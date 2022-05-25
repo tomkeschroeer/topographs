@@ -16,36 +16,10 @@ from tensorflow.keras.layers import (  # pylint: disable=import-error
     Input,
     Flatten
 )
-from tensorflow.keras.backend import batch_dot
-from tensorflow.keras.models import Model  # pylint: disable=import-error
-from tensorflow.keras.optimizers import Adam  # pylint: disable=import-error
 
-
-class trks_layers(Layer):
-    """Keras model definition of DIPS.
-
-    Parameters
-    ----------
-    train_config : object
-        training config
-    input_shape : tuple
-        dataset input shape
-    continue_training : bool, optional
-        Decide, if the training is continued using the latest
-        model file, by default False
-
-    Returns
-    -------
-    keras model
-        Dips keras model
-    int
-        Number of epochs
-    int
-        Starting epoch number
-    """
-    def __init__(self, nodes, output_nodes, net_name):
+class TrksLayers(Layer):
+    def __init__(self, nodes, net_name):
         self.nodes = nodes
-        self.output_nodes = output_nodes
         self.net_name = net_name
 
     def __call__(self, input_shape):
@@ -55,7 +29,7 @@ class trks_layers(Layer):
         tdd = masked_inputs
 
         # Define the TimeDistributed layers for the different tracks
-        for i, phi_nodes in enumerate(self.nodes):
+        for i, phi_nodes in enumerate(self.nodes[:-1]):
 
             tdd = TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")(tdd)
 
@@ -64,23 +38,21 @@ class trks_layers(Layer):
             )
 
         # Set output and activation function
-        output = TimeDistributed(Dense(self.output_nodes, activation="softmax"), name=self.net_name)(tdd)
+        output = TimeDistributed(Dense(self.nodes[-1], activation="softmax"), name=self.net_name)(tdd)
 
         return input, output
 
-class dense_network(Layer):
+class DenseNetwork(Layer):
     def __init__(
         self,
         nodes,
-        output_nodes,
     ):
         self.nodes = nodes
-        self.output_nodes = output_nodes
 
     def __call__(self, dense_ntw):
-        for node in self.nodes:
+        for node in self.nodes[:-1]:
             dense_ntw = Dense(node)(dense_ntw)
-        output = Dense(self.output_nodes, activation="softmax", name="Jet_class")(dense_ntw)
+        output = Dense(self.nodes[-1], activation="softmax", name="Jet_class")(dense_ntw)
         return output
 
 class DotProduct(Layer):
