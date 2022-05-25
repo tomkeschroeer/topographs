@@ -35,7 +35,7 @@ dt_product = DotProduct(edge_weight_output,edge_feat_output)()
 
 dense_vertex_output = dense_network(nodes=[50,50,50], output_nodes=18)(dt_product)
 
-model = Model(inputs = edge_feat_input, outputs = dense_vertex_output)
+model = Model(inputs = [edge_feat_input, edge_weight_input], outputs = dense_vertex_output)
 model.summary()
 model.compile(optimizer="Adam", loss="BinaryCrossentropy")
 

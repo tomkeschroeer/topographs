@@ -81,6 +81,7 @@ class dense_network(Layer):
         for node in self.nodes:
             dense_ntw = Dense(node)(dense_ntw)
         output = Dense(self.output_nodes, activation="softmax", name="Jet_class")(dense_ntw)
+        return output
 
 class DotProduct(Layer):
     def __init__(
@@ -93,9 +94,6 @@ class DotProduct(Layer):
     def __call__(self):
         pool = Dot(axes = 1)([self.layer1, self.layer2])
         pool = Flatten()(pool)
-        # print(f"pool vorher = {pool}")
-        # pool = K.squeeze(pool, -2)
-        # print(f"pool danach = {pool}")
         return pool
     
 
