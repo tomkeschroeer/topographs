@@ -3,6 +3,10 @@ inputs:
 
 output: /home/users/s/schroeer/scratch/PhD/Output
 
+jet_name: "jets"
+track_name: "tracks"
+target_name: "y"
+
 edge_feature_network:
   nodes: [70,70,70,30]
   n_tracks_name: tracks
