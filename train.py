@@ -11,7 +11,7 @@ from tensorflow import (
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.data import Dataset
 
-from modules import (
+from topograph.modules import (
     GetConfiguration,
     get_model,
     DataLoader

@@ -11,7 +11,7 @@ from tensorflow import (
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.data import Dataset
 
-from modules import (
+from topograph.modules import (
     GetConfiguration,
     get_model,
     DataLoader,
@@ -43,9 +43,9 @@ if __name__ == "__main__":
     config = GetConfiguration(args.config)
     metadata_dict = {}
     with File(config.input, "r") as f:
-        reco = f["tracks_loose"][0]
-        truth = f["truth_fromBC"][:, 0]
-        jet = f["jets"][0]
+        reco = f["/tracks_loose"][0, :]
+        truth = f["/truth_fromBC"][0, :]
+        jet = f["/jets"][0]
 
     MatchTruthReco = Matcher(
         dR_truth=truth["dr"],

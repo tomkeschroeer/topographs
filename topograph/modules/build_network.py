@@ -1,6 +1,6 @@
 from tensorflow.keras import Model
 
-from modules.layers import (
+from topograph.modules.layers import (
     TrksLayers,
     DenseNetwork,
     DotProduct
