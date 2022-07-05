@@ -1,11 +1,12 @@
-inputs: 
-  ttbar: /home/users/s/schroeer/scratch/PhD/Dataset_Dumper/samples/ttbar_410470_20220428_fixed_taus
+input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fulltruth/user.toschroe.410470.e6337_s3681_r13167_p4931.tdd.EMPFlowTruth_n40.22_2_75.22-06-27_truth_40tracks_output.h5/user.toschroe.29465619._000001.output.h5
+#/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
 
 output: /home/users/s/schroeer/scratch/PhD/Output
 
-jet_name: "jets"
-track_name: "tracks"
-target_name: "y"
+jets_name: "X_train"
+track_name: "X_tracks_loose_train"
+target_name: "Y_train"
+epochs: 200
 
 edge_feature_network:
   nodes: [70,70,70,30]
@@ -16,4 +17,4 @@ edge_weight_network:
   n_tracks_name: tracks
 
 vertex_network:
-  nodes: [50,50,50,18]
+  nodes: [50,50,50,3] #18]

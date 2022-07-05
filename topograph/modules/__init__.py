@@ -3,10 +3,14 @@ from modules.build_network import (
 )
 from modules.Helpermodules import (
     GetConfiguration,
-    DataGenerator
+    DataGenerator,
+    DataLoader
 )
 from modules.layers import (
     TrksLayers,
     DenseNetwork,
     DotProduct
+)
+from modules.Vertex_properties import (
+    Matcher
 )

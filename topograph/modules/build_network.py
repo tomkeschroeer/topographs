@@ -35,6 +35,6 @@ def get_model(input_feat, input_weight, config):
     dense_vertex_output = DenseNetwork(nodes=nodes_vertex)(dt_product)
 
     model = Model(inputs = [edge_feat_input, edge_weight_input], outputs = dense_vertex_output)
-    model.summary()
+    #model.summary()
     model.compile(optimizer="Adam", loss="BinaryCrossentropy")
     return model
