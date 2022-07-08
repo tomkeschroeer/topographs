@@ -41,41 +41,43 @@ if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
     metadata_dict = {}
-    with File(config.input, "r") as f:
-        metadata_dict["n_jets"], metadata_dict["n_trks"], metadata_dict["n_trk_features"] = f[f"{config.track_name}"].shape
-        _, metadata_dict["n_dim"] = f[config.target_name].shape
+    # with File(config.input, "r") as f:
+    #     metadata_dict["n_jets"], metadata_dict["n_trks"], metadata_dict["n_trk_features"] = f[f"{config.track_name}"].shape
+    #     _, metadata_dict["n_dim"] = f[config.target_name].shape
 
-    types = ({
-            "input_1": float32,
-            "input_2": float32
-        },
-        int32
-    )
-    shapes = ({
-            "input_1": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"])),
-            "input_2": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"]))
-        },
-        TensorShape((None, metadata_dict["n_dim"]))
-    )
+    # types = ({
+    #         "input_1": float32,
+    #         "input_2": float32
+    #     },
+    #     int32
+    # )
+    # shapes = ({
+    #         "input_1": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"])),
+    #         "input_2": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"]))
+    #     },
+    #     TensorShape((None, metadata_dict["n_dim"]))
+    # )
 
-    tf_dataset = (Dataset.from_generator(
-            DataLoader(
-                input=config.input,
-                metadata_dict=metadata_dict,
-                savetracks=True,
-                track_name=config.track_name,
-                jets_name=config.jets_name,
-                target_name=config.target_name
-            ),
-            types,
-            shapes
-        )
-         .repeat()
-         .prefetch(tf.data.AUTOTUNE)
-    )
+    # tf_dataset = (Dataset.from_generator(
+    #         DataLoader(
+    #             input=config.input,
+    #             metadata_dict=metadata_dict,
+    #             savetracks=True,
+    #             track_name=config.track_name,
+    #             jets_name=config.jets_name,
+    #             target_name=config.target_name
+    #         ),
+    #         types,
+    #         shapes
+    #     )
+    #      .repeat()
+    #      .prefetch(tf.data.AUTOTUNE)
+    # )
 
-    x = np.arange(60000000).reshape(100000,40,15)
-    y = np.arange(300000).reshape(100000,3)
+    x = np.arange(6000).reshape(10,40,15)
+    y_weight = np.random.random(400).reshape(10,40,1)
+    y_feat = np.arange(12000).reshape(10,40,30)
+    y = np.arange(30).reshape(10,3)
 
     model_checkpoint = ModelCheckpoint(
         config.output + "/model_epoch{epoch:03d}.h5",
@@ -86,5 +88,6 @@ if __name__ == "__main__":
 
     model = get_model(input_feat=(40,15), input_weight=(40,15), config=config)
     #print(len(list(tf_dataset)))
-    # callbacks = [model_checkpoint]
-    model.fit(tf_dataset, epochs = config.epochs, steps_per_epoch = 50_000)
+    callbacks = [model_checkpoint]
+    model.fit([x,x], [y_feat, y_weight,y], epochs = config.epochs, steps_per_epoch = 5, callbacks=callbacks)
+

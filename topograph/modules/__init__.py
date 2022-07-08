@@ -7,10 +7,14 @@ from topograph.modules.Helpermodules import (
     DataLoader
 )
 from topograph.modules.layers import (
-    TrksLayers,
+    EdgeLayers,
+    FeatLayers,
     DenseNetwork,
     DotProduct
 )
 from topograph.modules.Vertex_properties import (
     Matcher
+)
+from topograph.modules.tools import(
+    step_activation
 )

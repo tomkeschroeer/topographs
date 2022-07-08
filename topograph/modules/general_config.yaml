@@ -1,0 +1,34 @@
+track_inputs: 
+  - d0
+  - z0SinTheta
+  - dphi
+  - deta
+  - qOverP
+  - IP3D_signed_d0_significance 
+  - IP3D_signed_z0_significance
+  - phiUncertainty
+  - thetaUncertainty
+  - qOverPUncertainty 
+  - numberOfPixelHits
+  - numberOfSCTHits
+  - numberOfInnermostPixelLayerHits
+  - numberOfNextToInnermostPixelLayerHits 
+  - numberOfInnermostPixelLayerSharedHits
+  - numberOfInnermostPixelLayerSplitHits
+  - numberOfPixelSharedHits 
+  - numberOfPixelSplitHits
+  - numberOfSCTSharedHits
+  - numberOfPixelHoles
+  - numberOfSCTHoles
+
+edge_features:
+  - truthOriginLabel
+  - truthVertexIndex
+  - truthParentBarcode
+
+vertex_features:
+  - eta
+  - phi
+  - pt
+  - charge
+  - Lxy

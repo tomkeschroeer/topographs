@@ -1,6 +1,9 @@
 """Keras model of the DIPS tagger."""
 
 from tensorflow.keras import activations  # pylint: disable=import-error
+from topograph.modules.tools import step_activation
+from keras.layers.core import Activation
+from keras.utils.generic_utils import get_custom_objects
 from tensorflow.keras.layers import (  # pylint: disable=import-error
     Activation,
     Dense,
@@ -12,7 +15,55 @@ from tensorflow.keras.layers import (  # pylint: disable=import-error
     Flatten
 )
 
-class TrksLayers(Layer):
+class EdgeLayers(Layer):
+    """
+    Define a TrksLayers as a layer
+    """
+    def __init__(self, nodes, net_name):
+        """
+        Init for TrksLayers
+
+        Parameters
+        ----------
+        nodes: list
+            list of the number of nodes for all hidden layers
+        net_name: str
+            name of the network
+
+        Returns
+        -------
+        input : object
+            returns input of TrksLayer layer
+        output : object
+            returns output layer of DenseNetwork
+        """
+        self.nodes = nodes
+        self.net_name = net_name
+
+    def __call__(self, input_shape):
+        get_custom_objects().update({'step_activation': Activation(step_activation)})
+
+        # Set the track input
+        input = Input(shape = input_shape)
+        masked_inputs = Masking(mask_value=0)(input)
+        tdd = masked_inputs
+        
+        # Define the TimeDistributed layers for the different tracks
+        for i, phi_nodes in enumerate(self.nodes[:-1]):
+
+            tdd = TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")(tdd)
+
+            tdd = TimeDistributed(Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU")(
+                tdd
+            )
+
+        # Set output and activation function
+        output = TimeDistributed(Dense(self.nodes[-1], activation="softmax"), name=f"{self.net_name}_softmax")(tdd)
+        output = TimeDistributed(Activation(step_activation), name=self.net_name)(output)
+
+        return input, output
+
+class FeatLayers(Layer):
     """
     Define a TrksLayers as a layer
     """
@@ -64,6 +115,7 @@ class DenseNetwork(Layer):
     def __init__(
         self,
         nodes,
+        net_name
     ):
         """
         Init for DenseNetwork
@@ -79,11 +131,12 @@ class DenseNetwork(Layer):
             returns output layer of DenseNetwork
         """
         self.nodes = nodes
+        self.net_name = net_name
 
     def __call__(self, dense_ntw):
         for node in self.nodes[:-1]:
             dense_ntw = Dense(node)(dense_ntw)
-        output = Dense(self.nodes[-1], activation="softmax", name="Jet_class")(dense_ntw)
+        output = Dense(self.nodes[-1], activation="softmax", name=self.net_name)(dense_ntw)
         return output
 
 class DotProduct(Layer):
