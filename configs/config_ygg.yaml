@@ -1,0 +1,21 @@
+input: /srv/beegfs/scratch/groups/dpnc/atlas/ftag/ttbar_full_truth/user.toschroe.29465619._000123.output.h5 
+
+output: /home/users/s/schroeer/scratch/PhD/Output
+training_input: /home/users/s/schroeer/scratch/PhD/Output/training_topographs.h5
+
+track_name: "X_train_tracks"
+edge_name: "Y_edge"
+edge_feat_name: "Y_edge_features"
+vertex_feat_name: Y_vertex_features
+epochs: 100
+
+edge_feature_network:
+  nodes: [70,70,70,3]
+  n_tracks_name: tracks
+
+edge_weight_network:
+  nodes: [70,70,70,1]
+  n_tracks_name: tracks
+
+vertex_network:
+  nodes: [50,50,50,5] #18]

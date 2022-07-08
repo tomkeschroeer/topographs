@@ -54,8 +54,7 @@ if __name__ == "__main__":
     for step in range(n_steps):
         datasets = DatasetCreater(input_file=config.input, step=step, stepsize=stepsize)
         if step == 0:
-             with File("training_topographs.h5", "w") as train_file:
-                print(np.shape(datasets.get_vertex_feat_y()))
+             with File(f"{config.output}/training_topographs.h5", "w") as train_file:
                 train_file.create_dataset("Y_vertex_features", data = datasets.get_vertex_feat_y(), chunks=True, maxshape=(None,))
                 train_file.create_dataset("Y_edge_features", data = datasets.get_edge_feat_y(), chunks=True, maxshape=(None,40))
                 train_file.create_dataset("Y_edge", data = datasets.get_edge_y(), chunks=True, maxshape=(None,40))

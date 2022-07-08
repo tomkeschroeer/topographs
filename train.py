@@ -41,43 +41,52 @@ if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
     metadata_dict = {}
-    # with File(config.input, "r") as f:
-    #     metadata_dict["n_jets"], metadata_dict["n_trks"], metadata_dict["n_trk_features"] = f[f"{config.track_name}"].shape
-    #     _, metadata_dict["n_dim"] = f[config.target_name].shape
+    with File(config.training_input, "r") as f:
+        metadata_dict["n_jets"], metadata_dict["n_trks"] = f[f"{config.track_name}"].shape
+        metadata_dict["n_trk_features"] =  len(f[f"{config.track_name}"][0])
+        print(f[config.edge_feat_name][0])
+        metadata_dict["n_edge_y"] = 1
+        metadata_dict["n_edge_feat"] = len(f[config.edge_feat_name][0][0])
+        metadata_dict["n_vertex_feat"] = len(f[config.vertex_feat_name][0])
 
-    # types = ({
-    #         "input_1": float32,
-    #         "input_2": float32
-    #     },
-    #     int32
-    # )
-    # shapes = ({
-    #         "input_1": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"])),
-    #         "input_2": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"]))
-    #     },
-    #     TensorShape((None, metadata_dict["n_dim"]))
-    # )
+    types = ({
+            "input_1": float32,
+            "input_2": float32
+        },
+        {
+            "edge_feat": float32,
+            "edge_weight": int32,
+            "vertex_network": float32
+        }
+    )
+    shapes = ({
+            "input_1": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"])),
+            "input_2": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"]))
+        },
+        {
+            "edge_feat": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_edge_feat"])),
+            "edge_weight": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_edge_y"])),
+            "vertex_network": TensorShape((None, metadata_dict["n_vertex_feat"]))
 
-    # tf_dataset = (Dataset.from_generator(
-    #         DataLoader(
-    #             input=config.input,
-    #             metadata_dict=metadata_dict,
-    #             savetracks=True,
-    #             track_name=config.track_name,
-    #             jets_name=config.jets_name,
-    #             target_name=config.target_name
-    #         ),
-    #         types,
-    #         shapes
-    #     )
-    #      .repeat()
-    #      .prefetch(tf.data.AUTOTUNE)
-    # )
+        }
+    )
 
-    x = np.arange(6000).reshape(10,40,15)
-    y_weight = np.random.random(400).reshape(10,40,1)
-    y_feat = np.arange(12000).reshape(10,40,30)
-    y = np.arange(30).reshape(10,3)
+    tf_dataset = (Dataset.from_generator(
+            DataLoader(
+                input=config.input,
+                metadata_dict=metadata_dict,
+                savetracks=True,
+                track_name=config.track_name,
+                edge_name=config.edge_name,
+                edge_feat_name=config.edge_feat_name,
+                vertex_feat_name=config.vertex_feat_name
+            ),
+            types,
+            shapes
+        )
+         .repeat()
+         .prefetch(tf.data.AUTOTUNE)
+    )
 
     model_checkpoint = ModelCheckpoint(
         config.output + "/model_epoch{epoch:03d}.h5",
@@ -85,9 +94,10 @@ if __name__ == "__main__":
         save_best_only=False,
         save_weights_only=False,
     )
+    print(tf_dataset)
 
-    model = get_model(input_feat=(40,15), input_weight=(40,15), config=config)
+    model = get_model(input_feat=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), config=config)
     #print(len(list(tf_dataset)))
     callbacks = [model_checkpoint]
-    model.fit([x,x], [y_feat, y_weight,y], epochs = config.epochs, steps_per_epoch = 5, callbacks=callbacks)
+    model.fit(tf_dataset, epochs = config.epochs, steps_per_epoch = 5, callbacks=callbacks)
 

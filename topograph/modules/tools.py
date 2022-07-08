@@ -31,7 +31,6 @@ class DatasetCreater:
             self.reco = f["/tracks_loose"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
 
         self.ind_truthflav = self.get_b_indeces()
-        print(sum(self.ind_truthflav))
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
 
