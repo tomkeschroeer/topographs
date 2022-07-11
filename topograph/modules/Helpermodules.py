@@ -44,7 +44,7 @@ class DataGenerator:
         self, 
         input : str, 
         metadata_dict : dict,
-        stepsize : int = 5_000,
+        stepsize : int = 5,
         savejets : bool = False,
         savetracks : bool = True,
         track_name : str = "tracks",

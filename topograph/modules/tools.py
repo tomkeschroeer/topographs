@@ -45,14 +45,17 @@ class DatasetCreater:
         truthOriginLabel = self.reco["truthOriginLabel"]
         tOL_fromB = [[OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel]
         tOL_fromBC = [[OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel]
-        tOL = np.array([(np.logical_or(fromB, fromBC)) for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)]).astype(int)
+        tOL = np.array([[np.array([edge_y]).astype(int) for edge_y in (np.logical_or(fromB, fromBC))] for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)])
         return tOL
     
     def get_edge_feat_y(self):
-        return np.array(self.reco[self.global_conf.edge_features])
+        edge_feat_y = [[list(feat_track) for feat_track in feat_jet] for feat_jet in self.reco[self.global_conf.edge_features]]
+        return np.array(edge_feat_y)
 
     def get_vertex_feat_y(self):
-        return np.array([vertex_feat[hf == 5][0] for hf, vertex_feat in zip(self.truth["flavour"], self.truth[self.global_conf.vertex_features])]) 
+        vertex_feat = [list(vertex_feat[hf == 5][0]) for hf, vertex_feat in zip(self.truth["flavour"], self.truth[self.global_conf.vertex_features])]
+        return np.array(vertex_feat)
        
     def get_track_input(self):
-        return self.reco[self.global_conf.track_inputs]
+        track_input = [[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco[self.global_conf.track_inputs]]
+        return np.array(track_input)
