@@ -1,5 +1,6 @@
 import yaml
 from h5py import File
+from glob import glob
 
 class GetConfiguration:
     def __init__(self, config_file):
@@ -38,6 +39,12 @@ class GetConfiguration:
                 setattr(self, item, self.conf[item])
             else:
                 raise KeyError(f"You need to specify {item} in your config file")
+
+    def get_all_input_files(self):
+        try:
+            return glob(self.input)
+        except KeyError:
+            raise KeyError(f"No input file defined.")
 
 class DataGenerator:
     def __init__(
