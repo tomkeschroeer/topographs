@@ -42,12 +42,10 @@ if __name__ == "__main__":
     config = GetConfiguration(args.config)
     metadata_dict = {}
     with File(config.training_input, "r") as f:
-        metadata_dict["n_jets"], metadata_dict["n_trks"] = f[f"{config.track_name}"].shape
-        metadata_dict["n_trk_features"] =  len(f[f"{config.track_name}"][0])
-        print(f[config.edge_feat_name][0])
+        metadata_dict["n_jets"], metadata_dict["n_trks"], metadata_dict["n_trk_features"] = f[f"{config.track_name}"].shape
         metadata_dict["n_edge_y"] = 1
-        metadata_dict["n_edge_feat"] = len(f[config.edge_feat_name][0][0])
-        metadata_dict["n_vertex_feat"] = len(f[config.vertex_feat_name][0])
+        _, _, metadata_dict["n_edge_feat"] = f[f"{config.edge_feat_name}"].shape
+        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
 
     types = ({
             "input_1": float32,
@@ -73,7 +71,7 @@ if __name__ == "__main__":
 
     tf_dataset = (Dataset.from_generator(
             DataLoader(
-                input=config.input,
+                input=config.training_input,
                 metadata_dict=metadata_dict,
                 savetracks=True,
                 track_name=config.track_name,
@@ -94,7 +92,6 @@ if __name__ == "__main__":
         save_best_only=False,
         save_weights_only=False,
     )
-    print(tf_dataset)
 
     model = get_model(input_feat=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), config=config)
     #print(len(list(tf_dataset)))

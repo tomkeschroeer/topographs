@@ -46,12 +46,18 @@ class GetConfiguration:
         except KeyError:
             raise KeyError(f"No input file defined.")
 
+    def get_all_input_files(self):
+        try:
+            return glob(self.input)
+        except KeyError:
+            raise KeyError(f"No input file defined.")
+
 class DataGenerator:
     def __init__(
         self, 
         input : str, 
         metadata_dict : dict,
-        stepsize : int = 5_000,
+        stepsize : int = 5,
         savejets : bool = False,
         savetracks : bool = True,
         track_name : str = "tracks",
