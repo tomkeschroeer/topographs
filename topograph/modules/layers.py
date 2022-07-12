@@ -1,8 +1,4 @@
-"""Keras model of the DIPS tagger."""
-
 from tensorflow.keras import activations  # pylint: disable=import-error
-from topograph.modules.tools import step_activation
-from keras.layers.core import Activation
 from keras.utils.generic_utils import get_custom_objects
 from tensorflow.keras.layers import (  # pylint: disable=import-error
     Activation,
@@ -14,6 +10,8 @@ from tensorflow.keras.layers import (  # pylint: disable=import-error
     Input,
     Flatten
 )
+
+from topograph.modules.tools import step_activation
 
 class EdgeLayers(Layer):
     """
@@ -45,7 +43,7 @@ class EdgeLayers(Layer):
 
         # Set the track input
         input = Input(shape = input_shape)
-        masked_inputs = Masking(mask_value=0)(input)
+        masked_inputs = Masking(mask_value=-999.0)(input)
         tdd = masked_inputs
         
         # Define the TimeDistributed layers for the different tracks
@@ -58,10 +56,10 @@ class EdgeLayers(Layer):
             )
 
         # Set output and activation function
-        output = TimeDistributed(Dense(self.nodes[-1], activation="softmax"), name=f"{self.net_name}_softmax")(tdd)
-        output = TimeDistributed(Activation(step_activation), name=self.net_name)(output)
+        output_prev = TimeDistributed(Dense(self.nodes[-1], activation="sigmoid"), name=f"{self.net_name}_sigmoid")(tdd)
+        output = TimeDistributed(Activation(step_activation), name=self.net_name)(output_prev)
 
-        return input, output
+        return input, output_prev, output
 
 class FeatLayers(Layer):
     """
@@ -91,7 +89,7 @@ class FeatLayers(Layer):
     def __call__(self, input_shape):
         # Set the track input
         input = Input(shape = input_shape)
-        masked_inputs = Masking(mask_value=0)(input)
+        masked_inputs = Masking(mask_value=-999.0)(input)
         tdd = masked_inputs
 
         # Define the TimeDistributed layers for the different tracks
@@ -104,7 +102,7 @@ class FeatLayers(Layer):
             )
 
         # Set output and activation function
-        output = TimeDistributed(Dense(self.nodes[-1], activation="softmax"), name=self.net_name)(tdd)
+        output = TimeDistributed(Dense(self.nodes[-1], activation="linear"), name=self.net_name)(tdd)
 
         return input, output
 
@@ -134,9 +132,10 @@ class DenseNetwork(Layer):
         self.net_name = net_name
 
     def __call__(self, dense_ntw):
-        for node in self.nodes[:-1]:
+        for i, node in enumerate(self.nodes[:-1]):
             dense_ntw = Dense(node)(dense_ntw)
-        output = Dense(self.nodes[-1], activation="softmax", name=self.net_name)(dense_ntw)
+            dense_ntw = Activation(activations.relu, name=f"{self.net_name}_ReLu_{i}")(dense_ntw)
+        output = Dense(self.nodes[-1], activation="linear", name=self.net_name)(dense_ntw)
         return output
 
 class DotProduct(Layer):

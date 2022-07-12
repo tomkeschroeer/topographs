@@ -1,12 +1,17 @@
-import tensorflow.keras.backend as K
-from tensorflow import constant
 from h5py import File
 import numpy as np
+import numpy.ma as ma
 import yaml
 import pathlib
 
+import tensorflow.keras.backend as K
+from tensorflow import constant
+
 def step_activation(x):
     return K.switch(x >= 0.7, constant([[1]], dtype=x.dtype), constant([[0]], dtype=x.dtype))
+
+def Mask_invalid(x):
+    return K.equal(x, np.nan)
 
 class GlobalConfig:
     def __init__(self):
@@ -49,13 +54,15 @@ class DatasetCreater:
         return tOL
     
     def get_edge_feat_y(self):
-        edge_feat_y = [[list(feat_track) for feat_track in feat_jet] for feat_jet in self.reco[self.global_conf.edge_features]]
-        return np.array(edge_feat_y)
+        edge_feat_y = np.array([[list(feat_track) for feat_track in feat_jet] for feat_jet in self.reco[self.global_conf.edge_features]])
+        return edge_feat_y
 
     def get_vertex_feat_y(self):
-        vertex_feat = [list(vertex_feat[hf == 5][0]) for hf, vertex_feat in zip(self.truth["flavour"], self.truth[self.global_conf.vertex_features])]
-        return np.array(vertex_feat)
+        vertex_feat = np.array([list(vertex_feat[hf == 5][0]) for hf, vertex_feat in zip(self.truth["flavour"], self.truth[self.global_conf.vertex_features])])
+        return vertex_feat
        
     def get_track_input(self):
-        track_input = [[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco[self.global_conf.track_inputs]]
-        return np.array(track_input)
+        track_input = ma.masked_invalid([[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco[self.global_conf.track_inputs]])
+        mask = track_input.mask
+        track_input[mask] = -999
+        return track_input

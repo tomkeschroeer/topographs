@@ -1,25 +1,11 @@
 import argparse as pars
-from importlib_metadata import metadata
-import numpy as np
-import tensorflow as tf
-import pathlib
 from h5py import File
-from tensorflow import (
-    TensorShape,
-    float32,
-    int32
-)
-from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.data import Dataset
 
 from topograph.modules import (
     GetConfiguration,
-    get_model,
-    DataLoader,
-    Matcher
+    DatasetCreater,
+    GlobalConfig
 )
-
-from topograph.modules.tools import DatasetCreater, GlobalConfig
 
 def get_parser():
     """
@@ -37,6 +23,18 @@ def get_parser():
         required=True, 
         help='config file giving the network parameters'
     )
+    parser.add_argument(
+        '--prepare',
+        '-p',
+        default=None,
+        help='prepares samples'
+    )
+    parser.add_argument(
+        '--masking',
+        '-m',
+        default=None,
+        help='mask samples'
+    )
 
     args = parser.parse_args()
     return args
@@ -45,8 +43,7 @@ if __name__ == "__main__":
 
     args = get_parser()
     config = GetConfiguration(args.config)
-    metadata_dict = {}
-    stepsize = 5_000
+    stepsize = 300_000
     global_conf = GlobalConfig()
     input_files = config.get_all_input_files()
     for input_file_ind in range(len(input_files)):
@@ -54,6 +51,7 @@ if __name__ == "__main__":
             njets = len(f["/jets"][:])
         n_steps = njets//stepsize
         for step in range(n_steps):
+            print(f"process file number {input_file_ind+1} from {len(input_files)}, step {step+1}/{n_steps}")
             datasets = DatasetCreater(input_file=input_files[input_file_ind], step=step, stepsize=stepsize)
             if step == 0 and input_file_ind == 0:
                 with File(f"{config.output}/training_topographs.h5", "w") as train_file:
@@ -72,4 +70,3 @@ if __name__ == "__main__":
                     train_file["Y_edge"][-njets_step:] = datasets.get_edge_y()
                     train_file["X_train_tracks"].resize((train_file["X_train_tracks"].shape[0] + njets_step), axis=0)
                     train_file["X_train_tracks"][-njets_step:] = datasets.get_track_input()
-    
