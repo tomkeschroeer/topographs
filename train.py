@@ -1,8 +1,7 @@
 import argparse as pars
-from importlib_metadata import metadata
-import numpy as np
-import tensorflow as tf
 from h5py import File
+
+import tensorflow as tf
 from tensorflow import (
     TensorShape,
     float32,
@@ -14,7 +13,8 @@ from tensorflow.data import Dataset
 from topograph.modules import (
     GetConfiguration,
     get_model,
-    DataLoader
+    DataLoader,
+    step_activation
 )
 
 def get_parser():
@@ -93,8 +93,7 @@ if __name__ == "__main__":
         save_weights_only=False,
     )
 
-    model = get_model(input_feat=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), config=config)
-    #print(len(list(tf_dataset)))
     callbacks = [model_checkpoint]
-    model.fit(tf_dataset, epochs = config.epochs, steps_per_epoch = 5, callbacks=callbacks)
 
+    model = get_model(input_feat=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), config=config)
+    model.fit(tf_dataset, epochs = config.epochs, steps_per_epoch = 500, callbacks=callbacks)

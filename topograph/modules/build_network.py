@@ -1,4 +1,5 @@
 from tensorflow.keras import Model
+from tensorflow.keras.layers import Layer
 
 from topograph.modules.layers import (
     EdgeLayers,
@@ -6,8 +7,6 @@ from topograph.modules.layers import (
     DenseNetwork,
     DotProduct
 )
-
-from tensorflow.keras.layers import Layer
 
 class TopographModel(Layer):
     def __init__(self, config):
@@ -19,13 +18,12 @@ class TopographModel(Layer):
         nodes_vertex = self.config.vertex_network["nodes"]
 
         edge_feat_input, edge_feat_output = FeatLayers(nodes = nodes_feat, net_name="edge_feat")(input_feat) 
-        edge_weight_input, edge_weight_output = FeatLayers(nodes = nodes_weight, net_name="edge_weight")(input_weight) #EdgeLayers(nodes = nodes_weight, net_name="edge_weight")(input_weight)
+        edge_weight_input, edge_weight_output_prev, edge_weight_output = EdgeLayers(nodes = nodes_weight, net_name="edge_weight")(input_weight) #EdgeLayers(nodes = nodes_weight, net_name="edge_weight")(input_weight)
         dt_product = DotProduct(edge_weight_output,edge_feat_output)()
 
         dense_vertex_output = DenseNetwork(nodes=nodes_vertex, net_name="vertex_network")(dt_product)
 
         return edge_feat_input, edge_weight_input, edge_feat_output, edge_weight_output, dense_vertex_output
-        
 
 def get_model(input_feat, input_weight, config):
     """
@@ -48,5 +46,5 @@ def get_model(input_feat, input_weight, config):
     edge_feat_input, edge_weight_input, edge_feat_output, edge_weight_output, dense_vertex_output = TopographModel(config=config)(input_feat, input_weight)
     model = Model(inputs = [edge_feat_input, edge_weight_input], outputs = [edge_feat_output, edge_weight_output, dense_vertex_output])
     model.summary()
-    model.compile(optimizer="Adam", loss={"edge_feat": "categorical_crossentropy", "edge_weight": "binary_crossentropy", "vertex_network":"categorical_crossentropy"}, loss_weights={"edge_feat": 1, "edge_weight": 1, "vertex_network":1})
+    model.compile(optimizer="Adam", loss={"edge_feat": "mean_squared_error", "edge_weight": "binary_crossentropy", "vertex_network":"mean_squared_error"}, loss_weights={"edge_feat": 1, "edge_weight": 1, "vertex_network":1})
     return model

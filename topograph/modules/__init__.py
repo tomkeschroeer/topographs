@@ -16,5 +16,7 @@ from topograph.modules.Vertex_properties import (
     Matcher
 )
 from topograph.modules.tools import(
-    step_activation
+    step_activation,
+    DatasetCreater,
+    GlobalConfig
 )

@@ -1,6 +1,7 @@
 import yaml
 from h5py import File
 from glob import glob
+import numpy.ma as ma
 
 class GetConfiguration:
     def __init__(self, config_file):
@@ -12,14 +13,6 @@ class GetConfiguration:
             self.conf = yaml.load(conf_file, Loader=yaml.FullLoader)
   
     def getParameters(self):
-        # if "input" in self.conf:
-        #     for input in self.conf["input"].keys():
-        #         self.conf["input = self.conf["inputs"][input]
-        # else:
-        #     raise KeyError("You need to specify inputs in your config file")
-        
-        # setattr(self, "inputs", self.conf["inputs"])
-
         config_items = [
             "input",
             "output",
@@ -98,7 +91,7 @@ class DataGenerator:
             self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
             self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
             self.vertex_feat_batch = f[self.vertex_feat_name][step*self.stepsize : (step+1)*self.stepsize]
-    
+
 class DataLoader(DataGenerator):
     def __call__(self):
         n_samples = self.metadata_dict["n_jets"]
