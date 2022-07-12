@@ -18,6 +18,7 @@ class GetConfiguration:
             "output",
             "track_name",
             "epochs",
+            "steps_per_epoch",
             "edge_feature_network",
             "edge_weight_network",
             "vertex_network",
