@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     tf_dataset = (Dataset.from_generator(
             DataLoader(
-                input=config.training_input,
+                input=f"{config.output}/training_files/{config.training_file_name}",
                 metadata_dict=metadata_dict,
                 savetracks=True,
                 track_name=config.track_name,
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     )
 
     model_checkpoint = ModelCheckpoint(
-        config.output + "/model_epoch{epoch:03d}.h5",
+        config.output + "modelfiles/model_epoch{epoch:03d}.h5",
         verbose=True,
         save_best_only=False,
         save_weights_only=False,
@@ -96,4 +96,4 @@ if __name__ == "__main__":
     callbacks = [model_checkpoint]
 
     model = get_model(input_feat=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), config=config)
-    model.fit(tf_dataset, epochs = config.epochs, steps_per_epoch = 500, callbacks=callbacks)
+    model.fit(tf_dataset, epochs = config.epochs, steps_per_epoch = config.steps_per_epoch, callbacks=callbacks)

@@ -3,6 +3,7 @@ import numpy as np
 import numpy.ma as ma
 import yaml
 import pathlib
+import logging
 
 import tensorflow.keras.backend as K
 from tensorflow import constant
@@ -12,6 +13,62 @@ def step_activation(x):
 
 def Mask_invalid(x):
     return K.equal(x, np.nan)
+
+def get_logger():
+    """Set DebugLevel for logging.
+
+    Returns
+    -------
+    object
+        Topograph logger.
+    """
+
+    log_levels = {
+        "CRITICAL": logging.CRITICAL,
+        "ERROR": logging.ERROR,
+        "WARNING": logging.WARNING,
+        "INFO": logging.INFO,
+        "DEBUG": logging.DEBUG,
+        "NOTSET": logging.NOTSET,
+    }
+    topo_logger = logging.getLogger("Topograph")
+    topo_logger.setLevel(log_levels["INFO"])
+    ch_handler = logging.StreamHandler()
+    ch_handler.setLevel(log_levels["INFO"])
+    ch_handler.setFormatter(CustomFormatter())
+
+    topo_logger.addHandler(ch_handler)
+    topo_logger.propagate = False
+    return topo_logger
+
+class CustomFormatter(logging.Formatter):
+    """Logging Formatter to add colors and count warning / errors
+    using implementation from
+    https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output"""  # noqa # pylint: disable=C0301
+
+    grey = "\x1b[38;21m"
+    yellow = "\x1b[33;21m"
+    green = "\x1b[32;21m"
+    red = "\x1b[31;21m"
+    bold_red = "\x1b[31;1m"
+    reset = "\x1b[0m"
+    debugformat = (
+        "%(asctime)s - %(levelname)s:%(name)s: %(message)s (%(filename)s:%(lineno)d)"
+    )
+    date_format = "%(levelname)s:%(name)s: %(message)s"
+
+    FORMATS = {
+        logging.DEBUG: grey + debugformat + reset,
+        logging.INFO: green + date_format + reset,
+        logging.WARNING: yellow + date_format + reset,
+        logging.ERROR: red + debugformat + reset,
+        logging.CRITICAL: bold_red + debugformat + reset,
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
 
 class GlobalConfig:
     def __init__(self):
