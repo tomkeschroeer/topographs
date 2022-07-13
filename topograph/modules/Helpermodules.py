@@ -33,12 +33,6 @@ class GetConfiguration:
                 setattr(self, item, self.conf[item])
             else:
                 raise KeyError(f"You need to specify {item} in your config file")
-    
-    def get_all_input_files(self):
-        try:
-            return glob(self.input)
-        except KeyError:
-            raise KeyError(f"No input file defined.")
 
     def get_all_input_files(self):
         try:
