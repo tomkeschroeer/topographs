@@ -18,5 +18,6 @@ from topograph.modules.Vertex_properties import (
 from topograph.modules.tools import(
     step_activation,
     DatasetCreater,
-    GlobalConfig
+    GlobalConfig,
+    get_logger
 )

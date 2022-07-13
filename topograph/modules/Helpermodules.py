@@ -22,7 +22,7 @@ class GetConfiguration:
             "edge_feature_network",
             "edge_weight_network",
             "vertex_network",
-            "training_input",
+            "training_file_name",
             "edge_feat_name",
             "edge_name",
             "vertex_feat_name"
