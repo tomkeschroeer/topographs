@@ -7,7 +7,8 @@ from topograph.modules import (
 from topograph.preprocessing_tools import (
     Prepare,
     Merge,
-    Scaler
+    Scaler,
+    Apply_Scaler
 )
 
 def get_parser():
@@ -33,6 +34,12 @@ def get_parser():
         help='scale samples'
     )
     parser.add_argument(
+        '--apply_scales',
+        '-a',
+        action="store_true",
+        help='apply scales'
+    )
+    parser.add_argument(
         '--prepare',
         '-p',
         action="store_true",
@@ -54,10 +61,14 @@ if __name__ == "__main__":
     if args.scale:
         scale = Scaler(config)
         scale.Run()
+    if args.apply_scales:
+        apply_scales = Apply_Scaler(config)
+        apply_scales.Run()
     if args.prepare:
         prepare = Prepare(config)
         prepare.Run()
     if args.merge:
         merge = Merge(config)
         merge.Run()
+    
         

@@ -21,7 +21,7 @@ class Scaler:
 
         # Extract the correct variables
         tracks_name = "tracks_loose"
-        chunk_size = 2
+        chunk_size = 1e5
 
         # Get the file_length
         file_length = len(File(self.config.input, "r")[f"/{tracks_name}"].fields(self.var_list[0])[:])
@@ -46,6 +46,7 @@ class Scaler:
 
         # Loop over chunks
         for chunk_counter in range(n_chunks):
+            logger.info(f"Using chunk {chunk_counter+1} from {n_chunks}")
             # Check if this is the first time loading from the generator
             if chunk_counter == 0:
                 # Get the first chunk of scales from the generator
