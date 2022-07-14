@@ -1,6 +1,6 @@
 from h5py import File
 import numpy as np
-import numpy.ma as ma
+from glob import glob
 import yaml
 import pathlib
 import logging
@@ -79,47 +79,94 @@ class GlobalConfig:
             self.edge_features = global_conf.get("edge_features")
             self.vertex_features = global_conf.get("vertex_features")
 
-class DatasetCreater:
-    def __init__(self, input_file, step, stepsize):
-        self.global_conf = GlobalConfig()
-        self.input_file = input_file
-        self.step = step
+class GetConfiguration:
+    def __init__(self, config_file):
+        self.getConfFile(config_file)
+        self.getParameters()
+
+    def getConfFile(self, config_file):
+        with open(config_file, "r") as conf_file:
+            self.conf = yaml.load(conf_file, Loader=yaml.FullLoader)
+  
+    def getParameters(self):
+        config_items = [
+            "input",
+            "output",
+            "track_name",
+            "epochs",
+            "steps_per_epoch",
+            "edge_feature_network",
+            "edge_weight_network",
+            "vertex_network",
+            "training_file_name",
+            "edge_feat_name",
+            "edge_name",
+            "vertex_feat_name"
+        ]
+
+        for item in config_items:
+            if item in self.conf:
+                setattr(self, item, self.conf[item])
+            else:
+                raise KeyError(f"You need to specify {item} in your config file")
+
+    def get_all_input_files(self):
+        try:
+            return glob(self.input)
+        except KeyError:
+            raise KeyError(f"No input file defined.")
+
+class DataGenerator:
+    def __init__(
+        self, 
+        input : str, 
+        metadata_dict : dict,
+        stepsize : int = 5,
+        savejets : bool = False,
+        savetracks : bool = True,
+        track_name : str = "tracks",
+        edge_name : str ="edge",
+        edge_feat_name : str = "edge_feat",
+        vertex_feat_name : str = "vertex_feat"
+        ):
+        """
+        class to get dataset for topograph training
+
+        Parameters
+        ----------
+        input: 
+            input file containing the jet and track information
+        metadata_dict:
+            dictionary containing the total number of jets and tracks
+        stepsize:
+            the number of samples returned per generator step. Default: 5_000
+        savejets:
+            bool defining if jets are supposed to be saved
+        """
+        self.input = input
+        self.metadata_dict = metadata_dict
         self.stepsize = stepsize
-        self.ind_truthflav = None
+        self.savejets = savejets
+        self.savetracks = savetracks
+        self.track_name = track_name
+        self.edge_feat_name = edge_feat_name
+        self.edge_name = edge_name
+        self.vertex_feat_name = vertex_feat_name
 
-        with File(self.input_file, "r") as f:
-            self.truth = f["/truth_hadrons"][self.step*self.stepsize:(self.step+1)*self.stepsize :]
-            self.HadrConeTruth = f["/jets"][self.step*self.stepsize:(self.step+1)*self.stepsize]["HadronConeExclExtendedTruthLabelID"]
-            self.reco = f["/tracks_loose"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
+    def load_in_memory(self, step : int = 0):
+        with File(self.input) as f:
+            if self.savejets:
+                self.jets_batch = f[self.jets_name][step*self.stepsize : (step+1)*self.stepsize]
+            if self.savetracks:
+                self.track_batch = f[self.track_name][step*self.stepsize : (step+1)*self.stepsize]
+            self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
+            self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
+            self.vertex_feat_batch = f[self.vertex_feat_name][step*self.stepsize : (step+1)*self.stepsize]
 
-        self.ind_truthflav = self.get_b_indeces()
-        self.truth = self.truth[self.ind_truthflav]
-        self.reco = self.reco[self.ind_truthflav]
-
-    def get_b_indeces(self):
-        hadronflavour = self.truth["flavour"]
-        return np.logical_and(self.HadrConeTruth == 5, [sum(hf == 5)==1 for hf in hadronflavour])
-   
-    def get_n_valid_jets(self): 
-        return sum(self.ind_truthflav)
-
-    def get_edge_y(self):
-        truthOriginLabel = self.reco["truthOriginLabel"]
-        tOL_fromB = [[OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel]
-        tOL_fromBC = [[OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel]
-        tOL = np.array([[np.array([edge_y]).astype(int) for edge_y in (np.logical_or(fromB, fromBC))] for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)])
-        return tOL
-    
-    def get_edge_feat_y(self):
-        edge_feat_y = np.array([[list(feat_track) for feat_track in feat_jet] for feat_jet in self.reco[self.global_conf.edge_features]])
-        return edge_feat_y
-
-    def get_vertex_feat_y(self):
-        vertex_feat = np.array([list(vertex_feat[hf == 5][0]) for hf, vertex_feat in zip(self.truth["flavour"], self.truth[self.global_conf.vertex_features])])
-        return vertex_feat
-       
-    def get_track_input(self):
-        track_input = ma.masked_invalid([[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco[self.global_conf.track_inputs]])
-        mask = track_input.mask
-        track_input[mask] = -999
-        return track_input
+class DataLoader(DataGenerator):
+    def __call__(self):
+        n_samples = self.metadata_dict["n_jets"]
+        n_steps = n_samples//self.stepsize
+        for step in range(n_steps):
+            self.load_in_memory(step=step)
+            yield {"input_1":self.track_batch, "input_2":self.track_batch},{"edge_feat":self.edge_feat_batch,"edge_weight":self.edge_batch,"vertex_network":self.vertex_feat_batch}

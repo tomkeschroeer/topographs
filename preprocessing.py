@@ -1,7 +1,4 @@
 import argparse as pars
-from glob import glob
-
-from matplotlib.pyplot import get 
 
 from topograph.modules import (
     GetConfiguration,
@@ -10,7 +7,7 @@ from topograph.modules import (
 from topograph.preprocessing_tools import (
     Prepare,
     Merge,
-    Scale
+    Scaler
 )
 
 def get_parser():
@@ -55,7 +52,7 @@ if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
     if args.scale:
-        scale = Scale(config)
+        scale = Scaler(config)
         scale.Run()
     if args.prepare:
         prepare = Prepare(config)

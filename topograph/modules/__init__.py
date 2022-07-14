@@ -1,11 +1,6 @@
 from topograph.modules.build_network import (
     get_model
 )
-from topograph.modules.Helpermodules import (
-    GetConfiguration,
-    DataGenerator,
-    DataLoader
-)
 from topograph.modules.layers import (
     EdgeLayers,
     FeatLayers,
@@ -17,7 +12,9 @@ from topograph.modules.Vertex_properties import (
 )
 from topograph.modules.tools import(
     step_activation,
-    DatasetCreater,
     GlobalConfig,
-    get_logger
+    get_logger,
+    GetConfiguration,
+    DataGenerator,
+    DataLoader
 )
