@@ -116,6 +116,54 @@ class GetConfiguration:
         except KeyError:
             raise KeyError(f"No input file defined.")
 
+class DatasetCreater:
+    def __init__(self, input_file, step, stepsize, replace_invalid = False):
+        self.global_conf = GlobalConfig()
+        self.input_file = input_file
+        self.step = step
+        self.stepsize = stepsize
+        self.ind_truthflav = None
+        self.replace_invalid = replace_invalid
+
+        with File(self.input_file, "r") as f:
+            self.truth = f["/truth_hadrons"][self.step*self.stepsize:(self.step+1)*self.stepsize :]
+            self.HadrConeTruth = f["/jets"][self.step*self.stepsize:(self.step+1)*self.stepsize]["HadronConeExclExtendedTruthLabelID"]
+            self.reco = f["/tracks_loose"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
+
+        self.ind_truthflav = self.get_b_indeces()
+        self.truth = self.truth[self.ind_truthflav]
+        self.reco = self.reco[self.ind_truthflav]
+
+    def get_b_indeces(self):
+        hadronflavour = self.truth["flavour"]
+        return np.logical_and(self.HadrConeTruth == 5, [sum(hf == 5)==1 for hf in hadronflavour])
+   
+    def get_n_valid_jets(self): 
+        return sum(self.ind_truthflav)
+
+    def get_edge_y(self):
+        truthOriginLabel = self.reco["truthOriginLabel"]
+        tOL_fromB = [[OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel]
+        tOL_fromBC = [[OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel]
+        tOL = np.array([[np.array([edge_y]).astype(int) for edge_y in (np.logical_or(fromB, fromBC))] for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)])
+        return tOL
+    
+    def get_edge_feat_y(self):
+        edge_feat_y = np.array([[list(feat_track) for feat_track in feat_jet] for feat_jet in self.reco[self.global_conf.edge_features]])
+        return edge_feat_y
+
+    def get_vertex_feat_y(self):
+        vertex_feat = np.array([list(vertex_feat[hf == 5][0]) for hf, vertex_feat in zip(self.truth["flavour"], self.truth[self.global_conf.vertex_features])])
+        return vertex_feat
+       
+    def get_track_input(self):
+        track_input = ma.masked_invalid([[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco[self.global_conf.track_inputs]])
+        mask = track_input.mask
+        if self.replace_invalids:
+            track_input[mask] = -999
+            return track_input
+        return track_input, ~mask
+
 class DataGenerator:
     def __init__(
         self, 
@@ -170,3 +218,4 @@ class DataLoader(DataGenerator):
         for step in range(n_steps):
             self.load_in_memory(step=step)
             yield {"input_1":self.track_batch, "input_2":self.track_batch},{"edge_feat":self.edge_feat_batch,"edge_weight":self.edge_batch,"vertex_network":self.vertex_feat_batch}
+
