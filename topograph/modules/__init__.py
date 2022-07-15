@@ -17,5 +17,6 @@ from topograph.modules.tools import(
     GetConfiguration,
     DataGenerator,
     DataLoader,
-    DatasetCreater
+    DatasetCreater,
+    get_track_mask
 )

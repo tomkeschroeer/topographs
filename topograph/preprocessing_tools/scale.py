@@ -5,7 +5,8 @@ import json
 
 from topograph.modules.tools import (
     get_logger,
-    GlobalConfig
+    GlobalConfig,
+    get_track_mask
 )
 
 class Scaler:
@@ -130,10 +131,7 @@ class Scaler:
                     infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
                 )
 
-                for var, dtype in trks.dtype.fields.items():
-                    if "f" in dtype[0].str:
-                        track_mask = ~np.isnan(trks[var])
-                        break
+                track_mask = get_track_mask(trks)
 
                 X_trk_train = np.stack(
                     [np.nan_to_num(trks[v]) for v in self.var_list], axis=-1

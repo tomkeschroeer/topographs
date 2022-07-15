@@ -41,6 +41,12 @@ def get_logger():
     topo_logger.propagate = False
     return topo_logger
 
+def get_track_mask(trks):
+    for var, dtype in trks.dtype.fields.items():
+        if "f" in dtype[0].str:
+            track_mask = ~np.isnan(trks[var])
+            return track_mask
+
 class CustomFormatter(logging.Formatter):
     """Logging Formatter to add colors and count warning / errors
     using implementation from
