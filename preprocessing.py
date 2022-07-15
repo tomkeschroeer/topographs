@@ -8,7 +8,8 @@ from topograph.preprocessing_tools import (
     Prepare,
     Merge,
     Scaler,
-    Apply_Scaler
+    Apply_Scaler,
+    OneFileMaker
 )
 
 def get_parser():
@@ -26,6 +27,12 @@ def get_parser():
         type=str,
         required=True, 
         help='config file giving the network parameters'
+    )
+    parser.add_argument(
+        '--onefile',
+        '-o',
+        action="store_true",
+        help='make one samples files'
     )
     parser.add_argument(
         '--scale',
@@ -58,6 +65,9 @@ def get_parser():
 if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
+    if args.onefile:
+        onefile = OneFileMaker(config)
+        onefile.Run()
     if args.scale:
         scale = Scaler(config)
         scale.Run()
