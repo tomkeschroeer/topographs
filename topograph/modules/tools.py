@@ -98,12 +98,19 @@ class GetConfiguration:
         config_items = [
             "input",
             "output",
-            "track_name",
+            "njets",
+            "tracks_name",
+            "input_tracks_name",
+            "input_jet_name",
+            "input_truth_name",
             "epochs",
             "steps_per_epoch",
             "edge_feature_network",
             "edge_weight_network",
             "vertex_network",
+            "preprocessing_file_name",
+            "one_file_name",
+            "scale_dict",
             "training_file_name",
             "edge_feat_name",
             "edge_name",
@@ -123,8 +130,9 @@ class GetConfiguration:
             raise KeyError(f"No input file defined.")
 
 class DatasetCreater:
-    def __init__(self, input_file, step, stepsize, replace_invalid = False):
+    def __init__(self, config, input_file, step, stepsize, replace_invalid = False):
         self.global_conf = GlobalConfig()
+        self.config = config
         self.input_file = input_file
         self.step = step
         self.stepsize = stepsize
@@ -132,9 +140,9 @@ class DatasetCreater:
         self.replace_invalid = replace_invalid
 
         with File(self.input_file, "r") as f:
-            self.truth = f["/truth_hadrons"][self.step*self.stepsize:(self.step+1)*self.stepsize :]
-            self.HadrConeTruth = f["/jets"][self.step*self.stepsize:(self.step+1)*self.stepsize]["HadronConeExclExtendedTruthLabelID"]
-            self.reco = f["/tracks_loose"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
+            self.truth = f[f"/{self.config.input_truth_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize :]
+            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize]["HadronConeExclExtendedTruthLabelID"]
+            self.reco = f[f"/{self.config.input_track_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
 
         self.ind_truthflav = self.get_b_indeces()
         self.truth = self.truth[self.ind_truthflav]
@@ -163,12 +171,12 @@ class DatasetCreater:
         return vertex_feat
        
     def get_track_input(self):
-        track_input = ma.masked_invalid([[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco[self.global_conf.track_inputs]])
+        track_input = ma.masked_invalid([[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco])
         mask = track_input.mask
         if self.replace_invalids:
             track_input[mask] = -999
             return track_input
-        return track_input, ~mask
+        return track_input
 
 class DataGenerator:
     def __init__(

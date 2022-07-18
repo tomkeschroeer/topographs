@@ -14,18 +14,17 @@ class Scaler:
         self.config = config
         self.global_conf = GlobalConfig()
         self.var_list = self.global_conf.track_inputs
-        self.scale_dict_path = f"{self.config.output}/scale_dict.json"
+        self.scale_dict_path = f"{self.config.output}/{self.config.scale_dict}"
 
     def Run(self):
         logger = get_logger()
         logger.info("scale inputs...")
 
         # Extract the correct variables
-        tracks_name = "tracks_loose"
         chunk_size = 1e5
 
         # Get the file_length
-        file_length = len(File(self.config.input, "r")[f"/{tracks_name}"].fields(self.var_list[0])[:])
+        file_length = len(File(self.config.input, "r")[f"/{self.config.input_tracks_name}"].fields(self.var_list[0])[:])
 
         # Get the number of chunks we need to load
         n_chunks = int(np.ceil(file_length / chunk_size))
@@ -41,7 +40,7 @@ class Scaler:
         trks_scaling_generator = self.get_scaling_tracks_generator(
             input_file=self.config.input,
             nJets=file_length,
-            tracks_name=tracks_name,
+            tracks_name=self.config.input_tracks_name,
             chunk_size=chunk_size,
         )
 
@@ -69,7 +68,7 @@ class Scaler:
                     second_nTrks=tmp_nTrks_loaded,
                 )
 
-        scale_dict_trk.update({tracks_name: scale_dict_trk_selection})
+        scale_dict_trk.update({self.config.input_tracks_name: scale_dict_trk_selection})
 
             # Add scale dict for given tracks selection to the more general one
         # TODO: change in python 3.9

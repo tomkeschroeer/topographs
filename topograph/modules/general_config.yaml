@@ -1,5 +1,4 @@
 track_inputs: 
-  - d0
   - z0SinTheta
   - dphi
   - deta
