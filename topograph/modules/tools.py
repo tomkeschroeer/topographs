@@ -1,5 +1,6 @@
 from h5py import File
 import numpy as np
+import numpy.ma as ma
 from glob import glob
 import yaml
 import pathlib
@@ -98,6 +99,8 @@ class GetConfiguration:
         config_items = [
             "input",
             "output",
+            "stepsize",
+            "lr",
             "njets",
             "tracks_name",
             "input_tracks_name",
@@ -141,12 +144,14 @@ class DatasetCreater:
 
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize :]
-            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize]["HadronConeExclExtendedTruthLabelID"]
-            self.reco = f[f"/{self.config.input_track_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
+            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize][:]
+            self.reco = f[f"/{self.config.input_tracks_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
+            self.edge_features = f["/edge_features"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
 
         self.ind_truthflav = self.get_b_indeces()
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
+        self.edge_features = self.edge_features[self.ind_truthflav]
 
     def get_b_indeces(self):
         hadronflavour = self.truth["flavour"]
@@ -156,14 +161,14 @@ class DatasetCreater:
         return sum(self.ind_truthflav)
 
     def get_edge_y(self):
-        truthOriginLabel = self.reco["truthOriginLabel"]
+        truthOriginLabel = self.edge_features["truthOriginLabel"]
         tOL_fromB = [[OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel]
         tOL_fromBC = [[OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel]
         tOL = np.array([[np.array([edge_y]).astype(int) for edge_y in (np.logical_or(fromB, fromBC))] for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)])
         return tOL
     
     def get_edge_feat_y(self):
-        edge_feat_y = np.array([[list(feat_track) for feat_track in feat_jet] for feat_jet in self.reco[self.global_conf.edge_features]])
+        edge_feat_y = np.array([[list(feat_track) for feat_track in feat_jet] for feat_jet in self.edge_features[self.global_conf.edge_features]])
         return edge_feat_y
 
     def get_vertex_feat_y(self):
@@ -173,9 +178,7 @@ class DatasetCreater:
     def get_track_input(self):
         track_input = ma.masked_invalid([[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco])
         mask = track_input.mask
-        if self.replace_invalids:
-            track_input[mask] = -999
-            return track_input
+        track_input[mask] = -999
         return track_input
 
 class DataGenerator:
@@ -183,7 +186,7 @@ class DataGenerator:
         self, 
         input : str, 
         metadata_dict : dict,
-        stepsize : int = 5,
+        stepsize : int = 5000,
         savejets : bool = False,
         savetracks : bool = True,
         track_name : str = "tracks",

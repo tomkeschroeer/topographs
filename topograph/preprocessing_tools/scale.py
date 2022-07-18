@@ -24,7 +24,7 @@ class Scaler:
         chunk_size = 1e5
 
         # Get the file_length
-        file_length = len(File(self.config.input, "r")[f"/{self.config.input_tracks_name}"].fields(self.var_list[0])[:])
+        file_length = len(File(f"{self.config.output}/{self.config.one_file_name}", "r")[f"/{self.config.input_tracks_name}"].fields(self.var_list[0])[:])
 
         # Get the number of chunks we need to load
         n_chunks = int(np.ceil(file_length / chunk_size))
@@ -38,7 +38,7 @@ class Scaler:
         scale_dict_trk_selection = {}
         # Load generator
         trks_scaling_generator = self.get_scaling_tracks_generator(
-            input_file=self.config.input,
+            input_file=f"{self.config.output}/{self.config.one_file_name}",
             nJets=file_length,
             tracks_name=self.config.input_tracks_name,
             chunk_size=chunk_size,

@@ -24,7 +24,7 @@ class Apply_Scaler:
 
         chunk_size = 1e5
 
-        file_length = len(File(self.config.input, "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
+        file_length = len(File(f"{self.config.output}/{self.config.one_file_name}", "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
 
         n_chunks = int(np.ceil(file_length / chunk_size))
 
@@ -41,7 +41,7 @@ class Apply_Scaler:
         logger.info(f"Save scaled inputs in file {self.out_file}")
 
         scale_generator = self.scale_generator(
-            input_file=self.config.input,
+            input_file=f"{self.config.output}/{self.config.one_file_name}",
             nJets = file_length,
             tracks_scale_dict=tracks_scale_dict,
             chunk_size=chunk_size,
@@ -223,10 +223,8 @@ class Apply_Scaler:
         return scaled_trks
 
     def save_remaining_dt(self):
-        with File(self.config.input, "r") as f:
+        with File(f"{self.config.output}/{self.config.one_file_name}", "r") as f:
             with File(self.out_file, "a") as o:
-                o.create_dataset(data=f["/jets"], name="jets")
-                o.create_dataset(data=f["/truth_hadrons"], name = "truth_hadrons")
-
-
-        
+                o.create_dataset(data=f[f"/{self.config.input_jet_name}"], name=self.config.input_jet_name)
+                o.create_dataset(data=f[f"/{self.config.input_truth_name}"], name = self.config.input_truth_name)
+                o.create_dataset(data=f[f"/{self.config.input_tracks_name}"][:,:][self.global_conf.edge_features], name="edge_features")
