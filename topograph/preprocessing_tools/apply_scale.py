@@ -19,71 +19,71 @@ class Apply_Scaler:
 
     def Run(self):
         logger = get_logger()
-        logger.info(f"Scale/Shift jets from {self.config.input}")
-        logger.info(f"Using scales in {self.scale_dict_path}")
+        # logger.info(f"Scale/Shift jets from {self.config.input}")
+        # logger.info(f"Using scales in {self.scale_dict_path}")
 
-        chunk_size = 1e5
+        # chunk_size = 1e5
 
-        file_length = len(File(f"{self.config.output}/{self.config.one_file_name}", "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
+        # file_length = len(File(f"{self.config.output}/{self.config.one_file_name}", "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
 
-        n_chunks = int(np.ceil(file_length / chunk_size))
+        # n_chunks = int(np.ceil(file_length / chunk_size))
 
-        # Check if tracks are used
-        tracks_scale_dict = {}
-        # Get the scale dict for tracks
-        with open(self.scale_dict_path, "r") as infile:
-            full_scale_dict = json.load(infile)
-            tracks_scale_dict[self.input_tracks_name] = full_scale_dict[f"{self.input_tracks_name}"]
+        # # Check if tracks are used
+        # tracks_scale_dict = {}
+        # # Get the scale dict for tracks
+        # with open(self.scale_dict_path, "r") as infile:
+        #     full_scale_dict = json.load(infile)
+        #     tracks_scale_dict[self.input_tracks_name] = full_scale_dict[f"{self.input_tracks_name}"]
 
 
-        logger.info("Applying scaling and shifting.")
+        # logger.info("Applying scaling and shifting.")
         self.out_file = f"{self.config.output}/{self.config.preprocessing_file_name}"
-        logger.info(f"Save scaled inputs in file {self.out_file}")
+        # logger.info(f"Save scaled inputs in file {self.out_file}")
 
-        scale_generator = self.scale_generator(
-            input_file=f"{self.config.output}/{self.config.one_file_name}",
-            nJets = file_length,
-            tracks_scale_dict=tracks_scale_dict,
-            chunk_size=chunk_size,
-        )
-        with File(self.out_file, "w") as h5file:
+        # scale_generator = self.scale_generator(
+        #     input_file=f"{self.config.output}/{self.config.one_file_name}",
+        #     nJets = file_length,
+        #     tracks_scale_dict=tracks_scale_dict,
+        #     chunk_size=chunk_size,
+        # )
+        # with File(self.out_file, "w") as h5file:
 
-            # Set up chunk counter and start looping
-            chunk_counter = 0
-            for chunk_counter in range(n_chunks):
-                logger.info(
-                    f"Applying scales for chunk {chunk_counter+1} of {n_chunks}."
-                )
-                try:
-                    tracks = next(scale_generator)
+        #     # Set up chunk counter and start looping
+        #     chunk_counter = 0
+        #     for chunk_counter in range(n_chunks):
+        #         logger.info(
+        #             f"Applying scales for chunk {chunk_counter+1} of {n_chunks}."
+        #         )
+        #         try:
+        #             tracks = next(scale_generator)
 
-                    if chunk_counter == 0:
-                        h5file.create_dataset(
-                            self.input_tracks_name,
-                            data=tracks[0],
-                          #  compression="lzf",
-                            chunks=((100,) + tracks[0].shape[1:]),
-                            maxshape=(
-                                None,
-                                tracks[0].shape[1],
-                                tracks[0].shape[2],
-                            ),
-                        )
+        #             if chunk_counter == 0:
+        #                 h5file.create_dataset(
+        #                     self.input_tracks_name,
+        #                     data=tracks[0],
+        #                   #  compression="lzf",
+        #                     chunks=((100,) + tracks[0].shape[1:]),
+        #                     maxshape=(
+        #                         None,
+        #                         tracks[0].shape[1],
+        #                         tracks[0].shape[2],
+        #                     ),
+        #                 )
 
-                    else:
-                        h5file[self.input_tracks_name].resize(
-                            (h5file[self.input_tracks_name].shape[0] + tracks[0].shape[0]),
-                            axis=0,
-                        )
+        #             else:
+        #                 h5file[self.input_tracks_name].resize(
+        #                     (h5file[self.input_tracks_name].shape[0] + tracks[0].shape[0]),
+        #                     axis=0,
+        #                 )
                         
-                        h5file[self.input_tracks_name][-tracks[0].shape[0] :] = tracks[0]
+        #                 h5file[self.input_tracks_name][-tracks[0].shape[0] :] = tracks[0]
 
-                except StopIteration:
-                    break
+        #         except StopIteration:
+        #             break
 
-                chunk_counter += 1
+        #         chunk_counter += 1
 
-        self.save_remaining_dt()
+        self.save_remaining_dt(logger)
 
     def scale_generator(
         self,
@@ -222,9 +222,37 @@ class Apply_Scaler:
         # Return the scaled and tracks and, if defined, the track labels
         return scaled_trks
 
-    def save_remaining_dt(self):
+    def save_remaining_dt(self, logger):
+        stepsize = 500_000
         with File(f"{self.config.output}/{self.config.one_file_name}", "r") as f:
+            fulllen = len(f[self.config.input_tracks_name])
+            stepsize = min(fulllen, stepsize)
+            n_steps = fulllen // stepsize +1
             with File(self.out_file, "a") as o:
-                o.create_dataset(data=f[f"/{self.config.input_jet_name}"], name=self.config.input_jet_name)
-                o.create_dataset(data=f[f"/{self.config.input_truth_name}"], name = self.config.input_truth_name)
-                o.create_dataset(data=f[f"/{self.config.input_tracks_name}"][:,:][self.global_conf.edge_features], name="edge_features")
+                for step in range(n_steps):
+                    logger.info(f"Appending remaining dataset... step {step + 1} from {n_steps}")
+                    if step == 0:
+                        if self.config.input_jet_name in o.keys():
+                            del o[f"/{self.config.input_jet_name}"]
+                        if self.config.input_truth_name in o.keys():
+                            del o[f"/{self.config.input_truth_name}"]
+                        if "edge_features" in o.keys():
+                            del o["/edge_features"]
+                        jet_data = f[f"/{self.config.input_jet_name}"][:stepsize]
+                        n_entries = len(jet_data)
+                        logger.info(f"Appending {n_entries} entries to dataset...")
+                        o.create_dataset(data=jet_data, name=self.config.input_jet_name, chunks=True, maxshape=(None,))
+                        truth_data = f[f"/{self.config.input_truth_name}"][:stepsize]
+                        o.create_dataset(data=truth_data, name = self.config.input_truth_name, chunks=True, maxshape=(None, truth_data.shape[0],))
+                        edge_features = f[f"/{self.config.input_tracks_name}"][:stepsize][self.global_conf.edge_features]
+                        o.create_dataset(data=edge_features, name="edge_features", chunks=True, maxshape=(None, edge_features.shape[0],))
+                    else:
+                        n_entries = len(f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize])
+                        logger.info(f"Appending {n_entries} entries to dataset...")
+                        o[self.config.input_jet_name].resize((o[self.config.input_jet_name].shape[0] + n_entries), axis=0)
+                        o[self.config.input_jet_name][-n_entries:] = f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize]
+                        o[self.config.input_truth_name].resize((o[self.config.input_truth_name].shape[0] + n_entries), axis=0)
+                        o[self.config.input_truth_name][-n_entries:] = f[f"/{self.config.input_truth_name}"][step*stepsize:(step+1)*stepsize]
+                        o["edge_features"].resize((o["edge_features"].shape[0] + n_entries), axis=0)
+                        o["edge_features"][-n_entries:] = f[f"/{self.config.input_tracks_name}"][step*stepsize:(step+1)*stepsize][self.global_conf.edge_features]
+        logger.info("Appending done.")
