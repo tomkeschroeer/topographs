@@ -223,8 +223,25 @@ class Apply_Scaler:
         return scaled_trks
 
     def save_remaining_dt(self):
-        with File(f"{self.config.output}/{self.config.one_file_name}", "r") as f:
+        stepsize = 5_000_000
+        fulllen = len(self.out_file[self.config.input_tracks_name])
+        stepsize = min(fulllen, stepsize)
+        n_steps = fulllen // stepsize +1
+        with File(f"{self.config.output}/{self.config.one_file_name}", "r") as f:   
             with File(self.out_file, "a") as o:
-                o.create_dataset(data=f[f"/{self.config.input_jet_name}"], name=self.config.input_jet_name)
-                o.create_dataset(data=f[f"/{self.config.input_truth_name}"], name = self.config.input_truth_name)
-                o.create_dataset(data=f[f"/{self.config.input_tracks_name}"][:,:][self.global_conf.edge_features], name="edge_features")
+                for step in range(n_steps):
+                    if step == 0:
+                        jet_data = f[f"/{self.config.input_jet_name}"][:stepsize]
+                        o.create_dataset(data=jet_data, name=self.config.input_jet_name, chunks=True, maxshape=(None, jet_data.shape[0]))
+                        truth_data = f[f"/{self.config.input_truth_name}"][:stepsize]
+                        o.create_dataset(data=truth_data, name = self.config.input_truth_name, chunks=True, maxshape=(None, truth_data.shape[0], truth_data.shape[1]))
+                        edge_features = f[f"/{self.config.input_tracks_name}"][self.global_conf.edge_features][:stepsize]
+                        o.create_dataset(data=edge_features, name="edge_features", chunks=True, maxshape=(None, edge_features.shape[0], edge_features.shape[1]))
+                    else:
+                        n_entries = len(f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize])
+                        o[self.config.input_jet_name].resize((o[self.config.input_jet_name].shape[0] + n_entries), axis=0)
+                        o[self.config.input_jet_name][:-n_entries] = f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize]
+                        o[self.config.input_truth_name].resize((o[self.config.input_truth_name].shape[0] + n_entries), axis=0)
+                        o[self.config.input_truth_name][:-n_entries] = f[f"/{self.config.input_truth_name}"][step*stepsize:(step+1)*stepsize]
+                        o["edge_features"].resize((o["edge_features"].shape[0] + n_entries), axis=0)
+                        o["edge_features"][:-n_entries] = f[f"/{self.config.input_track_name}"][self.global_conf.edge_features][step*stepsize:(step+1)*stepsize]
