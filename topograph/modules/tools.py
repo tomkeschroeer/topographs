@@ -144,7 +144,7 @@ class DatasetCreater:
 
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize :]
-            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize][:]
+            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"].fields("HadronConeExclExtendedTruthLabelID")[self.step*self.stepsize:(self.step+1)*self.stepsize][:]
             self.reco = f[f"/{self.config.input_tracks_name}"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
             self.edge_features = f["/edge_features"][self.step*self.stepsize:(self.step+1)*self.stepsize, :]
 
@@ -220,12 +220,9 @@ class DataGenerator:
 
     def load_in_memory(self, step : int = 0):
         with File(self.input) as f:
-            if self.savejets:
-                self.jets_batch = f[self.jets_name][step*self.stepsize : (step+1)*self.stepsize]
-            if self.savetracks:
-                self.track_batch = f[self.track_name][step*self.stepsize : (step+1)*self.stepsize]
-            self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
-            self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
+            self.track_batch = f[self.track_name][step*self.stepsize : (step+1)*self.stepsize]
+            #self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
+            #self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
             self.vertex_feat_batch = f[self.vertex_feat_name][step*self.stepsize : (step+1)*self.stepsize]
 
 class DataLoader(DataGenerator):
@@ -234,5 +231,5 @@ class DataLoader(DataGenerator):
         n_steps = n_samples//self.stepsize
         for step in range(n_steps):
             self.load_in_memory(step=step)
-            yield {"input_1":self.track_batch, "input_2":self.track_batch},{"edge_feat":self.edge_feat_batch,"edge_weight":self.edge_batch,"vertex_network":self.vertex_feat_batch}
+            yield {"input_1":self.track_batch, "input_2":self.track_batch}, self.vertex_feat_batch
 

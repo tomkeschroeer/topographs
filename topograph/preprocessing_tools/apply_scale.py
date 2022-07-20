@@ -223,7 +223,7 @@ class Apply_Scaler:
         return scaled_trks
 
     def save_remaining_dt(self, logger):
-        stepsize = 500_000
+        stepsize = 1_000
         with File(f"{self.config.output}/{self.config.one_file_name}", "r") as f:
             fulllen = len(f[self.config.input_tracks_name])
             stepsize = min(fulllen, stepsize)
@@ -244,15 +244,16 @@ class Apply_Scaler:
                         o.create_dataset(data=jet_data, name=self.config.input_jet_name, chunks=True, maxshape=(None,))
                         truth_data = f[f"/{self.config.input_truth_name}"][:stepsize]
                         o.create_dataset(data=truth_data, name = self.config.input_truth_name, chunks=True, maxshape=(None, truth_data.shape[0],))
-                        edge_features = f[f"/{self.config.input_tracks_name}"][:stepsize][self.global_conf.edge_features]
+                        edge_features = f[f"/edge_features"][:stepsize]
                         o.create_dataset(data=edge_features, name="edge_features", chunks=True, maxshape=(None, edge_features.shape[0],))
                     else:
                         n_entries = len(f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize])
-                        logger.info(f"Appending {n_entries} entries to dataset...")
-                        o[self.config.input_jet_name].resize((o[self.config.input_jet_name].shape[0] + n_entries), axis=0)
-                        o[self.config.input_jet_name][-n_entries:] = f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize]
-                        o[self.config.input_truth_name].resize((o[self.config.input_truth_name].shape[0] + n_entries), axis=0)
-                        o[self.config.input_truth_name][-n_entries:] = f[f"/{self.config.input_truth_name}"][step*stepsize:(step+1)*stepsize]
-                        o["edge_features"].resize((o["edge_features"].shape[0] + n_entries), axis=0)
-                        o["edge_features"][-n_entries:] = f[f"/{self.config.input_tracks_name}"][step*stepsize:(step+1)*stepsize][self.global_conf.edge_features]
+                        if n_entries != 0:
+                            logger.info(f"Appending {n_entries} entries to dataset...")
+                            o[self.config.input_jet_name].resize((o[self.config.input_jet_name].shape[0] + n_entries), axis=0)
+                            o[self.config.input_jet_name][-n_entries:] = f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize]
+                            o[self.config.input_truth_name].resize((o[self.config.input_truth_name].shape[0] + n_entries), axis=0)
+                            o[self.config.input_truth_name][-n_entries:] = f[f"/{self.config.input_truth_name}"][step*stepsize:(step+1)*stepsize]
+                            o["edge_features"].resize((o["edge_features"].shape[0] + n_entries), axis=0)
+                            o["edge_features"][-n_entries:] = f[f"/edge_features"][step*stepsize:(step+1)*stepsize]
         logger.info("Appending done.")

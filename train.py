@@ -41,40 +41,30 @@ if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
     metadata_dict = {}
-    with File(config.training_input, "r") as f:
-        metadata_dict["n_jets"], metadata_dict["n_trks"], metadata_dict["n_trk_features"] = f[f"{config.track_name}"].shape
-        metadata_dict["n_edge_y"] = 1
-        _, _, metadata_dict["n_edge_feat"] = f[f"{config.edge_feat_name}"].shape
+    with File(f"{config.output}/{config.training_file_name}", "r") as f:
+        metadata_dict["n_jets"], metadata_dict["n_trks"], metadata_dict["n_trk_features"] = f[f"{config.tracks_name}"].shape
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
 
     types = ({
             "input_1": float32,
             "input_2": float32
         },
-        {
-            "edge_feat": float32,
-            "edge_weight": int32,
-            "vertex_network": float32
-        }
+        float32,
     )
     shapes = ({
             "input_1": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"])),
             "input_2": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_trk_features"]))
         },
-        {
-            "edge_feat": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_edge_feat"])),
-            "edge_weight": TensorShape((None, metadata_dict["n_trks"], metadata_dict["n_edge_y"])),
-            "vertex_network": TensorShape((None, metadata_dict["n_vertex_feat"]))
+        TensorShape((None, metadata_dict["n_vertex_feat"]))
 
-        }
     )
 
     tf_dataset = (Dataset.from_generator(
             DataLoader(
-                input=f"{config.output}/training_files/{config.training_file_name}",
+                input=f"{config.output}/{config.training_file_name}",
                 metadata_dict=metadata_dict,
                 savetracks=True,
-                track_name=config.track_name,
+                track_name=config.tracks_name,
                 edge_name=config.edge_name,
                 edge_feat_name=config.edge_feat_name,
                 vertex_feat_name=config.vertex_feat_name
@@ -94,6 +84,6 @@ if __name__ == "__main__":
     )
 
     callbacks = [model_checkpoint]
-
+    print(tf_dataset)
     model = get_model(input_feat=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]), config=config)
     model.fit(tf_dataset, epochs = config.epochs, steps_per_epoch = config.steps_per_epoch, callbacks=callbacks)
