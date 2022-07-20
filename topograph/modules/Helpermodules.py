@@ -24,7 +24,9 @@ class GetConfiguration:
             "output",
             "jets_name",
             "track_name",
-            "target_name",
+            "edge_name"
+            "edge_feat_name"
+            "vertex_feat_name"
             "epochs",
             "edge_feature_network",
             "edge_weight_network",
@@ -46,6 +48,9 @@ class DataGenerator:
         savejets : bool = False,
         savetracks : bool = True,
         track_name : str = "tracks",
+        edge_name : str,
+        edge_feat_name : str,
+        vertex_feat_name : str,
         jets_name : str = "jets",
         target_name: str = "y"
         ):
@@ -69,8 +74,9 @@ class DataGenerator:
         self.savejets = savejets
         self.savetracks = savetracks
         self.track_name = track_name
-        self.jets_name = jets_name
-        self.target_name = target_name
+        self.edge_feat_name = edge_feat_name
+        self.edge_name = edge_name
+        self.vertex_feat_name = vertex_feat_name
 
     def load_in_memory(self, step : int = 0):
         with File(self.input) as f:
@@ -78,7 +84,8 @@ class DataGenerator:
                 self.jets_batch = f[self.jets_name][step*self.stepsize : (step+1)*self.stepsize]
             if self.savetracks:
                 self.track_batch = f[self.track_name][step*self.stepsize : (step+1)*self.stepsize]
-            self.y = f[self.target_name][step*self.stepsize : (step+1)*self.stepsize]
+            self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
+            self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
     
 class DataLoader(DataGenerator):
     def __call__(self):
