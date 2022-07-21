@@ -15,7 +15,7 @@ class Prepare:
     
     def Run(self):
         logger = get_logger()
-        stepsize = 300_000
+        stepsize = 500_000
         global_conf = GlobalConfig()
         input_file = f"{self.config.output}/{self.config.preprocessing_file_name}"
         training_file_dir = f"{self.config.output}"
@@ -34,12 +34,13 @@ class Prepare:
             else:
                 njets_step = datasets.get_n_valid_jets()
                 logger.info(f"loading {njets_step} valid jets")
-                with File(f"{training_file_dir}/{self.config.training_file_name}", "a") as train_file:
-                    train_file[self.config.vertex_feat_name].resize((train_file[self.config.vertex_feat_name].shape[0] + njets_step), axis=0)
-                    train_file[self.config.vertex_feat_name][-njets_step:] = datasets.get_vertex_feat_y()
-                    #train_file[self.config.edge_feat_name].resize((train_file[self.config.edge_feat_name].shape[0] + njets_step), axis=0)
-                    #train_file[self.config.edge_feat_name][-njets_step:] = datasets.get_edge_feat_y()
-                    train_file[self.config.edge_name].resize((train_file[self.config.edge_name].shape[0] + njets_step), axis=0)
-                    train_file[self.config.edge_name][-njets_step:] = datasets.get_edge_y()
-                    train_file[self.config.tracks_name].resize((train_file[self.config.tracks_name].shape[0] + njets_step), axis=0)
-                    train_file[self.config.tracks_name][-njets_step:] = datasets.get_track_input()
+                if njets_step >0:
+                    with File(f"{training_file_dir}/{self.config.training_file_name}", "a") as train_file:
+                        train_file[self.config.vertex_feat_name].resize((train_file[self.config.vertex_feat_name].shape[0] + njets_step), axis=0)
+                        train_file[self.config.vertex_feat_name][-njets_step:] = datasets.get_vertex_feat_y()
+                        #train_file[self.config.edge_feat_name].resize((train_file[self.config.edge_feat_name].shape[0] + njets_step), axis=0)
+                        #train_file[self.config.edge_feat_name][-njets_step:] = datasets.get_edge_feat_y()
+                        train_file[self.config.edge_name].resize((train_file[self.config.edge_name].shape[0] + njets_step), axis=0)
+                        train_file[self.config.edge_name][-njets_step:] = datasets.get_edge_y()
+                        train_file[self.config.tracks_name].resize((train_file[self.config.tracks_name].shape[0] + njets_step), axis=0)
+                        train_file[self.config.tracks_name][-njets_step:] = datasets.get_track_input()

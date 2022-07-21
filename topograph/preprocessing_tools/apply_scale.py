@@ -223,7 +223,7 @@ class Apply_Scaler:
         return scaled_trks
 
     def save_remaining_dt(self, logger):
-        stepsize = 1_000
+        stepsize = 500_000
         with File(f"{self.config.output}/{self.config.one_file_name}", "r") as f:
             fulllen = len(f[self.config.input_tracks_name])
             stepsize = min(fulllen, stepsize)

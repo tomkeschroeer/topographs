@@ -14,7 +14,7 @@ class OneFileMaker:
     def Run(self):
         input_files = glob(self.config.input)
         logger = get_logger()
-        stepsize = 100_000
+        stepsize = 500_000
         metadata = {}
         continue_loading = True
         global_conf = GlobalConfig()
