@@ -120,7 +120,7 @@ class GetConfiguration:
             "vertex_feat_name"
         ]
 
-        for item in config_items:
+        for item in self.conf.keys():#config_items:
             if item in self.conf:
                 setattr(self, item, self.conf[item])
             else:
@@ -183,7 +183,8 @@ class DatasetCreater:
 
 class DataGenerator:
     def __init__(
-        self, 
+        self,
+        train_dataset: bool,
         input : str, 
         metadata_dict : dict,
         stepsize : int = 5000,
@@ -209,6 +210,7 @@ class DataGenerator:
             bool defining if jets are supposed to be saved
         """
         self.input = input
+        self.train_dataset = train_dataset
         self.metadata_dict = metadata_dict
         self.stepsize = stepsize
         self.savejets = savejets
@@ -223,7 +225,8 @@ class DataGenerator:
             self.track_batch = f[self.track_name][step*self.stepsize : (step+1)*self.stepsize]
             #self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
             #self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
-            self.vertex_feat_batch = f[self.vertex_feat_name][step*self.stepsize : (step+1)*self.stepsize]
+            if self.train_dataset:
+                self.vertex_feat_batch = f[self.vertex_feat_name][step*self.stepsize : (step+1)*self.stepsize]
 
 class DataLoader(DataGenerator):
     def __call__(self):
@@ -231,5 +234,8 @@ class DataLoader(DataGenerator):
         n_steps = n_samples//self.stepsize
         for step in range(n_steps):
             self.load_in_memory(step=step)
-            yield {"input_1":self.track_batch, "input_2":self.track_batch}, self.vertex_feat_batch
+            if self.train_dataset:
+                yield {"input_1":self.track_batch, "input_2":self.track_batch}, self.vertex_feat_batch
+            else: 
+                yield {"input_1":self.track_batch, "input_2":self.track_batch}
 
