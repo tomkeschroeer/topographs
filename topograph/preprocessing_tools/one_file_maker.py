@@ -1,5 +1,6 @@
 from glob import glob
 import os
+import numpy as np
 from h5py import File
 from time import time
 
@@ -12,7 +13,7 @@ class OneFileMaker:
     def __init__(self, config):
         self.config = config
     def Run(self):
-        input_files = glob(self.config.input)
+        input_files = np.random.shuffle(glob(self.config.input))
         logger = get_logger()
         stepsize = 500_000
         metadata = {}
