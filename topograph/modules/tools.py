@@ -6,11 +6,15 @@ import yaml
 import pathlib
 import logging
 
+import tensorflow as tf
 import tensorflow.keras.backend as K
-from tensorflow import constant
+from tensorflow import constant, float32, TensorShape
 
 def step_activation(x):
     return K.switch(x >= 0.7, constant([[1]], dtype=x.dtype), constant([[0]], dtype=x.dtype))
+
+def shifted_relu_activation(x):
+    return K.switch(x >= 0.5, 2*(x-0.5), constant([[0]], dtype=x.dtype))
 
 def Mask_invalid(x):
     return K.equal(x, np.nan)
@@ -184,9 +188,11 @@ class DatasetCreater:
 class DataGenerator:
     def __init__(
         self,
-        train_dataset: bool,
-        input : str, 
+        input : str,
         metadata_dict : dict,
+        get_labels: bool = True,
+        get_inputs: bool = True,
+        get_weight_labels: bool = False,
         stepsize : int = 5000,
         savejets : bool = False,
         savetracks : bool = True,
@@ -210,7 +216,9 @@ class DataGenerator:
             bool defining if jets are supposed to be saved
         """
         self.input = input
-        self.train_dataset = train_dataset
+        self.get_inputs = get_inputs
+        self.get_labels = get_labels
+        self.get_weight_labels = get_weight_labels
         self.metadata_dict = metadata_dict
         self.stepsize = stepsize
         self.savejets = savejets
@@ -222,20 +230,54 @@ class DataGenerator:
 
     def load_in_memory(self, step : int = 0):
         with File(self.input) as f:
-            self.track_batch = f[self.track_name][step*self.stepsize : (step+1)*self.stepsize]
             #self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
-            #self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
-            if self.train_dataset:
+            if self.get_inputs:
+                self.track_batch = f[self.track_name][step*self.stepsize : (step+1)*self.stepsize]
+            if self.get_labels:
                 self.vertex_feat_batch = f[self.vertex_feat_name][step*self.stepsize : (step+1)*self.stepsize]
+            if self.get_weight_labels:
+                self.edge_batch = f[self.edge_name][step*self.stepsize : (step+1)*self.stepsize]
+    
+    def get_types_shapes(self):
+        if self.get_labels and self.get_inputs:
+            types = ({
+                    "input_1": float32,
+                    "input_2": float32
+                },
+                float32)
+            shapes = ({
+                    "input_1": TensorShape((None, self.metadata_dict["n_trks"], self.metadata_dict["n_trk_features"])),
+                    "input_2": TensorShape((None, self.metadata_dict["n_trks"], self.metadata_dict["n_trk_features"]))
+                },
+                TensorShape((None, self.metadata_dict["n_vertex_feat"]))
+            )
+        elif self.get_labels:
+            types = (float32)
+            shapes = (TensorShape((None, self.metadata_dict["n_vertex_feat"])))
+        elif self.get_inputs:
+            types = ({
+                    "input_1": float32,
+                    "input_2": float32
+                })
+            shapes = ({
+                    "input_1": TensorShape((None, self.metadata_dict["n_trks"], self.metadata_dict["n_trk_features"])),
+                    "input_2": TensorShape((None, self.metadata_dict["n_trks"], self.metadata_dict["n_trk_features"]))
+                })
+        return types, shapes
+        
 
 class DataLoader(DataGenerator):
     def __call__(self):
         n_samples = self.metadata_dict["n_jets"]
-        n_steps = n_samples//self.stepsize
+        n_steps = n_samples//self.stepsize +1
         for step in range(n_steps):
             self.load_in_memory(step=step)
-            if self.train_dataset:
+            if self.get_inputs and self.get_labels and not self.get_weight_labels:
                 yield {"input_1":self.track_batch, "input_2":self.track_batch}, self.vertex_feat_batch
-            else: 
+            elif self.get_inputs:
                 yield {"input_1":self.track_batch, "input_2":self.track_batch}
+            elif self.get_labels:
+                yield self.vertex_feat_batch
+            elif self.get_weight_labels:
+                yield self.get_weight_labels
 

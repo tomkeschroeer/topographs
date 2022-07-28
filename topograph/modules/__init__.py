@@ -12,6 +12,7 @@ from topograph.modules.Vertex_properties import (
 )
 from topograph.modules.tools import(
     step_activation,
+    shifted_relu_activation,
     GlobalConfig,
     get_logger,
     GetConfiguration,

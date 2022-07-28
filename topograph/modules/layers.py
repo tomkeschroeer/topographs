@@ -11,7 +11,10 @@ from tensorflow.keras.layers import (  # pylint: disable=import-error
     Flatten
 )
 
-from topograph.modules.tools import step_activation
+from topograph.modules.tools import (
+    step_activation,
+    shifted_relu_activation
+)
 
 class EdgeLayers(Layer):
     """
@@ -39,11 +42,14 @@ class EdgeLayers(Layer):
         self.net_name = net_name
 
     def __call__(self, input_shape):
-        get_custom_objects().update({'step_activation': Activation(step_activation)})
+        get_custom_objects().update({
+            'step_activation': Activation(step_activation),
+            'shifted_relu_activation': Activation(shifted_relu_activation)
+        })
 
         # Set the track input
         input = Input(shape = input_shape)
-        masked_inputs = Masking(mask_value=-999.0)(input)
+        masked_inputs = Masking(mask_value=0)(input)
         tdd = masked_inputs
         
         # Define the TimeDistributed layers for the different tracks
@@ -57,7 +63,8 @@ class EdgeLayers(Layer):
 
         # Set output and activation function
         output_prev = TimeDistributed(Dense(self.nodes[-1], activation="sigmoid"), name=f"{self.net_name}_sigmoid")(tdd)
-        output = TimeDistributed(Activation(step_activation), name=self.net_name)(output_prev)
+        output = TimeDistributed(Activation(shifted_relu_activation), name=self.net_name)(output_prev)
+       # output = TimeDistributed(Activation(step_activation), name=self.net_name)(output_prev)
 
         return input, output_prev, output
 
@@ -89,7 +96,7 @@ class FeatLayers(Layer):
     def __call__(self, input_shape):
         # Set the track input
         input = Input(shape = input_shape)
-        masked_inputs = Masking(mask_value=-999.0)(input)
+        masked_inputs = Masking(mask_value=0)(input)
         tdd = masked_inputs
 
         # Define the TimeDistributed layers for the different tracks

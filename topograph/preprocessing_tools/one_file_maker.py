@@ -16,9 +16,8 @@ class OneFileMaker:
     def Run(self):
         input_files = glob(self.config.input)
         input_files = random.sample(input_files, k=len(input_files))
-        print(input_files)
         logger = get_logger()
-        stepsize = 500_000
+        stepsize = min(500_000, int(self.config.njets/2))
         metadata = {}
         continue_loading = True
         global_conf = GlobalConfig()
@@ -42,14 +41,15 @@ class OneFileMaker:
                     else:
                         with File(f"{self.config.output}/{self.config.one_file_name}", "a") as out_file:
                             n_entries = len(f[f"/{self.config.input_jet_name}"][step*stepsize:(step+1)*stepsize])
-                            out_file[self.config.input_tracks_name].resize((out_file[self.config.input_tracks_name].shape[0] + n_entries), axis=0)
-                            out_file[self.config.input_tracks_name][-n_entries:] = f[f"/{self.config.input_tracks_name}"].fields(global_conf.track_inputs)[step*stepsize:(step+1)*stepsize]
-                            out_file[self.config.input_truth_name].resize((out_file[self.config.input_truth_name].shape[0] + n_entries), axis=0)
-                            out_file[self.config.input_truth_name][-n_entries:] = f[f"/{self.config.input_truth_name}"].fields(global_conf.vertex_features + ["flavour"])[step*stepsize:(step+1)*stepsize]
-                            out_file[self.config.input_jet_name].resize((out_file[self.config.input_jet_name].shape[0] + n_entries), axis=0)
-                            out_file[self.config.input_jet_name][-n_entries:] = f[f"/{self.config.input_jet_name}"].fields(["HadronConeExclExtendedTruthLabelID"])[step*stepsize:(step+1)*stepsize]
-                            out_file["edge_features"].resize((out_file[self.config.input_jet_name].shape[0] + n_entries), axis=0)
-                            out_file["edge_features"][-n_entries:] = f[f"/{self.config.input_tracks_name}"].fields(["truthOriginLabel"])[step*stepsize:(step+1)*stepsize]           
+                            if n_entries > 0:
+                                out_file[self.config.input_tracks_name].resize((out_file[self.config.input_tracks_name].shape[0] + n_entries), axis=0)
+                                out_file[self.config.input_tracks_name][-n_entries:] = f[f"/{self.config.input_tracks_name}"].fields(global_conf.track_inputs)[step*stepsize:(step+1)*stepsize]
+                                out_file[self.config.input_truth_name].resize((out_file[self.config.input_truth_name].shape[0] + n_entries), axis=0)
+                                out_file[self.config.input_truth_name][-n_entries:] = f[f"/{self.config.input_truth_name}"].fields(global_conf.vertex_features + ["flavour"])[step*stepsize:(step+1)*stepsize]
+                                out_file[self.config.input_jet_name].resize((out_file[self.config.input_jet_name].shape[0] + n_entries), axis=0)
+                                out_file[self.config.input_jet_name][-n_entries:] = f[f"/{self.config.input_jet_name}"].fields(["HadronConeExclExtendedTruthLabelID"])[step*stepsize:(step+1)*stepsize]
+                                out_file["edge_features"].resize((out_file["edge_features"].shape[0] + n_entries), axis=0)
+                                out_file["edge_features"][-n_entries:] = f[f"/{self.config.input_tracks_name}"].fields(["truthOriginLabel"])[step*stepsize:(step+1)*stepsize]           
                             if len(out_file[self.config.input_jet_name]) >= int(self.config.njets): continue_loading = False
                     if continue_loading == False: 
                         logger.info(f"Loaded {self.config.njets} jets, stop loading.")
