@@ -4,7 +4,6 @@ import pathlib
 from glob import glob
 
 import numpy as np
-import numpy.ma as ma
 import tensorflow.keras.backend as K
 import yaml
 from h5py import File
@@ -210,9 +209,7 @@ class DatasetCreater:
         edge_feat_y = np.array(
             [
                 [list(feat_track) for feat_track in feat_jet]
-                for feat_jet in self.edge_features[
-                    self.global_conf.edge_features
-                ]
+                for feat_jet in self.edge_features[self.global_conf.edge_features]
             ]
         )
         return edge_feat_y
@@ -227,17 +224,14 @@ class DatasetCreater:
                 )
             ]
         )
+        vertex_feat = np.log(vertex_feat)
         return vertex_feat
 
     def get_track_input(self):
-        track_input = ma.masked_invalid(
-            [
-                [list(inputs_track) for inputs_track in input_jet]
-                for input_jet in self.reco
-            ]
-        )
-        mask = track_input.mask
-        track_input[mask] = -999
+        track_input = [
+            [list(inputs_track) for inputs_track in input_jet]
+            for input_jet in self.reco
+        ]
         return track_input
 
 
