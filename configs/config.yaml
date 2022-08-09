@@ -1,24 +1,17 @@
 input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fulltruth/user.toschroe.410470.e6337_s3681_r13167_p4931.tdd.EMPFlowTruth_n40.22_2_75.22-06-27_truth_40tracks_output.h5/*.h5
 #/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
 
-output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Output_ttbar/
+output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar/
 
-# one_file_name: topograph_ttbar_inputfiles_combined.h5
-# preprocessing_file_name: preprocessed_ttbar_topograph.h5
-# training_file_name: training_ttbar_topographs.h5
-# scale_dict: scale_dict_ttbar.json
+one_file_name: topograph_ttbar_inputfiles_combined.h5
+preprocessing_file_name: preprocessed_ttbar_topograph.h5
+scale_dict: scale_dict_ttbar.json
 
-one_file_name: topograph_ttbar_inputfiles_combined_val.h5
-preprocessing_file_name: preprocessed_ttbar_topograph_val.h5
-training_file_name: validation_ttbar_topographs.h5
-scale_dict: scale_dict_ttbar_val.json
+training_file_name: training_ttbar_topographs.h5
+validation_file_name: validation_ttbar_topographs.h5
+testing_file_name: testing_ttbar_topographs.h5
 
-# one_file_name_test: topograph_ttbar_inputfiles_combined_test.h5
-# preprocessing_file_name_test: preprocessed_ttbar_topograph_test.h5
-# training_file_name_test: testing_ttbar_topographs.h5
-# scale_dict_test: scale_dict_ttbar_test.json
-
-njets: 1_000_000
+njets: 10_000_000
 njets_val: 1_000_000
 njets_test: 1_000_000
 
@@ -31,7 +24,7 @@ edge_name: "Y_edge"
 edge_feat_name: "Y_edge_features"
 vertex_feat_name: Y_vertex_features
 
-epochs: 200
+epochs: 20
 stepsize: 15000
 lr: 0.001
 
@@ -44,7 +37,8 @@ edge_weight_network:
   n_tracks_name: tracks
 
 vertex_network:
-  nodes: [50,50,50,5] 
+  nodes: [50,50,50,1] 
 
 evaluation:
   model: model_epoch200.h5
+  plot_efficiency: True

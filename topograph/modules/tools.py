@@ -158,14 +158,14 @@ class DatasetCreater:
         self.stepsize = stepsize
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
-
+        print(self.input_file)
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
-            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"].fields(
+            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][
                 "HadronConeExclExtendedTruthLabelID"
-            )[self.step * self.stepsize : (self.step + 1) * self.stepsize][:]
+            ][self.step * self.stepsize : (self.step + 1) * self.stepsize][:]
             self.reco = f[f"/{self.config.input_tracks_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             ]
@@ -188,7 +188,7 @@ class DatasetCreater:
         return sum(self.ind_truthflav)
 
     def get_edge_y(self):
-        truthOriginLabel = self.edge_features.fields("truthOriginLabel")
+        truthOriginLabel = self.edge_features["truthOriginLabel"]
         tOL_fromB = [
             [OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel
         ]
@@ -210,9 +210,9 @@ class DatasetCreater:
         edge_feat_y = np.array(
             [
                 [list(feat_track) for feat_track in feat_jet]
-                for feat_jet in self.edge_features.fields(
+                for feat_jet in self.edge_features[
                     self.global_conf.edge_features
-                )
+                ]
             ]
         )
         return edge_feat_y
@@ -222,8 +222,8 @@ class DatasetCreater:
             [
                 list(vertex_feat[hf == 5][0])
                 for hf, vertex_feat in zip(
-                    self.truth.fields("flavour"),
-                    self.truth.fields(self.global_conf.vertex_features),
+                    self.truth["flavour"],
+                    self.truth[self.global_conf.vertex_features],
                 )
             ]
         )

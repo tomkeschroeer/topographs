@@ -44,6 +44,7 @@ class Plotter:
 
         self.plot_dir = f"{self.config.output}/plots"
         makedirs(self.plot_dir, exist_ok=True)
+        
         if config.evaluation["plot_efficiency"]:
             n_modelfiles = len(glob(f"{self.config.output}/modelfiles/model_epoch*"))
             self.plotting_efficiency(n_modelfiles, self.metadata_dict["n_jets"]*self.metadata_dict["n_trks"], logger)
@@ -99,7 +100,8 @@ class Plotter:
 
     def plotting_efficiency(self, n_modelfiles, Ntotal, logger):
         effs = []
-        for i in range(1,n_modelfiles+1):
+        #for i in range(1,n_modelfiles+1):
+        for i in [1,10,20]:
             logger.info(f"plotting efficiency for model model_epoch{i:03d}")
             _, model = self.load_model(f"{self.config.output}/modelfiles/model_epoch{i:03d}.h5")
             preds = self.get_predictions(model)
