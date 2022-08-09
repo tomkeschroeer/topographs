@@ -65,17 +65,23 @@ def get_parser():
 if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
+    output_dir = f"{config.output}"
+    dataset_types = {
+        "": {"njets":config.njets, "final_filename": f"{output_dir}/{config.training_file_name}"},
+        "_val": {"njets": config.njets_val, "final_filename": f"{output_dir}/{config.validation_file_name}"},
+        "_test": {"njets": config.njets_test, "final_filename": f"{output_dir}/{config.testing_file_name}"}
+    }
     if args.onefile:
-        onefile = OneFileMaker(config)
+        onefile = OneFileMaker(config, dataset_types)
         onefile.Run()
     if args.scale:
-        scale = Scaler(config)
+        scale = Scaler(config, dataset_types)
         scale.Run()
     if args.apply_scales:
-        apply_scales = Apply_Scaler(config)
+        apply_scales = Apply_Scaler(config, dataset_types)
         apply_scales.Run()
     if args.prepare:
-        prepare = Prepare(config)
+        prepare = Prepare(config, dataset_types)
         prepare.Run()
     if args.merge:
         merge = Merge(config)

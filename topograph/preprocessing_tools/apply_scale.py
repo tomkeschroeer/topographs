@@ -10,80 +10,81 @@ from topograph.modules import (
 )
 
 class Apply_Scaler:
-    def __init__(self, config):
+    def __init__(self, config, dataset_types):
         self.config = config
-        self.scale_dict_path = f"{self.config.output}/{self.config.scale_dict}"
+        self.dataset_types = dataset_types 
+        self.scale_dict_path_basic = f"{self.config.output}/{self.config.scale_dict}".replace(".json", "")
         self.global_conf = GlobalConfig()
         self.var_list = self.global_conf.track_inputs
         self.input_tracks_name = self.config.input_tracks_name
 
     def Run(self):
         logger = get_logger()
-        logger.info(f"Scale/Shift jets from {self.config.input}")
-        logger.info(f"Using scales in {self.scale_dict_path}")
 
         chunk_size = 1e5
+        for dataset_type in self.dataset_types.keys():
+            self.scale_dict_path = f"{self.scale_dict_path_basic}{dataset_type}.json"
+            logger.info(f"Scale/Shift jets from {self.config.input}")
+            logger.info(f"Using scales in {self.scale_dict_path}")
+            file_length = len(File(f"{self.config.output}/{self.config.one_file_name}", "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
+            n_chunks = int(np.ceil(file_length / chunk_size))
 
-        file_length = len(File(f"{self.config.output}/{self.config.one_file_name}", "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
-
-        n_chunks = int(np.ceil(file_length / chunk_size))
-
-        # Check if tracks are used
-        tracks_scale_dict = {}
-        # Get the scale dict for tracks
-        with open(self.scale_dict_path, "r") as infile:
-            full_scale_dict = json.load(infile)
-            tracks_scale_dict[self.input_tracks_name] = full_scale_dict[f"{self.input_tracks_name}"]
+            # Check if tracks are used
+            tracks_scale_dict = {}
+            # Get the scale dict for tracks
+            with open(self.scale_dict_path, "r") as infile:
+                full_scale_dict = json.load(infile)
+                tracks_scale_dict[self.input_tracks_name] = full_scale_dict[f"{self.input_tracks_name}"]
 
 
-        logger.info("Applying scaling and shifting.")
-        self.out_file = f"{self.config.output}/{self.config.preprocessing_file_name}"
-        logger.info(f"Save scaled inputs in file {self.out_file}")
+            logger.info("Applying scaling and shifting.")
+            self.out_file = f"{self.config.output}/{self.config.preprocessing_file_name}".replace(".h5","") + f"{dataset_type}.h5"
+            logger.info(f"Save scaled inputs in file {self.out_file}")
+            input_file=f"{self.config.output}/{self.config.one_file_name}".replace(".h5","") + f"{dataset_type}.h5"
+            scale_generator = self.scale_generator(
+                input_file=input_file,
+                nJets = file_length,
+                tracks_scale_dict=tracks_scale_dict,
+                chunk_size=chunk_size,
+            )
+            with File(self.out_file, "w") as h5file:
 
-        scale_generator = self.scale_generator(
-            input_file=f"{self.config.output}/{self.config.one_file_name}",
-            nJets = file_length,
-            tracks_scale_dict=tracks_scale_dict,
-            chunk_size=chunk_size,
-        )
-        with File(self.out_file, "w") as h5file:
+                # Set up chunk counter and start looping
+                chunk_counter = 0
+                for chunk_counter in range(n_chunks):
+                    logger.info(
+                        f"Applying scales for chunk {chunk_counter+1} of {n_chunks}."
+                    )
+                    try:
+                        tracks = next(scale_generator)
 
-            # Set up chunk counter and start looping
-            chunk_counter = 0
-            for chunk_counter in range(n_chunks):
-                logger.info(
-                    f"Applying scales for chunk {chunk_counter+1} of {n_chunks}."
-                )
-                try:
-                    tracks = next(scale_generator)
+                        if chunk_counter == 0:
+                            h5file.create_dataset(
+                                self.input_tracks_name,
+                                data=tracks[0],
+                            #  compression="lzf",
+                                chunks=((100,) + tracks[0].shape[1:]),
+                                maxshape=(
+                                    None,
+                                    tracks[0].shape[1],
+                                    tracks[0].shape[2],
+                                ),
+                            )
 
-                    if chunk_counter == 0:
-                        h5file.create_dataset(
-                            self.input_tracks_name,
-                            data=tracks[0],
-                          #  compression="lzf",
-                            chunks=((100,) + tracks[0].shape[1:]),
-                            maxshape=(
-                                None,
-                                tracks[0].shape[1],
-                                tracks[0].shape[2],
-                            ),
-                        )
+                        else:
+                            h5file[self.input_tracks_name].resize(
+                                (h5file[self.input_tracks_name].shape[0] + tracks[0].shape[0]),
+                                axis=0,
+                            )
+                            
+                            h5file[self.input_tracks_name][-tracks[0].shape[0] :] = tracks[0]
 
-                    else:
-                        h5file[self.input_tracks_name].resize(
-                            (h5file[self.input_tracks_name].shape[0] + tracks[0].shape[0]),
-                            axis=0,
-                        )
-                        
-                        h5file[self.input_tracks_name][-tracks[0].shape[0] :] = tracks[0]
+                    except StopIteration:
+                        break
 
-                except StopIteration:
-                    break
+                    chunk_counter += 1
 
-                chunk_counter += 1
-
-        self.save_remaining_dt(logger)
+            self.save_remaining_dt(logger, input_file)
 
     def scale_generator(
         self,
@@ -222,9 +223,9 @@ class Apply_Scaler:
         # Return the scaled and tracks and, if defined, the track labels
         return scaled_trks
 
-    def save_remaining_dt(self, logger):
+    def save_remaining_dt(self, logger, input_file):
         stepsize = 500_000
-        with File(f"{self.config.output}/{self.config.one_file_name}", "r") as f:
+        with File(input_file, "r") as f:
             fulllen = len(f[self.config.input_tracks_name])
             stepsize = min(fulllen, stepsize)
             n_steps = fulllen // stepsize +1

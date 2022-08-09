@@ -11,6 +11,7 @@ def comp_pred_label_pt(pred_f_val, label_f_val):
 def calculate_efficiency(pred, label, Ntotal):
     pred_f = pred.flatten()
     label_f = label.flatten()
+    print(list(pred_f[pred_f < 0.4]))
     n_true = list(map(comp_pred_label, pred_f, label_f))
     Ntotal = Ntotal
     return sum(n_true)/Ntotal
