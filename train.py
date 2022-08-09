@@ -46,7 +46,7 @@ if __name__ == "__main__":
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
 
     DatasetGenerator = DataLoader(
-            input=f"{config.output}/{config.training_file_name}",
+            input=f"{config.output}/{config.training_file_name}".replace("//","/"),
             get_labels=True,
             get_inputs=True,
             metadata_dict=metadata_dict,

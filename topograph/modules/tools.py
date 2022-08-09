@@ -176,13 +176,12 @@ class DatasetCreater:
         return edge_feat_y
 
     def get_vertex_feat_y(self):
-        vertex_feat = np.array([list(vertex_feat[hf == 5][0]) for hf, vertex_feat in zip(self.truth["flavour"], self.truth[self.global_conf.vertex_features])])
+        vertex_feat = np.array([list(vertex_feat[hf == 5][0]) for hf, vertex_feat in zip(self.truth.fields("flavour"), self.truth.fields(self.global_conf.vertex_features))])
+        vertex_feat = np.log(vertex_feat)
         return vertex_feat
        
     def get_track_input(self):
-        track_input = ma.masked_invalid([[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco])
-        mask = track_input.mask
-        track_input[mask] = -999
+        track_input = [[list(inputs_track) for inputs_track in input_jet] for input_jet in self.reco]
         return track_input
 
 class DataGenerator:
