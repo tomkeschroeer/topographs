@@ -74,5 +74,10 @@ def get_model(input_feat, input_weight, config):
             "edge_weight_sigmoid": "binary_crossentropy",
             "vertex_network": "mean_squared_error",
         },
+        loss_weights={
+            "edge_weight_sigmoid": 100,
+            "vertex_network": 1,
+        },
+        metrics=["accuracy"],
     )
     return model

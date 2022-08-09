@@ -17,7 +17,7 @@ def step_activation(x):
 
 
 def shifted_relu_activation(x):
-    return K.switch(x >= 0.5, 2 * (x - 0.5), constant([[0]], dtype=x.dtype))
+    return K.switch(x >= 0.8, (x - 0.8), constant([[0]], dtype=x.dtype))
 
 
 def Mask_invalid(x):
