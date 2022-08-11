@@ -111,7 +111,7 @@ if __name__ == "__main__":
         input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]),
         config=config,
     )
-
+    model.summary()
     model.fit(
         tf_dataset,
         epochs=config.epochs,

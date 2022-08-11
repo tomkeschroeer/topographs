@@ -15,6 +15,14 @@ repos:
         entry: black
         types: [python]
         args: ["--experimental-string-processing"]
+      - id: flake8
+        name: flake8
+        stages: [commit]
+        language: system
+        entry: flake8
+        types: [python]
+        exclude: setup.py
+        args: ["--darglint-ignore-regex", "*"]
       - id: yamllint
         name: yamllint
         stages: [commit]

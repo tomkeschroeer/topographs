@@ -1,10 +1,8 @@
 from glob import glob
 from os import makedirs
 
-import numpy as np
 from h5py import File
-from puma import Histogram, HistogramPlot, PlotBase, PlotObject
-from tensorflow import TensorShape, float32, int32
+from puma import PlotBase
 from tensorflow.data import Dataset
 from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
@@ -15,10 +13,7 @@ from topograph.modules import (
     shifted_relu_activation,
     step_activation,
 )
-from topograph.plotting.plotting_tools import (
-    calculate_efficiency,
-    calculate_jetwise_efficiency,
-)
+from topograph.plotting.plotting_tools import calculate_efficiency
 
 
 def create_figure(plot):
@@ -62,7 +57,6 @@ class Plotter:
 
         if config.evaluation["plot_pt"]:
             logger.info("Plotting pT...")
-            model_file = self.config.evaluation["model"]
             self.plotting_pT_regression(logger=logger)
 
     def load_model(self, modelfile=None):
@@ -83,7 +77,7 @@ class Plotter:
         model_sub = Model(inputs=[input], outputs=[layer])
         return model, model_sub
 
-    def get_predictions(self, model):
+    def get_predictions(self, model, full_model=False):
         DatasetGenerator = DataLoader(
             input=self.test_file,
             metadata_dict=self.metadata_dict,
@@ -100,8 +94,10 @@ class Plotter:
         types, shapes = DatasetGenerator.get_types_shapes()
 
         dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
-        preds = model.predict(dataset)
-        print(len(preds))
+        if full_model:
+            _, preds = model.predict(dataset)
+        else:
+            preds = model.predict(dataset)
         return preds
 
     def get_labels(self, get_weight_labels=False, get_labels=False):
@@ -121,7 +117,6 @@ class Plotter:
             preds = self.get_predictions(model)
             labels = self.get_labels(get_weight_labels=True).astype(int)
             eff = calculate_efficiency(preds, labels, Ntotal)
-            print(f"epoch {i}, eff = {eff}")
             effs.append(eff)
         plot_eff = PlotBase(
             ylabel="efficiency",
@@ -135,10 +130,10 @@ class Plotter:
         plot_eff.savefig(f"{self.plot_dir}/eff_per_epoch.pdf")
 
     def plotting_pT_regression(self, logger, modelfile=None):
-        logger.info(f"plotting pT regression for model model_epoch")
+        logger.info("plotting pT regression for model model_epoch")
         model, _ = self.load_model(modelfile)
-        preds = np.array(self.get_predictions(model)).flatten()
-        print(preds)
+        model.summary()
+        preds = self.get_predictions(model, full_model=True)
         labels = self.get_labels(get_labels=True).flatten()
         plot_pT = PlotBase(
             ylabel="predicted pT",

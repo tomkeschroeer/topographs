@@ -157,7 +157,6 @@ class DatasetCreater:
         self.stepsize = stepsize
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
-        print(self.input_file)
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -280,7 +279,6 @@ class DataGenerator:
 
     def load_in_memory(self, step: int = 0):
         with File(self.input) as f:
-            # self.edge_feat_batch = f[self.edge_feat_name][step*self.stepsize : (step+1)*self.stepsize]
             if self.get_inputs:
                 self.track_batch = f[self.track_name][
                     step * self.stepsize : (step + 1) * self.stepsize

@@ -20,9 +20,7 @@ class TopographModel(Layer):
         )(input_feat)
         edge_wt_input, edge_wt_out_prev, edge_wt_out = EdgeLayers(
             nodes=nodes_weight, net_name="edge_weight"
-        )(
-            input_weight
-        )  # EdgeLayers(nodes = nodes_weight, net_name="edge_weight")(input_weight)
+        )(input_weight)
         dt_product = DotProduct(edge_wt_out, edge_feat_out)()
 
         dense_vertex_out = DenseNetwork(nodes=nodes_vertex, net_name="vertex_network")(
@@ -63,6 +61,7 @@ def get_model(input_feat, input_weight, config):
         edge_wt_out,
         dense_vertex_out,
     ) = TopographModel(config=config)(input_feat, input_weight)
+
     model = Model(
         inputs=[edge_feat_input, edge_wt_input],
         outputs=[edge_wt_out, dense_vertex_out],
