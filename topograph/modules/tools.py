@@ -7,7 +7,20 @@ import numpy as np
 import tensorflow.keras.backend as K
 import yaml
 from h5py import File
-from tensorflow import TensorShape, constant, float32
+from tensorflow import TensorShape, Variable, constant, float32
+
+
+def get_sample_weights(x):
+    x = x.flatten()
+    length = len(x)
+    n_b = sum(x)
+    n_nonb = length - n_b
+    fac_b = length / n_b
+    fac_nonb = length / n_nonb
+    weights = np.ones(len(x))
+    weights[x == 1] = fac_b
+    weights[x == 0] = fac_nonb
+    return weights.reshape((length, 1))
 
 
 def step_activation(x):
@@ -18,6 +31,11 @@ def step_activation(x):
 
 def shifted_relu_activation(x):
     return K.switch(x >= 0.8, (x - 0.8), constant([[0]], dtype=x.dtype))
+
+
+def shifted_relu_activation_train(x):
+    fac = Variable(0.8)
+    return K.switch(x >= fac, (x - fac), constant([[0]], dtype=x.dtype))
 
 
 def Mask_invalid(x):
@@ -242,6 +260,7 @@ class DataGenerator:
         get_labels: bool = True,
         get_inputs: bool = True,
         get_weight_labels: bool = False,
+        get_sample_weights: bool = False,
         stepsize: int = 5000,
         savejets: bool = False,
         savetracks: bool = True,
@@ -268,6 +287,7 @@ class DataGenerator:
         self.get_inputs = get_inputs
         self.get_labels = get_labels
         self.get_weight_labels = get_weight_labels
+        self.get_sample_weights = get_sample_weights
         self.metadata_dict = metadata_dict
         self.stepsize = stepsize
         self.savejets = savejets
@@ -291,8 +311,60 @@ class DataGenerator:
                 self.edge_batch = f[self.edge_name][
                     step * self.stepsize : (step + 1) * self.stepsize
                 ]
+            if self.get_sample_weights:
+                self.sample_weight_batch = list(
+                    map(get_sample_weights, self.edge_batch[0:2])
+                )
 
     def get_types_shapes(self):
+        if (
+            self.get_labels
+            and self.get_inputs
+            and self.get_weight_labels
+            and self.get_sample_weights
+        ):
+            types = (
+                {"input_1": float32, "input_2": float32},
+                {"edge_weight_sigmoid": float32, "vertex_network": float32},
+                float32,
+            )
+            shapes = (
+                {
+                    "input_1": TensorShape(
+                        (
+                            None,
+                            self.metadata_dict["n_trks"],
+                            self.metadata_dict["n_trk_features"],
+                        )
+                    ),
+                    "input_2": TensorShape(
+                        (
+                            None,
+                            self.metadata_dict["n_trks"],
+                            self.metadata_dict["n_trk_features"],
+                        )
+                    ),
+                },
+                {
+                    "edge_weight_sigmoid": TensorShape(
+                        (
+                            None,
+                            self.metadata_dict["n_trks"],
+                            self.metadata_dict["n_edge_y"],
+                        )
+                    ),
+                    "vertex_network": TensorShape(
+                        (None, self.metadata_dict["n_vertex_feat"])
+                    ),
+                },
+                TensorShape(
+                    (
+                        None,
+                        self.metadata_dict["n_trks"],
+                        self.metadata_dict["n_edge_y"],
+                    )
+                ),
+            )
         if self.get_labels and self.get_inputs and self.get_weight_labels:
             types = (
                 {"input_1": float32, "input_2": float32},
@@ -379,7 +451,18 @@ class DataLoader(DataGenerator):
         n_steps = n_samples // self.stepsize + 1
         for step in range(n_steps):
             self.load_in_memory(step=step)
-            if self.get_inputs and self.get_labels and self.get_weight_labels:
+            if (
+                self.get_inputs
+                and self.get_labels
+                and self.get_weight_labels
+                and self.get_sample_weights
+            ):
+                yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
+                    "edge_weight_sigmoid": self.edge_batch,
+                    "vertex_network": self.vertex_feat_batch,
+                },
+                {"edge_weight_sigmoid": self.get_sample_weights}
+            elif self.get_inputs and self.get_labels and self.get_weight_labels:
                 yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
                     "edge_weight_sigmoid": self.edge_batch,
                     "vertex_network": self.vertex_feat_batch,

@@ -1,23 +1,17 @@
-from topograph.modules.build_network import (
-    get_model
-)
-from topograph.modules.layers import (
-    EdgeLayers,
-    FeatLayers,
-    DenseNetwork,
-    DotProduct
-)
-from topograph.modules.Vertex_properties import (
-    Matcher
-)
-from topograph.modules.tools import(
-    step_activation,
-    shifted_relu_activation,
-    GlobalConfig,
-    get_logger,
-    GetConfiguration,
+# flake8: noqa
+# pylint: skip-file
+from topograph.modules.build_network import get_model
+from topograph.modules.layers import DenseNetwork, DotProduct, EdgeLayers, FeatLayers
+from topograph.modules.tools import (
     DataGenerator,
     DataLoader,
     DatasetCreater,
-    get_track_mask
+    GetConfiguration,
+    GlobalConfig,
+    get_logger,
+    get_track_mask,
+    shifted_relu_activation,
+    shifted_relu_activation_train,
+    step_activation,
 )
+from topograph.modules.Vertex_properties import Matcher

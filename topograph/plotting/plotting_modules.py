@@ -132,7 +132,6 @@ class Plotter:
     def plotting_pT_regression(self, logger, modelfile=None):
         logger.info("plotting pT regression for model model_epoch")
         model, _ = self.load_model(modelfile)
-        model.summary()
         preds = self.get_predictions(model, full_model=True)
         labels = self.get_labels(get_labels=True).flatten()
         plot_pT = PlotBase(
