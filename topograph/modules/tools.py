@@ -15,8 +15,8 @@ def get_sample_weights(x):
     length = len(x)
     n_b = sum(x)
     n_nonb = length - n_b
-    fac_b = length / n_b
-    fac_nonb = length / n_nonb
+    fac_b = length / (n_b + 1e-4)
+    fac_nonb = length / (n_nonb + 1e-4)
     weights = np.ones(len(x))
     weights[x == 1] = fac_b
     weights[x == 0] = fac_nonb
@@ -313,7 +313,7 @@ class DataGenerator:
                 ]
             if self.get_sample_weights:
                 self.sample_weight_batch = list(
-                    map(get_sample_weights, self.edge_batch[0:2])
+                    map(get_sample_weights, self.edge_batch)
                 )
 
     def get_types_shapes(self):
@@ -326,7 +326,7 @@ class DataGenerator:
             types = (
                 {"input_1": float32, "input_2": float32},
                 {"edge_weight_sigmoid": float32, "vertex_network": float32},
-                float32,
+                {"edge_weight_sigmoid": float32},
             )
             shapes = (
                 {
@@ -357,15 +357,17 @@ class DataGenerator:
                         (None, self.metadata_dict["n_vertex_feat"])
                     ),
                 },
-                TensorShape(
-                    (
-                        None,
-                        self.metadata_dict["n_trks"],
-                        self.metadata_dict["n_edge_y"],
-                    )
-                ),
+                {
+                    "edge_weight_sigmoid": TensorShape(
+                        (
+                            None,
+                            self.metadata_dict["n_trks"],
+                            self.metadata_dict["n_edge_y"],
+                        )
+                    ),
+                },
             )
-        if self.get_labels and self.get_inputs and self.get_weight_labels:
+        elif self.get_labels and self.get_inputs and self.get_weight_labels:
             types = (
                 {"input_1": float32, "input_2": float32},
                 {"edge_weight_sigmoid": float32, "vertex_network": float32},
@@ -460,8 +462,7 @@ class DataLoader(DataGenerator):
                 yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
                     "edge_weight_sigmoid": self.edge_batch,
                     "vertex_network": self.vertex_feat_batch,
-                },
-                {"edge_weight_sigmoid": self.get_sample_weights}
+                }, {"edge_weight_sigmoid": self.sample_weight_batch}
             elif self.get_inputs and self.get_labels and self.get_weight_labels:
                 yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
                     "edge_weight_sigmoid": self.edge_batch,

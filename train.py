@@ -49,7 +49,7 @@ if __name__ == "__main__":
         get_labels=True,
         get_weight_labels=True,
         get_inputs=True,
-        get_sample_weights=True,
+        get_sample_weights=config.use_sample_weights,
         metadata_dict=metadata_dict,
         savetracks=True,
         track_name=config.tracks_name,
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]),
         config=config,
     )
-    model.summary()
+
     model.fit(
         tf_dataset,
         epochs=config.epochs,
