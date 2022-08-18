@@ -268,6 +268,7 @@ class DataGenerator:
         edge_name: str = "edge",
         edge_feat_name: str = "edge_feat",
         vertex_feat_name: str = "vertex_feat",
+        #  n_samples: int = None,
     ):
         """
         class to get dataset for topograph training
@@ -296,6 +297,7 @@ class DataGenerator:
         self.edge_feat_name = edge_feat_name
         self.edge_name = edge_name
         self.vertex_feat_name = vertex_feat_name
+        # self.n_samples = n_samples
 
     def load_in_memory(self, step: int = 0):
         with File(self.input) as f:
@@ -325,8 +327,8 @@ class DataGenerator:
         ):
             types = (
                 {"input_1": float32, "input_2": float32},
-                {"edge_weight_sigmoid": float32, "vertex_network": float32},
-                {"edge_weight_sigmoid": float32},
+                {"edge_weight": float32, "vertex_network": float32},
+                {"edge_weight": float32},
             )
             shapes = (
                 {
@@ -346,7 +348,7 @@ class DataGenerator:
                     ),
                 },
                 {
-                    "edge_weight_sigmoid": TensorShape(
+                    "edge_weight": TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
@@ -358,7 +360,7 @@ class DataGenerator:
                     ),
                 },
                 {
-                    "edge_weight_sigmoid": TensorShape(
+                    "edge_weight": TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
@@ -370,7 +372,7 @@ class DataGenerator:
         elif self.get_labels and self.get_inputs and self.get_weight_labels:
             types = (
                 {"input_1": float32, "input_2": float32},
-                {"edge_weight_sigmoid": float32, "vertex_network": float32},
+                {"edge_weight": float32, "vertex_network": float32},
             )
             shapes = (
                 {
@@ -390,7 +392,7 @@ class DataGenerator:
                     ),
                 },
                 {
-                    "edge_weight_sigmoid": TensorShape(
+                    "edge_weight": TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
@@ -449,7 +451,9 @@ class DataGenerator:
 
 class DataLoader(DataGenerator):
     def __call__(self):
+        # if self.n_samples is None:
         n_samples = self.metadata_dict["n_jets"]
+        # print(self.n_samples)
         n_steps = n_samples // self.stepsize + 1
         for step in range(n_steps):
             self.load_in_memory(step=step)
@@ -460,12 +464,12 @@ class DataLoader(DataGenerator):
                 and self.get_sample_weights
             ):
                 yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
-                    "edge_weight_sigmoid": self.edge_batch,
+                    "edge_weight": self.edge_batch,
                     "vertex_network": self.vertex_feat_batch,
-                }, {"edge_weight_sigmoid": self.sample_weight_batch}
+                }, {"edge_weight": self.sample_weight_batch}
             elif self.get_inputs and self.get_labels and self.get_weight_labels:
                 yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
-                    "edge_weight_sigmoid": self.edge_batch,
+                    "edge_weight": self.edge_batch,
                     "vertex_network": self.vertex_feat_batch,
                 }
             elif self.get_inputs and self.get_labels and not self.get_weight_labels:

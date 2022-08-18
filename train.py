@@ -5,8 +5,9 @@ import tensorflow as tf
 from h5py import File
 from tensorflow.data import Dataset
 from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.layers import Input
 
-from topograph.modules import DataLoader, GetConfiguration, get_model
+from topograph.modules import DataLoader, GetConfiguration, TopographModel
 
 
 def get_parser():
@@ -98,6 +99,7 @@ if __name__ == "__main__":
     modelfile_dir = (config.output + "/modelfiles/model_epoch{epoch:03d}.h5").replace(
         "//", "/"
     )
+
     model_checkpoint = ModelCheckpoint(
         modelfile_dir,
         verbose=True,
@@ -107,12 +109,13 @@ if __name__ == "__main__":
     )
 
     callbacks = [model_checkpoint]
-
-    model = get_model(
-        input_feat=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]),
-        input_weight=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]),
-        config=config,
+    input_feat = Input(shape=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]))
+    input_weight = Input(
+        shape=(metadata_dict["n_trks"], metadata_dict["n_trk_features"])
     )
+
+    model_builder = TopographModel(config=config, metadata_dict=metadata_dict)
+    model = model_builder.get_model(input_feat, input_weight)
 
     model.fit(
         tf_dataset,
@@ -121,3 +124,5 @@ if __name__ == "__main__":
         steps_per_epoch=metadata_dict["n_jets"] // config.stepsize,
         callbacks=callbacks,
     )
+
+    # print(model_build.slope_values)
