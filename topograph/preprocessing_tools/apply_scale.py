@@ -24,9 +24,10 @@ class Apply_Scaler:
         chunk_size = 1e5
         for dataset_type in self.dataset_types.keys():
             self.scale_dict_path = f"{self.scale_dict_path_basic}{dataset_type}.json"
-            logger.info(f"Scale/Shift jets from {self.config.input}")
+            input_file=f"{self.config.output}/{self.config.one_file_name}".replace(".h5","") + f"{dataset_type}.h5"
+            logger.info(f"Scale/Shift jets from {input_file}")
             logger.info(f"Using scales in {self.scale_dict_path}")
-            file_length = len(File(f"{self.config.output}/{self.config.one_file_name}", "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
+            file_length = len(File(input_file, "r")[f"/{self.input_tracks_name}"][self.var_list[0]][:])
             n_chunks = int(np.ceil(file_length / chunk_size))
 
             # Check if tracks are used
@@ -40,7 +41,7 @@ class Apply_Scaler:
             logger.info("Applying scaling and shifting.")
             self.out_file = f"{self.config.output}/{self.config.preprocessing_file_name}".replace(".h5","") + f"{dataset_type}.h5"
             logger.info(f"Save scaled inputs in file {self.out_file}")
-            input_file=f"{self.config.output}/{self.config.one_file_name}".replace(".h5","") + f"{dataset_type}.h5"
+            
             scale_generator = self.scale_generator(
                 input_file=input_file,
                 nJets = file_length,
