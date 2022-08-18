@@ -313,6 +313,8 @@ class DataGenerator:
                 self.edge_batch = f[self.edge_name][
                     step * self.stepsize : (step + 1) * self.stepsize
                 ]
+                # self.edge_batch = self.edge_batch.reshape((40,))
+                # print(self.edge_batch)
             if self.get_sample_weights:
                 self.sample_weight_batch = list(
                     map(get_sample_weights, self.edge_batch)

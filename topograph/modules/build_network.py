@@ -27,27 +27,19 @@ class TopographModel:
         )
 
     def get_model(self, input_feat, input_weight):
-        # input_feat = Input(shape=(self.metadata_dict["n_trks"], self.metadata_dict["n_trk_features"]))
-        # input_weight = Input(shape=(self.metadata_dict["n_trks"], self.metadata_dict["n_trk_features"]))
         edge_wt_out = self.edge_layer(input_feat)
         edge_feat_out = self.feat_layer(input_weight)
         shiftrelu = self.shiftrelu(edge_wt_out)
-        dt_product = self.dot_product(
-            [edge_feat_out, shiftrelu]
-        )  # edge_wt_out)# shiftrelu)
+        dt_product = self.dot_product([edge_feat_out, shiftrelu])
         dense_vertex_out = self.dense_vertex_out(dt_product)
-        # dense_vertex_out = self.dense_vertex_out_layers[0](dt_product)
-        # for layer in self.dense_vertex_out_layers[1:]:
-        #     dense_vertex_out = dense_vertex_out(layer)
-
         model = Model(
             inputs=[input_feat, input_weight],
             outputs=[edge_wt_out, dense_vertex_out],
         )
-        # print(f"TRAINABLE WEIGHTS = {model.trainable_weights}")
         model.summary()
         model.compile(
             optimizer="Adam",
+            run_eagerly=True,
             loss={
                 "edge_weight": "binary_crossentropy",
                 "vertex_network": "mean_squared_error",

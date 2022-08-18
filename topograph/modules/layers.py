@@ -15,7 +15,6 @@ class ShiftRelu(Layer):
 
     def call(self, x):
         shifted_relu = K.switch(x >= self.fac, (x + self.fac), (x - self.fac))
-        # shifted_relu = K.squeeze(shifted_relu, axis=2)
         return shifted_relu
 
 
@@ -46,38 +45,37 @@ class EdgeLayers(Layer):
         self.nodes = nodes
         self.net_name = net_name
         # self.fac = self.add_weight(shape=(1,), trainable=True, name="new_relu_factor")
-
-        self.slope_vals = []
+        self.layers = []
+        for i, phi_nodes in enumerate(self.nodes[:-1]):
+            self.layers.append(
+                TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")
+            )
+            self.layers.append(
+                TimeDistributed(
+                    Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
+                )
+            )
+        self.layers.append(
+            TimeDistributed(
+                Dense(self.nodes[-1], activation="sigmoid"), name=f"{self.net_name}"
+            )
+        )
 
     # def shifted_relu_activation_train(self, x):
     #     return K.switch(x >= self.fac, (x + self.fac), (x - self.fac))
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"nodes": self.nodes, "net_name": self.net_name})
+        return config
+
     def call(self, input_layer):
         # Set the track input
-        tdd = TimeDistributed(Dense(self.nodes[0]), name=f"{self.net_name}_Phi0_Dense")(
-            input_layer
-        )
+        tdd = self.layers[0](input_layer)
         # Define the TimeDistributed layers for the different tracks
-        for i, phi_nodes in enumerate(self.nodes[1:-1]):
-
-            tdd = TimeDistributed(
-                Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense"
-            )(tdd)
-
-            tdd = TimeDistributed(
-                Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
-            )(tdd)
-
-        # Set output and activation function
-        output = TimeDistributed(
-            Dense(self.nodes[-1], activation="sigmoid"), name=f"{self.net_name}"
-        )(tdd)
-        output = K.squeeze(output, -1)
-        print(output)
-        output = ShiftRelu()(output)
-
-        # output = Activation(self.shifted_relu_activation_train, name=self.net_name)(output_prev)
-        return output
+        for layer in self.layers[1:]:
+            tdd = layer(tdd)
+        return tdd
 
 
 class FeatLayers(Layer):
@@ -106,30 +104,37 @@ class FeatLayers(Layer):
         super(FeatLayers, self).__init__(name=net_name)
         self.nodes = nodes
         self.net_name = net_name
+        self.layers = []
+        for i, phi_nodes in enumerate(self.nodes[:-1]):
+            self.layers.append(
+                TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")
+            )
+            self.layers.append(
+                TimeDistributed(
+                    Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
+                )
+            )
+
+        # Set output and activation function
+        self.layers.append(
+            TimeDistributed(
+                Dense(self.nodes[-1], activation="linear"),
+                name=f"{self.net_name}_Phi{len(self.nodes)}_Dense",
+            )
+        )
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"nodes": self.nodes, "net_name": self.net_name})
+        return config
 
     def call(self, input_layer):
         # Set the track input
-        tdd = TimeDistributed(Dense(self.nodes[0]), name=f"{self.net_name}_Phi0_Dense")(
-            input_layer
-        )
+        tdd = self.layers[0](input_layer)
         # Define the TimeDistributed layers for the different tracks
-        for i, phi_nodes in enumerate(self.nodes[1:-1]):
-
-            tdd = TimeDistributed(
-                Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense"
-            )(tdd)
-
-            tdd = TimeDistributed(
-                Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
-            )(tdd)
-
-        # Set output and activation function
-        output = TimeDistributed(
-            Dense(self.nodes[-1], activation="linear"),
-            name=f"{self.net_name}_Phi{len(self.nodes)}_Dense",
-        )(tdd)
-
-        return output
+        for layer in self.layers[1:]:
+            tdd = layer(tdd)
+        return tdd
 
 
 # def get_dense_network_layers(nodes, net_name):
@@ -168,17 +173,26 @@ class DenseNetwork(Layer):
         super(DenseNetwork, self).__init__(name=net_name)
         self.nodes = nodes
         self.net_name = net_name
+        self.layers = []
+        for i, node in enumerate(self.nodes[:-1]):
+            self.layers.append(Dense(node, name=f"{self.net_name}_layer_{i}"))
+            self.layers.append(
+                Activation(activations.relu, name=f"{self.net_name}_ReLu_{i}")
+            )
+        self.layers.append(
+            Dense(self.nodes[-1], activation="linear", name=self.net_name)
+        )
         # self.name = net_name
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"nodes": self.nodes, "net_name": self.net_name})
+        return config
+
     def call(self, dense_ntw):
-        for i, node in enumerate(self.nodes[:-1]):
-            dense_ntw = Dense(node, name=f"{self.net_name}_layer_{i}")(dense_ntw)
-            dense_ntw = Activation(activations.relu, name=f"{self.net_name}_ReLu_{i}")(
-                dense_ntw
-            )
-        dense_ntw = Dense(self.nodes[-1], activation="linear", name=self.net_name)(
-            dense_ntw
-        )
+        dense_ntw = self.layers[0](dense_ntw)
+        for layer in self.layers[1:]:
+            dense_ntw = layer(dense_ntw)
         return dense_ntw
 
 
@@ -189,9 +203,11 @@ class DotProduct(Layer):
     def call(self, inputs):
         feat_layer, edge_layer = inputs[:2]
         # assert (len(attention.shape) == 2) & (len(features.shape) == 3), "Please provide attention tensor as first argument (rank 2), followed by feature tensor (rank 3)"
-        pool = K.batch_dot(feat_layer, K.expand_dims(edge_layer, 1))
-        print(pool)
-        # pool = K.squeeze(pool,-1)
+        pool = K.batch_dot(
+            K.permute_dimensions(edge_layer, (0, 2, 1)),
+            K.permute_dimensions(feat_layer, (0, 1, 2)),
+        )
+        pool = K.squeeze(pool, -2)
         return pool
 
 
@@ -224,7 +240,5 @@ class DotProduct(Layer):
 #         pool = Dot(axes=1)(layers)
 #         print(pool.shape)
 #         # pool = Reshape((pool.shape[1]))(pool)
-#         print(pool.shape)
-#         pool = Flatten()(pool)
 #         print(pool.shape)
 #         return pool

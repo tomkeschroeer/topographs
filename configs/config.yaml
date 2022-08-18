@@ -24,12 +24,13 @@ edge_name: "Y_edge"
 edge_feat_name: "Y_edge_features"
 vertex_feat_name: Y_vertex_features
 
-epochs: 1
+epochs: 200
 stepsize: 15000
 lr: 0.001
+use_sample_weights: True
 
 edge_feature_network:
-  nodes: [70, 70, 70, 3]
+  nodes: [70, 70, 70, 30]
   n_tracks_name: tracks
 
 edge_weight_network:
@@ -37,8 +38,10 @@ edge_weight_network:
   n_tracks_name: tracks
 
 vertex_network:
-  nodes: [50, 50, 50, 2]
+  nodes: [50, 50, 50, 1]
 
 evaluation:
   model: model_epoch001.h5
+  n_samples: 10_000
   plot_efficiency: True
+  plot_pt: False
