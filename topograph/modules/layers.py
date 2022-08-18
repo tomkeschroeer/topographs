@@ -1,25 +1,28 @@
+import tensorflow.keras.backend as K
 from tensorflow.keras import activations  # pylint: disable=import-error
-from keras.utils.generic_utils import get_custom_objects
 from tensorflow.keras.layers import (  # pylint: disable=import-error
     Activation,
     Dense,
-    Masking,
-    TimeDistributed,
     Layer,
-    Dot,
-    Input,
-    Flatten
+    TimeDistributed,
 )
 
-from topograph.modules.tools import (
-    step_activation,
-    shifted_relu_activation
-)
+
+class ShiftRelu(Layer):
+    def __init__(self):
+        super(ShiftRelu, self).__init__()
+        self.fac = self.add_weight(shape=(1,), trainable=True, name="new_relu_factor")
+
+    def call(self, x):
+        shifted_relu = K.switch(x >= self.fac, (x + self.fac), (x - self.fac))
+        return shifted_relu
+
 
 class EdgeLayers(Layer):
     """
     Define a TrksLayers as a layer
     """
+
     def __init__(self, nodes, net_name):
         """
         Init for TrksLayers
@@ -38,40 +41,48 @@ class EdgeLayers(Layer):
         output : object
             returns output layer of DenseNetwork
         """
+        super(EdgeLayers, self).__init__(name=net_name)
         self.nodes = nodes
         self.net_name = net_name
-
-    def __call__(self, input_shape):
-        get_custom_objects().update({
-            'step_activation': Activation(step_activation),
-            'shifted_relu_activation': Activation(shifted_relu_activation)
-        })
-
-        # Set the track input
-        input = Input(shape = input_shape)
-        masked_inputs = Masking(mask_value=0)(input)
-        tdd = masked_inputs
-        
-        # Define the TimeDistributed layers for the different tracks
+        # self.fac = self.add_weight(shape=(1,), trainable=True, name="new_relu_factor")
+        self.layers = []
         for i, phi_nodes in enumerate(self.nodes[:-1]):
-
-            tdd = TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")(tdd)
-
-            tdd = TimeDistributed(Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU")(
-                tdd
+            self.layers.append(
+                TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")
             )
+            self.layers.append(
+                TimeDistributed(
+                    Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
+                )
+            )
+        self.layers.append(
+            TimeDistributed(
+                Dense(self.nodes[-1], activation="sigmoid"), name=f"{self.net_name}"
+            )
+        )
 
-        # Set output and activation function
-        output_prev = TimeDistributed(Dense(self.nodes[-1], activation="sigmoid"), name=f"{self.net_name}_sigmoid")(tdd)
-        output = TimeDistributed(Activation(shifted_relu_activation), name=self.net_name)(output_prev)
-       # output = TimeDistributed(Activation(step_activation), name=self.net_name)(output_prev)
+    # def shifted_relu_activation_train(self, x):
+    #     return K.switch(x >= self.fac, (x + self.fac), (x - self.fac))
 
-        return input, output_prev, output
+    def get_config(self):
+        config = super().get_config()
+        config.update({"nodes": self.nodes, "net_name": self.net_name})
+        return config
+
+    def call(self, input_layer):
+        # Set the track input
+        tdd = self.layers[0](input_layer)
+        # Define the TimeDistributed layers for the different tracks
+        for layer in self.layers[1:]:
+            tdd = layer(tdd)
+        return tdd
+
 
 class FeatLayers(Layer):
     """
     Define a TrksLayers as a layer
     """
+
     def __init__(self, nodes, net_name):
         """
         Init for TrksLayers
@@ -90,38 +101,62 @@ class FeatLayers(Layer):
         output : object
             returns output layer of DenseNetwork
         """
+        super(FeatLayers, self).__init__(name=net_name)
         self.nodes = nodes
         self.net_name = net_name
-
-    def __call__(self, input_shape):
-        # Set the track input
-        input = Input(shape = input_shape)
-        masked_inputs = Masking(mask_value=0)(input)
-        tdd = masked_inputs
-
-        # Define the TimeDistributed layers for the different tracks
+        self.layers = []
         for i, phi_nodes in enumerate(self.nodes[:-1]):
-
-            tdd = TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")(tdd)
-
-            tdd = TimeDistributed(Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU")(
-                tdd
+            self.layers.append(
+                TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")
+            )
+            self.layers.append(
+                TimeDistributed(
+                    Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
+                )
             )
 
         # Set output and activation function
-        output = TimeDistributed(Dense(self.nodes[-1], activation="linear"), name=self.net_name)(tdd)
+        self.layers.append(
+            TimeDistributed(
+                Dense(self.nodes[-1], activation="linear"),
+                name=f"{self.net_name}_Phi{len(self.nodes)}_Dense",
+            )
+        )
 
-        return input, output
+    def get_config(self):
+        config = super().get_config()
+        config.update({"nodes": self.nodes, "net_name": self.net_name})
+        return config
+
+    def call(self, input_layer):
+        # Set the track input
+        tdd = self.layers[0](input_layer)
+        # Define the TimeDistributed layers for the different tracks
+        for layer in self.layers[1:]:
+            tdd = layer(tdd)
+        return tdd
+
+
+# def get_dense_network_layers(nodes, net_name):
+#     """
+#     Define a DenseNetwork as a layer
+#     """
+#     nodes = nodes
+#     net_name = net_name
+#     layers = []
+#     for i, node in enumerate(nodes[:-1]):
+#         layers.append(Dense(node, name=f"vertex_network_dense_{i}"))
+#         layers.append(Activation(activations.relu, name=f"{net_name}_ReLu_{i}"))
+#     layers.append(Dense(nodes[-1], activation="linear", name=net_name))
+#     return layers
+
 
 class DenseNetwork(Layer):
     """
     Define a DenseNetwork as a layer
     """
-    def __init__(
-        self,
-        nodes,
-        net_name
-    ):
+
+    def __init__(self, nodes, net_name):
         """
         Init for DenseNetwork
 
@@ -135,45 +170,75 @@ class DenseNetwork(Layer):
         output : object
             returns output layer of DenseNetwork
         """
+        super(DenseNetwork, self).__init__(name=net_name)
         self.nodes = nodes
         self.net_name = net_name
-
-    def __call__(self, dense_ntw):
+        self.layers = []
         for i, node in enumerate(self.nodes[:-1]):
-            dense_ntw = Dense(node)(dense_ntw)
-            dense_ntw = Activation(activations.relu, name=f"{self.net_name}_ReLu_{i}")(dense_ntw)
-        output = Dense(self.nodes[-1], activation="linear", name=self.net_name)(dense_ntw)
-        return output
+            self.layers.append(Dense(node, name=f"{self.net_name}_layer_{i}"))
+            self.layers.append(
+                Activation(activations.relu, name=f"{self.net_name}_ReLu_{i}")
+            )
+        self.layers.append(
+            Dense(self.nodes[-1], activation="linear", name=self.net_name)
+        )
+        # self.name = net_name
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"nodes": self.nodes, "net_name": self.net_name})
+        return config
+
+    def call(self, dense_ntw):
+        dense_ntw = self.layers[0](dense_ntw)
+        for layer in self.layers[1:]:
+            dense_ntw = layer(dense_ntw)
+        return dense_ntw
+
 
 class DotProduct(Layer):
-    """
-    Define a DotProduct as a layer
-    """
-    def __init__(
-        self,
-        layer1,
-        layer2
-    ):
-        """
-        Init for DotProduct
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        Parameters
-        ----------
-        layer1: Layer object
-            first layer used for dot product
-        layer1: Layer object
-            second layer used for dot product
-        
-        Returns
-        -------
-        pool : object
-            returns the dot product of two layers
-        """
-        self.layer1 = layer1
-        self.layer2 = layer2
-    def __call__(self):
-        pool = Dot(axes = 1)([self.layer1, self.layer2])
-        pool = Flatten()(pool)
+    def call(self, inputs):
+        feat_layer, edge_layer = inputs[:2]
+        # assert (len(attention.shape) == 2) & (len(features.shape) == 3), "Please provide attention tensor as first argument (rank 2), followed by feature tensor (rank 3)"
+        pool = K.batch_dot(
+            K.permute_dimensions(edge_layer, (0, 2, 1)),
+            K.permute_dimensions(feat_layer, (0, 1, 2)),
+        )
+        pool = K.squeeze(pool, -2)
         return pool
-    
 
+
+# class DotProduct(Layer):
+#     """
+#     Define a DotProduct as a layer
+#     """
+
+#     def __init__(self):
+#         """
+#         Init for DotProduct
+
+#         Parameters
+#         ----------
+#         layer1: Layer object
+#             first layer used for dot product
+#         layer1: Layer object
+#             second layer used for dot product
+
+#         Returns
+#         -------
+#         pool : object
+#             returns the dot product of two layers
+#         """
+#         super().__init__()
+
+#     def call(self, layers):
+#         # print(layer[0].shape)
+#         # print(layer[1].shape)
+#         pool = Dot(axes=1)(layers)
+#         print(pool.shape)
+#         # pool = Reshape((pool.shape[1]))(pool)
+#         print(pool.shape)
+#         return pool
