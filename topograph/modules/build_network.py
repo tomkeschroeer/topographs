@@ -67,7 +67,7 @@ class TopographModel:
             add_activation = edge_wt_out
         dt_product = self.dot_product([edge_feat_out, add_activation])
         dense_vertex_out = self.dense_vertex_out(dt_product)
-        # print(f"{input_feat}\n{input_weight}\n{edge_wt_out}\n{edge_feat_out}\n{shiftrelu}\n{dt_product}\n{dense_vertex_out}")
+
         model = Model(
             inputs=[input_feat, input_weight],
             outputs=[edge_wt_out, dense_vertex_out],

@@ -86,9 +86,7 @@ class Plotter:
             model = load_model(filepath=modelfile)
 
         input = model.input
-        print(self.add_activation)
         layer_names = [layer.name for layer in model.layers]
-        print(layer_names)
         if self.add_activation is None:
             activation_name = "edge_weight"
         elif self.add_activation == "shifted_relu":
@@ -101,7 +99,6 @@ class Plotter:
                 ' select one of the following: ["shifted_relu", "sigmoid"] or leave'
                 " empty/remove option."
             )
-        print(activation_name)
         layer = model.get_layer(name=activation_name)
         model_sub = Model(inputs=[input], outputs=[layer.output])
         return model, model_sub

@@ -218,43 +218,6 @@ class DotProduct(Layer):
 
     def call(self, inputs):
         feat_layer, edge_layer = inputs[:2]
-        # assert (len(attention.shape) == 2) & (len(features.shape) == 3), "Please provide attention tensor as first argument (rank 2), followed by feature tensor (rank 3)"
-        pool = K.batch_dot(
-            K.permute_dimensions(edge_layer, (0, 2, 1)),
-            K.permute_dimensions(feat_layer, (0, 1, 2)),
-        )
+        pool = K.batch_dot(K.permute_dimensions(edge_layer, (0, 2, 1)), feat_layer)
         pool = K.squeeze(pool, -2)
         return pool
-
-
-# class DotProduct(Layer):
-#     """
-#     Define a DotProduct as a layer
-#     """
-
-#     def __init__(self):
-#         """
-#         Init for DotProduct
-
-#         Parameters
-#         ----------
-#         layer1: Layer object
-#             first layer used for dot product
-#         layer1: Layer object
-#             second layer used for dot product
-
-#         Returns
-#         -------
-#         pool : object
-#             returns the dot product of two layers
-#         """
-#         super().__init__()
-
-#     def call(self, layers):
-#         # print(layer[0].shape)
-#         # print(layer[1].shape)
-#         pool = Dot(axes=1)(layers)
-#         print(pool.shape)
-#         # pool = Reshape((pool.shape[1]))(pool)
-#         print(pool.shape)
-#         return pool

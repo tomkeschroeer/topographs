@@ -323,8 +323,6 @@ class DataGenerator:
                 self.edge_batch = f[self.edge_name][
                     step * self.stepsize : (step + 1) * self.stepsize
                 ]
-                # self.edge_batch = self.edge_batch.reshape((40,))
-                # print(self.edge_batch)
             if self.get_sample_weights:
                 self.sample_weight_batch = list(
                     map(get_sample_weights, self.edge_batch)
@@ -484,10 +482,9 @@ class DataGenerator:
 
 class DataLoader(DataGenerator):
     def __call__(self):
-        # if self.n_samples is None:
-        n_samples = self.metadata_dict["n_jets"]
-        # print(self.n_samples)
-        n_steps = n_samples // self.stepsize + 1
+        if self.n_samples is None:
+            self.n_samples = self.metadata_dict["n_jets"]
+        n_steps = self.n_samples // self.stepsize + 1
         for step in range(n_steps):
             self.load_in_memory(step=step)
             if (
