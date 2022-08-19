@@ -143,7 +143,7 @@ class GetConfiguration:
         #     "steps_per_epoch",
         #     "edge_feature_network",
         #     "edge_weight_network",
-        #     "vertex_network",
+        #     self.vertex_network_layer_name,
         #     "preprocessing_file_name",
         #     "one_file_name",
         #     "scale_dict",
@@ -268,7 +268,12 @@ class DataGenerator:
         edge_name: str = "edge",
         edge_feat_name: str = "edge_feat",
         vertex_feat_name: str = "vertex_feat",
-        #  n_samples: int = None,
+        n_samples: int = None,
+        edge_weight_layer_name: str = "edge_weight",
+        edge_feat_layer_name: str = "edge_feat",
+        vertex_network_layer_name: str = "vertex_network",
+        input_weight_layer_name: str = "input_1",
+        input_feat_layer_name: str = "input_2",
     ):
         """
         class to get dataset for topograph training
@@ -297,7 +302,12 @@ class DataGenerator:
         self.edge_feat_name = edge_feat_name
         self.edge_name = edge_name
         self.vertex_feat_name = vertex_feat_name
-        # self.n_samples = n_samples
+        self.n_samples = n_samples
+        self.edge_weight_layer_name = edge_weight_layer_name
+        self.edge_feat_layer_name = edge_feat_layer_name
+        self.vertex_network_layer_name = vertex_network_layer_name
+        self.input_weight_layer_name = input_weight_layer_name
+        self.input_feat_layer_name = input_feat_layer_name
 
     def load_in_memory(self, step: int = 0):
         with File(self.input) as f:
@@ -328,20 +338,26 @@ class DataGenerator:
             and self.get_sample_weights
         ):
             types = (
-                {"input_1": float32, "input_2": float32},
-                {"edge_weight": float32, "vertex_network": float32},
-                {"edge_weight": float32},
+                {
+                    self.input_weight_layer_name: float32,
+                    self.input_feat_layer_name: float32,
+                },
+                {
+                    self.edge_weight_layer_name: float32,
+                    self.vertex_network_layer_name: float32,
+                },
+                {self.edge_weight_layer_name: float32},
             )
             shapes = (
                 {
-                    "input_1": TensorShape(
+                    self.input_weight_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
                             self.metadata_dict["n_trk_features"],
                         )
                     ),
-                    "input_2": TensorShape(
+                    self.input_feat_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
@@ -350,19 +366,19 @@ class DataGenerator:
                     ),
                 },
                 {
-                    "edge_weight": TensorShape(
+                    self.edge_weight_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
                             self.metadata_dict["n_edge_y"],
                         )
                     ),
-                    "vertex_network": TensorShape(
+                    self.vertex_network_layer_name: TensorShape(
                         (None, self.metadata_dict["n_vertex_feat"])
                     ),
                 },
                 {
-                    "edge_weight": TensorShape(
+                    self.edge_weight_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
@@ -373,19 +389,25 @@ class DataGenerator:
             )
         elif self.get_labels and self.get_inputs and self.get_weight_labels:
             types = (
-                {"input_1": float32, "input_2": float32},
-                {"edge_weight": float32, "vertex_network": float32},
+                {
+                    self.input_weight_layer_name: float32,
+                    self.input_feat_layer_name: float32,
+                },
+                {
+                    self.edge_weight_layer_name: float32,
+                    self.vertex_network_layer_name: float32,
+                },
             )
             shapes = (
                 {
-                    "input_1": TensorShape(
+                    self.input_weight_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
                             self.metadata_dict["n_trk_features"],
                         )
                     ),
-                    "input_2": TensorShape(
+                    self.input_feat_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
@@ -394,30 +416,36 @@ class DataGenerator:
                     ),
                 },
                 {
-                    "edge_weight": TensorShape(
+                    self.edge_weight_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
                             self.metadata_dict["n_edge_y"],
                         )
                     ),
-                    "vertex_network": TensorShape(
+                    self.vertex_network_layer_name: TensorShape(
                         (None, self.metadata_dict["n_vertex_feat"])
                     ),
                 },
             )
         elif self.get_labels and self.get_inputs:
-            types = ({"input_1": float32, "input_2": float32}, float32)
+            types = (
+                {
+                    self.input_weight_layer_name: float32,
+                    self.input_feat_layer_name: float32,
+                },
+                float32,
+            )
             shapes = (
                 {
-                    "input_1": TensorShape(
+                    self.input_weight_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
                             self.metadata_dict["n_trk_features"],
                         )
                     ),
-                    "input_2": TensorShape(
+                    self.input_feat_layer_name: TensorShape(
                         (
                             None,
                             self.metadata_dict["n_trks"],
@@ -431,16 +459,19 @@ class DataGenerator:
             types = float32
             shapes = TensorShape((None, self.metadata_dict["n_vertex_feat"]))
         elif self.get_inputs:
-            types = {"input_1": float32, "input_2": float32}
+            types = {
+                self.input_weight_layer_name: float32,
+                self.input_feat_layer_name: float32,
+            }
             shapes = {
-                "input_1": TensorShape(
+                self.input_weight_layer_name: TensorShape(
                     (
                         None,
                         self.metadata_dict["n_trks"],
                         self.metadata_dict["n_trk_features"],
                     )
                 ),
-                "input_2": TensorShape(
+                self.input_feat_layer_name: TensorShape(
                     (
                         None,
                         self.metadata_dict["n_trks"],
@@ -465,22 +496,33 @@ class DataLoader(DataGenerator):
                 and self.get_weight_labels
                 and self.get_sample_weights
             ):
-                yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
-                    "edge_weight": self.edge_batch,
-                    "vertex_network": self.vertex_feat_batch,
-                }, {"edge_weight": self.sample_weight_batch}
+                yield {
+                    self.input_weight_layer_name: self.track_batch,
+                    self.input_feat_layer_name: self.track_batch,
+                }, {
+                    self.edge_weight_layer_name: self.edge_batch,
+                    self.vertex_network_layer_name: self.vertex_feat_batch,
+                }, {
+                    self.edge_weight_layer_name: self.sample_weight_batch
+                }
             elif self.get_inputs and self.get_labels and self.get_weight_labels:
-                yield {"input_1": self.track_batch, "input_2": self.track_batch}, {
-                    "edge_weight": self.edge_batch,
-                    "vertex_network": self.vertex_feat_batch,
+                yield {
+                    self.input_weight_layer_name: self.track_batch,
+                    self.input_feat_layer_name: self.track_batch,
+                }, {
+                    self.edge_weight_layer_name: self.edge_batch,
+                    self.vertex_network_layer_name: self.vertex_feat_batch,
                 }
             elif self.get_inputs and self.get_labels and not self.get_weight_labels:
                 yield {
-                    "input_1": self.track_batch,
-                    "input_2": self.track_batch,
+                    self.input_weight_layer_name: self.track_batch,
+                    self.input_feat_layer_name: self.track_batch,
                 }, self.vertex_feat_batch
             elif self.get_inputs:
-                yield {"input_1": self.track_batch, "input_2": self.track_batch}
+                yield {
+                    self.input_weight_layer_name: self.track_batch,
+                    self.input_feat_layer_name: self.track_batch,
+                }
             elif self.get_labels:
                 yield self.vertex_feat_batch
             elif self.get_weight_labels:

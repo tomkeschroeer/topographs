@@ -6,12 +6,16 @@ from puma import PlotBase
 from tensorflow.data import Dataset
 from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
+from tensorflow.keras.utils import CustomObjectScope
 
 from topograph.modules import (
     DataLoader,
+    DenseNetwork,
+    DotProduct,
+    EdgeLayers,
+    FeatLayers,
+    ShiftRelu,
     get_logger,
-    shifted_relu_activation,
-    step_activation,
 )
 from topograph.plotting.plotting_tools import calculate_efficiency
 
@@ -59,22 +63,35 @@ class Plotter:
             logger.info("Plotting pT...")
             self.plotting_pT_regression(logger=logger)
 
-    def load_model(self, modelfile=None):
+    def load_topomodel(self, modelfile=None):
         if modelfile is None:
             modelfile_name = self.config.evaluation["model"]
             modelfile = f"{self.config.output}/modelfiles/{modelfile_name}".replace(
                 "//", "/"
             )
-        model = load_model(
-            modelfile,
-            custom_objects={
-                "step_activation": step_activation,
-                "shifted_relu_activation": shifted_relu_activation,
-            },
-        )
+        print(modelfile)
+        with CustomObjectScope(
+            {
+                "ShiftRelu": ShiftRelu,
+                "EdgeLayers": EdgeLayers,
+                "FeatLayers": FeatLayers,
+                "DenseNetwork": DenseNetwork,
+                "DotProduct": DotProduct,
+            }
+        ):
+            model = load_model(filepath=modelfile)
+        #     custom_objects={
+        #         "ShiftRelu": ShiftRelu,
+        #         "EdgeLayers": EdgeLayers,
+        #         "FeatLayers": FeatLayers,
+        #         "DenseNetwork": DenseNetwork,
+        #         "DotProduct": DotProduct
+        #     }
+        # )
         input = model.input
-        layer = model.get_layer(name="edge_weight").output
-        model_sub = Model(inputs=[input], outputs=[layer])
+        layer = model.get_layer(name="shift_relu")
+        print(layer.trainable_weights)
+        model_sub = Model(inputs=[input], outputs=[layer.output])
         return model, model_sub
 
     def get_predictions(self, model, full_model=False):
@@ -111,7 +128,7 @@ class Plotter:
         effs = []
         for i in range(1, n_modelfiles + 1):
             logger.info(f"plotting efficiency for model model_epoch{i:03d}")
-            _, model = self.load_model(
+            _, model = self.load_topomodel(
                 f"{self.config.output}/modelfiles/model_epoch{i:03d}.h5"
             )
             preds = self.get_predictions(model)
@@ -131,7 +148,7 @@ class Plotter:
 
     def plotting_pT_regression(self, logger, modelfile=None):
         logger.info("plotting pT regression for model model_epoch")
-        model, _ = self.load_model(modelfile)
+        model, _ = self.load_topomodel(modelfile)
         preds = self.get_predictions(model, full_model=True)
         labels = self.get_labels(get_labels=True).flatten()
         plot_pT = PlotBase(

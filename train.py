@@ -45,6 +45,12 @@ if __name__ == "__main__":
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
         _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
+    edge_weight_layer_name = "edge_weight"
+    edge_feat_layer_name = "edge_feat"
+    vertex_network_layer_name = "vertex_network"
+    input_weight_layer_name = "input_1"
+    input_feat_layer_name = "input_2"
+
     DatasetGenerator = DataLoader(
         input=train_file,
         get_labels=True,
@@ -57,6 +63,11 @@ if __name__ == "__main__":
         edge_name=config.edge_name,
         edge_feat_name=config.edge_feat_name,
         vertex_feat_name=config.vertex_feat_name,
+        edge_weight_layer_name=edge_weight_layer_name,
+        edge_feat_layer_name=edge_feat_layer_name,
+        vertex_network_layer_name=vertex_network_layer_name,
+        input_weight_layer_name=input_weight_layer_name,
+        input_feat_layer_name=input_feat_layer_name,
     )
 
     types, shapes = DatasetGenerator.get_types_shapes()
@@ -89,6 +100,11 @@ if __name__ == "__main__":
         edge_name=config.edge_name,
         edge_feat_name=config.edge_feat_name,
         vertex_feat_name=config.vertex_feat_name,
+        edge_weight_layer_name=edge_weight_layer_name,
+        edge_feat_layer_name=edge_feat_layer_name,
+        vertex_network_layer_name=vertex_network_layer_name,
+        input_weight_layer_name=input_weight_layer_name,
+        input_feat_layer_name=input_feat_layer_name,
     )
 
     types_val, shapes_val = DatasetGeneratorVal.get_types_shapes()
@@ -114,7 +130,16 @@ if __name__ == "__main__":
         shape=(metadata_dict["n_trks"], metadata_dict["n_trk_features"])
     )
 
-    model_builder = TopographModel(config=config, metadata_dict=metadata_dict)
+    model_builder = TopographModel(
+        config=config,
+        metadata_dict=metadata_dict,
+        edge_weight_layer_name=edge_weight_layer_name,
+        edge_feat_layer_name=edge_feat_layer_name,
+        vertex_network_layer_name=vertex_network_layer_name,
+        input_weight_layer_name=input_weight_layer_name,
+        input_feat_layer_name=input_feat_layer_name,
+    )
+
     model = model_builder.get_model(input_feat, input_weight)
 
     model.fit(
@@ -124,5 +149,3 @@ if __name__ == "__main__":
         steps_per_epoch=metadata_dict["n_jets"] // config.stepsize,
         callbacks=callbacks,
     )
-
-    # print(model_build.slope_values)

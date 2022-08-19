@@ -11,19 +11,38 @@ from topograph.modules.layers import (
 
 
 class TopographModel:
-    def __init__(self, config, metadata_dict):
+    def __init__(
+        self,
+        config,
+        metadata_dict,
+        edge_weight_layer_name,
+        edge_feat_layer_name,
+        vertex_network_layer_name,
+        input_weight_layer_name,
+        input_feat_layer_name,
+    ):
         # super(TopographModel, self).__init__()
         self.config = config
         self.metadata_dict = metadata_dict
+        self.edge_weight_layer_name = edge_weight_layer_name
+        self.edge_feat_layer_name = edge_feat_layer_name
+        self.vertex_network_layer_name = vertex_network_layer_name
+        self.input_weight_layer_name = input_weight_layer_name
+        self.input_feat_layer_name = input_feat_layer_name
+
         self.nodes_feat = self.config.edge_feature_network["nodes"]
         self.nodes_weight = self.config.edge_weight_network["nodes"]
         self.nodes_vertex = self.config.vertex_network["nodes"]
-        self.feat_layer = FeatLayers(nodes=self.nodes_feat, net_name="edge_feat")
-        self.edge_layer = EdgeLayers(nodes=self.nodes_weight, net_name="edge_weight")
+        self.feat_layer = FeatLayers(
+            nodes=self.nodes_feat, net_name=self.edge_feat_layer_name
+        )
+        self.edge_layer = EdgeLayers(
+            nodes=self.nodes_weight, net_name=self.edge_weight_layer_name
+        )
         self.shiftrelu = ShiftRelu()
         self.dot_product = DotProduct()
         self.dense_vertex_out = DenseNetwork(
-            nodes=self.nodes_vertex, net_name="vertex_network"
+            nodes=self.nodes_vertex, net_name=self.vertex_network_layer_name
         )
 
     def get_model(self, input_feat, input_weight):
@@ -32,6 +51,7 @@ class TopographModel:
         shiftrelu = self.shiftrelu(edge_wt_out)
         dt_product = self.dot_product([edge_feat_out, shiftrelu])
         dense_vertex_out = self.dense_vertex_out(dt_product)
+        # print(f"{input_feat}\n{input_weight}\n{edge_wt_out}\n{edge_feat_out}\n{shiftrelu}\n{dt_product}\n{dense_vertex_out}")
         model = Model(
             inputs=[input_feat, input_weight],
             outputs=[edge_wt_out, dense_vertex_out],
@@ -41,12 +61,12 @@ class TopographModel:
             optimizer="Adam",
             run_eagerly=True,
             loss={
-                "edge_weight": "binary_crossentropy",
-                "vertex_network": "mean_squared_error",
+                self.edge_weight_layer_name: "binary_crossentropy",
+                self.vertex_network_layer_name: "mean_squared_error",
             },
             loss_weights={
-                "edge_weight": 100,
-                "vertex_network": 1,
+                self.edge_weight_layer_name: 100,
+                self.vertex_network_layer_name: 1,
             },
             weighted_metrics=["accuracy"],
         )

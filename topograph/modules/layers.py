@@ -1,4 +1,5 @@
 import tensorflow.keras.backend as K
+from tensorflow import constant
 from tensorflow.keras import activations  # pylint: disable=import-error
 from tensorflow.keras.layers import (  # pylint: disable=import-error
     Activation,
@@ -9,12 +10,14 @@ from tensorflow.keras.layers import (  # pylint: disable=import-error
 
 
 class ShiftRelu(Layer):
-    def __init__(self):
-        super(ShiftRelu, self).__init__()
+    def __init__(self, **kwargs):
+        super(ShiftRelu, self).__init__(**kwargs)
         self.fac = self.add_weight(shape=(1,), trainable=True, name="new_relu_factor")
 
     def call(self, x):
-        shifted_relu = K.switch(x >= self.fac, (x + self.fac), (x - self.fac))
+        shifted_relu = K.switch(
+            x >= self.fac, (x - self.fac), constant([0], dtype=x.dtype)
+        )
         return shifted_relu
 
 
@@ -23,7 +26,7 @@ class EdgeLayers(Layer):
     Define a TrksLayers as a layer
     """
 
-    def __init__(self, nodes, net_name):
+    def __init__(self, nodes, net_name, **kwargs):
         """
         Init for TrksLayers
 
@@ -44,6 +47,7 @@ class EdgeLayers(Layer):
         super(EdgeLayers, self).__init__(name=net_name)
         self.nodes = nodes
         self.net_name = net_name
+
         # self.fac = self.add_weight(shape=(1,), trainable=True, name="new_relu_factor")
         self.layers = []
         for i, phi_nodes in enumerate(self.nodes[:-1]):
@@ -61,14 +65,6 @@ class EdgeLayers(Layer):
             )
         )
 
-    # def shifted_relu_activation_train(self, x):
-    #     return K.switch(x >= self.fac, (x + self.fac), (x - self.fac))
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"nodes": self.nodes, "net_name": self.net_name})
-        return config
-
     def call(self, input_layer):
         # Set the track input
         tdd = self.layers[0](input_layer)
@@ -77,13 +73,18 @@ class EdgeLayers(Layer):
             tdd = layer(tdd)
         return tdd
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"nodes": self.nodes, "net_name": self.net_name})
+        return config
+
 
 class FeatLayers(Layer):
     """
     Define a TrksLayers as a layer
     """
 
-    def __init__(self, nodes, net_name):
+    def __init__(self, nodes, net_name, **kwargs):
         """
         Init for TrksLayers
 
@@ -101,7 +102,7 @@ class FeatLayers(Layer):
         output : object
             returns output layer of DenseNetwork
         """
-        super(FeatLayers, self).__init__(name=net_name)
+        super(FeatLayers, self).__init__(name=net_name)  # , **kwargs)
         self.nodes = nodes
         self.net_name = net_name
         self.layers = []
@@ -123,11 +124,6 @@ class FeatLayers(Layer):
             )
         )
 
-    def get_config(self):
-        config = super().get_config()
-        config.update({"nodes": self.nodes, "net_name": self.net_name})
-        return config
-
     def call(self, input_layer):
         # Set the track input
         tdd = self.layers[0](input_layer)
@@ -135,6 +131,13 @@ class FeatLayers(Layer):
         for layer in self.layers[1:]:
             tdd = layer(tdd)
         return tdd
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
+        )
+        return config
 
 
 # def get_dense_network_layers(nodes, net_name):
@@ -156,7 +159,7 @@ class DenseNetwork(Layer):
     Define a DenseNetwork as a layer
     """
 
-    def __init__(self, nodes, net_name):
+    def __init__(self, nodes, net_name, **kwargs):
         """
         Init for DenseNetwork
 
@@ -184,16 +187,18 @@ class DenseNetwork(Layer):
         )
         # self.name = net_name
 
-    def get_config(self):
-        config = super().get_config()
-        config.update({"nodes": self.nodes, "net_name": self.net_name})
-        return config
-
     def call(self, dense_ntw):
         dense_ntw = self.layers[0](dense_ntw)
         for layer in self.layers[1:]:
             dense_ntw = layer(dense_ntw)
         return dense_ntw
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
+        )
+        return config
 
 
 class DotProduct(Layer):
