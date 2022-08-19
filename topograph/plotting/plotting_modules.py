@@ -101,11 +101,13 @@ class Plotter:
             get_inputs=True,
             get_labels=False,
             get_weight_labels=False,
+            # stepsize=600,
             savetracks=True,
             track_name=self.config.tracks_name,
             edge_name=self.config.edge_name,
             edge_feat_name=self.config.edge_feat_name,
             vertex_feat_name=self.config.vertex_feat_name,
+            n_samples=self.config.evaluation.get("n_samples", None),
         )
 
         types, shapes = DatasetGenerator.get_types_shapes()
@@ -135,6 +137,10 @@ class Plotter:
             labels = self.get_labels(get_weight_labels=True).astype(int)
             eff = calculate_efficiency(preds, labels, Ntotal)
             effs.append(eff)
+        with File(f"{self.config.output}/plotting_data.h5", "a") as f:
+            if "efficiency" in f.keys():
+                del f["efficiency"]
+            f.create_dataset("efficiency", data=effs)
         plot_eff = PlotBase(
             ylabel="efficiency",
             xlabel="epoch",
