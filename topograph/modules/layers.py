@@ -1,5 +1,5 @@
 import tensorflow.keras.backend as K
-from tensorflow import constant
+from tensorflow import cast, greater
 from tensorflow.keras import activations  # pylint: disable=import-error
 from tensorflow.keras.layers import (  # pylint: disable=import-error
     Activation,
@@ -7,18 +7,31 @@ from tensorflow.keras.layers import (  # pylint: disable=import-error
     Layer,
     TimeDistributed,
 )
+from tensorflow.math import exp
+
+
+class Sigmoid(Layer):
+    def __init__(self, **kwargs):
+        super(Sigmoid, self).__init__(**kwargs)
+        self.c1 = self.add_weight(shape=(1,), trainable=True, name="c1_sigmoid")
+        self.c2 = self.add_weight(shape=(1,), trainable=True, name="c2_sigmoid")
+
+    def call(self, x):
+        return 1 / (1 + exp(-self.c1 * (x - self.c2)))
 
 
 class ShiftRelu(Layer):
     def __init__(self, **kwargs):
         super(ShiftRelu, self).__init__(**kwargs)
-        self.fac = self.add_weight(shape=(1,), trainable=True, name="new_relu_factor")
+        self.shift = self.add_weight(shape=(1,), trainable=True, name="relu_shift")
+        self.slope = self.add_weight(shape=(1,), trainable=True, name="relu_slope")
 
     def call(self, x):
-        shifted_relu = K.switch(
-            x >= self.fac, (x - self.fac), constant([0], dtype=x.dtype)
+        print(self.shift)
+        print(self.slope)
+        return (
+            self.slope * (x - self.shift) * cast(greater(x, self.shift), dtype=x.dtype)
         )
-        return shifted_relu
 
 
 class EdgeLayers(Layer):
