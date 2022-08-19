@@ -1,6 +1,7 @@
 from glob import glob
 from os import makedirs
 
+import numpy as np
 from h5py import File
 from puma import PlotBase
 from tensorflow.data import Dataset
@@ -31,6 +32,33 @@ def create_figure(plot):
     return plot
 
 
+def get_point_styles(N):
+    point_styles = [
+        "rx",
+        "bx",
+        "gx",
+        "cx",
+        "mx",
+        "yx",
+        "kx",
+        "r.",
+        "b.",
+        "g.",
+        "c.",
+        "m.",
+        "y.",
+        "k.",
+        "rv",
+        "bv",
+        "gv",
+        "cv",
+        "mv",
+        "yv",
+        "kv",
+    ]
+    return point_styles[:N]
+
+
 class Plotter:
     def __init__(self, config):
         self.config = config
@@ -54,14 +82,62 @@ class Plotter:
         self.plot_dir = f"{self.config.output}/plots"
         makedirs(self.plot_dir, exist_ok=True)
 
-        if config.evaluation["plot_efficiency"]:
-            logger.info("Plotting efficiency...")
+        if config.evaluation["plot_efficiency"] or config.evaluation["plot_parameters"]:
             n_modelfiles = len(glob(f"{self.config.output}/modelfiles/model_epoch*"))
-            self.plotting_efficiency(
-                n_modelfiles,
-                self.metadata_dict["n_jets"] * self.metadata_dict["n_trks"],
-                logger,
-            )
+            effs = []
+            params = []
+            for i in range(1, n_modelfiles + 1):
+                layer, model_sub, model = self.load_topomodel(
+                    f"{self.config.output}/modelfiles/model_epoch{i:03d}.h5"
+                )
+                if config.evaluation["plot_efficiency"]:
+                    logger.info(f"plotting efficiency for model model_epoch{i:03d}")
+                    effs = self.plotting_efficiency(
+                        model_sub,
+                        Ntotal=self.metadata_dict["n_jets"]
+                        * self.metadata_dict["n_trks"],
+                        logger=logger,
+                        effs=effs,
+                    )
+                if config.evaluation["plot_parameters"]:
+                    logger.info(f"plotting parameters for model model_epoch{i:03d}")
+                    params = self.plotting_parameters(layer, params=params)
+
+            if config.evaluation["plot_efficiency"]:
+                self.plot_vals(
+                    ylabel="efficiency",
+                    xlabel="epoch",
+                    plot_name="eff_per_epoch",
+                    vals=[effs],
+                    labels=[""],
+                    point_styles=get_point_styles(1),
+                )
+
+            if config.evaluation["plot_parameters"]:
+                params = np.array(params).T.squeeze(0)
+                labels = [var.name.replace(":0", "") for var in layer.trainable_weights]
+                if self.config.evaluation.get("plot_params_one", False):
+                    self.plot_vals(
+                        ylabel="parameter value",
+                        xlabel="epoch",
+                        plot_name="parameters",
+                        vals=params,
+                        labels=labels,
+                        point_styles=get_point_styles(len(labels)),
+                    )
+                if self.config.evaluation.get("plot_params_split", True):
+                    for param, label, point_style in zip(
+                        params, labels, get_point_styles(len(labels))
+                    ):
+                        self.plot_vals(
+                            ylabel="parameter value",
+                            xlabel="epoch",
+                            plot_name=label,
+                            vals=[param],
+                            labels=[""],
+                            point_styles=[point_style],
+                            title=label,
+                        )
 
         if config.evaluation["plot_pt"]:
             logger.info("Plotting pT...")
@@ -101,7 +177,7 @@ class Plotter:
             )
         layer = model.get_layer(name=activation_name)
         model_sub = Model(inputs=[input], outputs=[layer.output])
-        return model, model_sub
+        return layer, model_sub, model
 
     def get_predictions(self, model, full_model=False):
         DatasetGenerator = DataLoader(
@@ -110,7 +186,7 @@ class Plotter:
             get_inputs=True,
             get_labels=False,
             get_weight_labels=False,
-            # stepsize=600,
+            stepsize=5000,
             savetracks=True,
             track_name=self.config.tracks_name,
             edge_name=self.config.edge_name,
@@ -135,31 +211,16 @@ class Plotter:
             if get_labels:
                 return f[self.config.vertex_feat_name][:]
 
-    def plotting_efficiency(self, n_modelfiles, Ntotal, logger):
-        effs = []
-        for i in range(1, n_modelfiles + 1):
-            logger.info(f"plotting efficiency for model model_epoch{i:03d}")
-            _, model = self.load_topomodel(
-                f"{self.config.output}/modelfiles/model_epoch{i:03d}.h5"
-            )
-            preds = self.get_predictions(model)
-            labels = self.get_labels(get_weight_labels=True).astype(int)
-            eff = calculate_efficiency(preds, labels, Ntotal)
-            effs.append(eff)
+    def plotting_efficiency(self, model, Ntotal, logger, effs):
+        preds = self.get_predictions(model)
+        labels = self.get_labels(get_weight_labels=True).astype(int)
+        eff = calculate_efficiency(preds, labels, Ntotal)
+        effs.append(eff)
         with File(f"{self.config.output}/plotting_data.h5", "a") as f:
             if "efficiency" in f.keys():
                 del f["efficiency"]
             f.create_dataset("efficiency", data=effs)
-        plot_eff = PlotBase(
-            ylabel="efficiency",
-            xlabel="epoch",
-            n_ratio_panels=0,
-            logy=False,
-        )
-        plot_eff.initialise_figure()
-        plot_eff.axis_top.plot(effs, "bo")
-        plot_eff = create_figure(plot=plot_eff)
-        plot_eff.savefig(f"{self.plot_dir}/eff_per_epoch.pdf")
+        return effs
 
     def plotting_pT_regression(self, logger, modelfile=None):
         logger.info("plotting pT regression for model model_epoch")
@@ -176,3 +237,22 @@ class Plotter:
         plot_pT.axis_top.plot(labels, preds, "bo")
         plot_pT = create_figure(plot=plot_pT)
         plot_pT.savefig(f"{self.plot_dir}/pT_regression.pdf")
+
+    def plotting_parameters(self, layer, params):
+        weights = layer.trainable_weights
+        params.append(np.array(weights))
+        return params
+
+    def plot_vals(
+        self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
+    ):
+        plot_eff = PlotBase(
+            ylabel=ylabel, xlabel=xlabel, n_ratio_panels=0, logy=False, title=title
+        )
+        plot_eff.initialise_figure()
+        for val, label, point_style in zip(vals, labels, point_styles):
+            print(point_style)
+            plot_eff.axis_top.plot(val, point_style, label=label)
+        plot_eff.axis_top.legend()
+        plot_eff = create_figure(plot=plot_eff)
+        plot_eff.savefig(f"{self.plot_dir}/{plot_name}.pdf")
