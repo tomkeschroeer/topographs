@@ -7,6 +7,7 @@ from topograph.modules.layers import (
     EdgeLayers,
     FeatLayers,
     ShiftRelu,
+    Sigmoid,
 )
 
 
@@ -39,7 +40,19 @@ class TopographModel:
         self.edge_layer = EdgeLayers(
             nodes=self.nodes_weight, net_name=self.edge_weight_layer_name
         )
-        self.shiftrelu = ShiftRelu()
+        add_activation = self.config.edge_weight_network.get("add_activation", None)
+        if add_activation == "shifted_relu":
+            self.add_activation = ShiftRelu()
+        elif add_activation == "sigmoid":
+            self.add_activation = Sigmoid()
+        elif add_activation is None:
+            self.add_activation = False
+        else:
+            raise KeyError(
+                f"Undefined additional actrivation: {add_activation}. Please select one"
+                ' of the following: ["shifted_relu", "sigmoid"] or leave empty/remove'
+                " option."
+            )
         self.dot_product = DotProduct()
         self.dense_vertex_out = DenseNetwork(
             nodes=self.nodes_vertex, net_name=self.vertex_network_layer_name
@@ -48,8 +61,11 @@ class TopographModel:
     def get_model(self, input_feat, input_weight):
         edge_wt_out = self.edge_layer(input_feat)
         edge_feat_out = self.feat_layer(input_weight)
-        shiftrelu = self.shiftrelu(edge_wt_out)
-        dt_product = self.dot_product([edge_feat_out, shiftrelu])
+        if self.add_activation:
+            add_activation = self.add_activation(edge_wt_out)
+        else:
+            add_activation = edge_wt_out
+        dt_product = self.dot_product([edge_feat_out, add_activation])
         dense_vertex_out = self.dense_vertex_out(dt_product)
         # print(f"{input_feat}\n{input_weight}\n{edge_wt_out}\n{edge_feat_out}\n{shiftrelu}\n{dt_product}\n{dense_vertex_out}")
         model = Model(

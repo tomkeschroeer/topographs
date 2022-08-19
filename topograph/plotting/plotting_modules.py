@@ -15,6 +15,7 @@ from topograph.modules import (
     EdgeLayers,
     FeatLayers,
     ShiftRelu,
+    Sigmoid,
     get_logger,
 )
 from topograph.plotting.plotting_tools import calculate_efficiency
@@ -36,6 +37,9 @@ class Plotter:
         logger = get_logger()
         self.metadata_dict = {}
         self.test_file = f"{self.config.output}/{self.config.testing_file_name}"
+        self.add_activation = self.config.edge_weight_network.get(
+            "add_activation", None
+        )
 
         with File(self.test_file, "r") as f:
             (
@@ -69,9 +73,9 @@ class Plotter:
             modelfile = f"{self.config.output}/modelfiles/{modelfile_name}".replace(
                 "//", "/"
             )
-        print(modelfile)
         with CustomObjectScope(
             {
+                "Sigmoid": Sigmoid,
                 "ShiftRelu": ShiftRelu,
                 "EdgeLayers": EdgeLayers,
                 "FeatLayers": FeatLayers,
@@ -80,17 +84,25 @@ class Plotter:
             }
         ):
             model = load_model(filepath=modelfile)
-        #     custom_objects={
-        #         "ShiftRelu": ShiftRelu,
-        #         "EdgeLayers": EdgeLayers,
-        #         "FeatLayers": FeatLayers,
-        #         "DenseNetwork": DenseNetwork,
-        #         "DotProduct": DotProduct
-        #     }
-        # )
+
         input = model.input
-        layer = model.get_layer(name="shift_relu")
-        print(layer.trainable_weights)
+        print(self.add_activation)
+        layer_names = [layer.name for layer in model.layers]
+        print(layer_names)
+        if self.add_activation is None:
+            activation_name = "edge_weight"
+        elif self.add_activation == "shifted_relu":
+            activation_name = [layer for layer in layer_names if "relu" in layer][0]
+        elif self.add_activation == "sigmoid":
+            activation_name = [layer for layer in layer_names if "sigmoid" in layer][0]
+        else:
+            raise KeyError(
+                f"Undefined additional actrivation: {self.add_activation}. Please"
+                ' select one of the following: ["shifted_relu", "sigmoid"] or leave'
+                " empty/remove option."
+            )
+        print(activation_name)
+        layer = model.get_layer(name=activation_name)
         model_sub = Model(inputs=[input], outputs=[layer.output])
         return model, model_sub
 

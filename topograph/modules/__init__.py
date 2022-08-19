@@ -7,6 +7,7 @@ from topograph.modules.layers import (
     EdgeLayers,
     FeatLayers,
     ShiftRelu,
+    Sigmoid,
 )
 from topograph.modules.tools import (
     DataGenerator,

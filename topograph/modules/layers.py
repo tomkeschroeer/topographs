@@ -27,8 +27,6 @@ class ShiftRelu(Layer):
         self.slope = self.add_weight(shape=(1,), trainable=True, name="relu_slope")
 
     def call(self, x):
-        print(self.shift)
-        print(self.slope)
         return (
             self.slope * (x - self.shift) * cast(greater(x, self.shift), dtype=x.dtype)
         )
