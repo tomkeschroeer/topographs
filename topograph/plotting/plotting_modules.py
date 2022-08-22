@@ -94,6 +94,7 @@ class Plotter:
                     logger.info(f"plotting efficiency for model model_epoch{i:03d}")
                     effs = self.plotting_efficiency(
                         model_sub,
+                        layer,
                         Ntotal=self.metadata_dict["n_jets"]
                         * self.metadata_dict["n_trks"],
                         logger=logger,
@@ -107,7 +108,7 @@ class Plotter:
                 self.plot_vals(
                     ylabel="efficiency",
                     xlabel="epoch",
-                    plot_name="eff_per_epoch",
+                    plot_name="eff_per_epoch_zeros",
                     vals=[effs],
                     labels=[""],
                     point_styles=get_point_styles(1),
@@ -211,10 +212,15 @@ class Plotter:
             if get_labels:
                 return f[self.config.vertex_feat_name][:]
 
-    def plotting_efficiency(self, model, Ntotal, logger, effs):
+    def plotting_efficiency(self, model, layer, Ntotal, logger, effs):
         preds = self.get_predictions(model)
+        weights = layer.trainable_weights
+        slope = [weight for weight in weights if "relu_slope" in weight.name][0]
+        shift = [weight for weight in weights if "relu_shift" in weight.name][0]
         labels = self.get_labels(get_weight_labels=True).astype(int)
-        eff = calculate_efficiency(preds, labels, Ntotal)
+        eff = calculate_efficiency(
+            preds, labels, Ntotal, slope, shift, zeros_only=True
+        )()
         effs.append(eff)
         with File(f"{self.config.output}/plotting_data.h5", "a") as f:
             if "efficiency" in f.keys():
@@ -251,7 +257,6 @@ class Plotter:
         )
         plot_eff.initialise_figure()
         for val, label, point_style in zip(vals, labels, point_styles):
-            print(point_style)
             plot_eff.axis_top.plot(val, point_style, label=label)
         plot_eff.axis_top.legend()
         plot_eff = create_figure(plot=plot_eff)

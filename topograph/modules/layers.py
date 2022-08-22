@@ -1,6 +1,6 @@
 import tensorflow.keras.backend as K
 from tensorflow import cast, greater
-from tensorflow.keras import activations  # pylint: disable=import-error
+from tensorflow.keras import activations, initializers  # pylint: disable=import-error
 from tensorflow.keras.layers import (  # pylint: disable=import-error
     Activation,
     Dense,
@@ -13,8 +13,8 @@ from tensorflow.math import exp
 class Sigmoid(Layer):
     def __init__(self, **kwargs):
         super(Sigmoid, self).__init__(**kwargs)
-        self.c1 = self.add_weight(shape=(1,), trainable=True, name="c1_sigmoid")
-        self.c2 = self.add_weight(shape=(1,), trainable=True, name="c2_sigmoid")
+        self.c1 = self.add_weight(shape=(), trainable=True, name="c1_sigmoid")
+        self.c2 = self.add_weight(shape=(), trainable=True, name="c2_sigmoid")
 
     def call(self, x):
         return 1 / (1 + exp(-self.c1 * (x - self.c2)))
@@ -23,8 +23,14 @@ class Sigmoid(Layer):
 class ShiftRelu(Layer):
     def __init__(self, **kwargs):
         super(ShiftRelu, self).__init__(**kwargs)
-        self.shift = self.add_weight(shape=(1,), trainable=True, name="relu_shift")
-        self.slope = self.add_weight(shape=(1,), trainable=True, name="relu_slope")
+        shift_initializer = initializers.Constant(0.8)
+        slope_initializer = initializers.Constant(1.0)
+        self.shift = self.add_weight(
+            shape=(), trainable=True, name="relu_shift", initializer=shift_initializer
+        )
+        self.slope = self.add_weight(
+            shape=(), trainable=True, name="relu_slope", initializer=slope_initializer
+        )
 
     def call(self, x):
         return (
@@ -149,20 +155,6 @@ class FeatLayers(Layer):
             {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
         )
         return config
-
-
-# def get_dense_network_layers(nodes, net_name):
-#     """
-#     Define a DenseNetwork as a layer
-#     """
-#     nodes = nodes
-#     net_name = net_name
-#     layers = []
-#     for i, node in enumerate(nodes[:-1]):
-#         layers.append(Dense(node, name=f"vertex_network_dense_{i}"))
-#         layers.append(Activation(activations.relu, name=f"{net_name}_ReLu_{i}"))
-#     layers.append(Dense(nodes[-1], activation="linear", name=net_name))
-#     return layers
 
 
 class DenseNetwork(Layer):
