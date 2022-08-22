@@ -1,14 +1,8 @@
 import argparse as pars
-from puma import Histogram, HistogramPlot
-from tensorflow.keras.models import load_model
-from topograph.modules import (
-    GlobalConfig,
-    GetConfiguration,
 
-)
-from topograph.plotting import (
-    Plotter
-)
+from topograph.modules import GetConfiguration
+from topograph.plotting import Plotter
+
 
 def get_parser():
     """
@@ -20,18 +14,18 @@ def get_parser():
     """
     parser = pars.ArgumentParser()
     parser.add_argument(
-        '--config', 
-        '-c', 
+        "--config",
+        "-c",
         type=str,
-        required=True, 
-        help='config file giving the network parameters'
+        required=True,
+        help="config file giving the network parameters",
     )
 
     args = parser.parse_args()
     return args
 
+
 if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
     Plotting = Plotter(config)
-
