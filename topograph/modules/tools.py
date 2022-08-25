@@ -11,15 +11,18 @@ from tensorflow import TensorShape, Variable, constant, float32
 
 
 def get_sample_weights(x):
+    # print(f"x in get sample weights = {x}")
     x = x.flatten()
     length = len(x)
+    # print(f"Therefore, the length is {length}")
     n_b = sum(x)
     n_nonb = length - n_b
-    fac_b = length / (n_b + 1e-4)
-    fac_nonb = length / (n_nonb + 1e-4)
+    fac_b = length / (n_b + 1e-5)
+    fac_nonb = length / (n_nonb + 1e-5)
     weights = np.ones(len(x))
     weights[x == 1] = fac_b
     weights[x == 0] = fac_nonb
+    # print(f"Let's check the weights: what do they look like?! {weights}")
     return weights.reshape((length, 1))
 
 
@@ -324,8 +327,8 @@ class DataGenerator:
                     step * self.stepsize : (step + 1) * self.stepsize
                 ]
             if self.get_sample_weights:
-                self.sample_weight_batch = list(
-                    map(get_sample_weights, self.edge_batch)
+                self.sample_weight_batch = np.array(
+                    list(map(get_sample_weights, self.edge_batch))
                 )
 
     def get_types_shapes(self):
@@ -484,7 +487,9 @@ class DataLoader(DataGenerator):
     def __call__(self):
         if self.n_samples is None:
             self.n_samples = self.metadata_dict["n_jets"]
-        n_steps = self.n_samples // self.stepsize + 1
+        n_steps = self.n_samples // self.stepsize
+        if self.n_samples % self.n_samples != 0:
+            n_steps += 1
         for step in range(n_steps):
             self.load_in_memory(step=step)
             if (

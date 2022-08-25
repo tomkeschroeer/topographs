@@ -34,6 +34,11 @@ def create_figure(plot):
 
 def get_point_styles(N):
     point_styles = [
+        "r-",
+        "b.",
+        "g.",
+        "c.",
+        "m.",
         "rx",
         "bx",
         "gx",
@@ -64,10 +69,45 @@ class Plotter:
         self.config = config
         logger = get_logger()
         self.metadata_dict = {}
-        self.test_file = f"{self.config.output}/{self.config.testing_file_name}"
+        self.test_file = (
+            f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
+        )
+        self.plot_file = f"{self.config.output}/plotting_data.h5"
         self.add_activation = self.config.edge_weight_network.get(
             "add_activation", None
         )
+
+        self.plot_effs = self.config.evaluation["plot_efficiency"].get("plot", False)
+        self.plot_effs_zeros = self.config.evaluation["plot_efficiency_zeros_only"].get(
+            "plot", False
+        )
+        self.plot_effs_ones = self.config.evaluation["plot_efficiency_ones_only"].get(
+            "plot", False
+        )
+        self.plot_parameters = self.config.evaluation["plot_parameters"].get(
+            "plot", False
+        )
+        self.plot_parameters_split = self.config.evaluation["plot_parameters"].get(
+            "split", True
+        )
+        self.plot_parameters_one = self.config.evaluation["plot_parameters"].get(
+            "in_one", False
+        )
+        self.plot_pt = self.config.evaluation["plot_pt"].get("plot", False)
+
+        self.recalculate_effs = self.config.evaluation["plot_efficiency"].get(
+            "recalculate", True
+        )
+        self.recalculate_effs_zeros = self.config.evaluation[
+            "plot_efficiency_zeros_only"
+        ].get("recalculate", True)
+        self.recalculate_effs_ones = self.config.evaluation[
+            "plot_efficiency_ones_only"
+        ].get("recalculate", True)
+        self.recalculate_parameters = self.config.evaluation["plot_parameters"].get(
+            "recalculate", True
+        )
+        self.recalculate_pt = self.config.evaluation["plot_pt"].get("recalculate", True)
 
         with File(self.test_file, "r") as f:
             (
@@ -79,66 +119,166 @@ class Plotter:
                 f"{self.config.vertex_feat_name}"
             ].shape
 
+        DatasetGenerator = DataLoader(
+            input=self.test_file,
+            metadata_dict=self.metadata_dict,
+            get_inputs=True,
+            get_labels=False,
+            get_weight_labels=False,
+            stepsize=3000,
+            savetracks=True,
+            track_name=self.config.tracks_name,
+            edge_name=self.config.edge_name,
+            edge_feat_name=self.config.edge_feat_name,
+            vertex_feat_name=self.config.vertex_feat_name,
+            n_samples=self.config.evaluation.get("n_samples", None),
+        )
+
+        types, shapes = DatasetGenerator.get_types_shapes()
+
+        self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
+
         self.plot_dir = f"{self.config.output}/plots"
         makedirs(self.plot_dir, exist_ok=True)
+        effs = []
+        effs_ones = []
+        effs_zeros = []
+        params = []
 
-        if config.evaluation["plot_efficiency"] or config.evaluation["plot_parameters"]:
+        if self.recalculate_effs is False and self.plot_effs:
+            with File(self.plot_file, "r+") as f:
+                effs = f["efficiency"][:]
+        if self.recalculate_effs_ones is False and self.plot_effs_ones:
+            with File(self.plot_file, "r+") as f:
+                effs_ones = f["efficiency_ones_only"][:]
+        if self.recalculate_effs_zeros is False and self.plot_effs_zeros:
+            with File(self.plot_file, "r+") as f:
+                effs_zeros = f["efficiency_zeros_only"][:]
+        if self.recalculate_parameters is False and self.plot_parameters:
+            with File(self.plot_file, "r+") as f:
+                params = f["parameters"][:]
+
+        if (
+            self.plot_effs
+            or self.plot_effs_ones
+            or self.plot_effs_zeros
+            or self.plot_parameters
+        ) and (
+            self.recalculate_effs
+            or self.recalculate_effs_zeros
+            or self.recalculate_effs_ones
+            or self.plot_parameters
+        ):
             n_modelfiles = len(glob(f"{self.config.output}/modelfiles/model_epoch*"))
-            effs = []
-            params = []
             for i in range(1, n_modelfiles + 1):
-                layer, model_sub, model = self.load_topomodel(
+                layer, model_sub, _ = self.load_topomodel(
                     f"{self.config.output}/modelfiles/model_epoch{i:03d}.h5"
                 )
-                if config.evaluation["plot_efficiency"]:
+                if (
+                    (self.plot_effs and self.recalculate_effs)
+                    or (self.plot_effs_ones and self.recalculate_effs_ones)
+                    or (self.plot_effs_zeros and self.recalculate_effs_ones)
+                ):
+                    preds, labels, slope, shift = self.get_pred_and_labels(
+                        model=model_sub, layer=layer
+                    )
+                if self.plot_effs and self.recalculate_effs:
                     logger.info(f"plotting efficiency for model model_epoch{i:03d}")
-                    effs = self.plotting_efficiency(
-                        model_sub,
-                        layer,
-                        Ntotal=self.metadata_dict["n_jets"]
-                        * self.metadata_dict["n_trks"],
-                        logger=logger,
+                    effs = self.get_efficiency(
+                        preds=preds,
+                        labels=labels,
+                        slope=slope,
+                        shift=shift,
                         effs=effs,
                     )
-                if config.evaluation["plot_parameters"]:
+                if self.plot_effs_ones and self.recalculate_effs_ones:
+                    logger.info(
+                        f"plotting efficiency, ones only, for model model_epoch{i:03d}"
+                    )
+                    effs_ones = self.get_efficiency(
+                        preds=preds,
+                        labels=labels,
+                        slope=slope,
+                        shift=shift,
+                        effs=effs_ones,
+                        ones_only=True,
+                    )
+                if self.plot_effs_zeros and self.recalculate_effs_zeros:
+                    logger.info(
+                        f"plotting efficiency, zeros only, for model model_epoch{i:03d}"
+                    )
+                    effs_zeros = self.get_efficiency(
+                        preds=preds,
+                        labels=labels,
+                        slope=slope,
+                        shift=shift,
+                        effs=effs_zeros,
+                        zeros_only=True,
+                    )
+                if self.plot_parameters and self.recalculate_parameters:
                     logger.info(f"plotting parameters for model model_epoch{i:03d}")
                     params = self.plotting_parameters(layer, params=params)
 
-            if config.evaluation["plot_efficiency"]:
+        if self.plot_effs:
+            self.plot_vals(
+                ylabel="efficiency",
+                xlabel="epoch",
+                plot_name="eff_per_epoch",
+                vals=[effs],
+                labels=[""],
+                point_styles=get_point_styles(1),
+            )
+            if self.recalculate_effs:
+                self.save_vals(dataset_name="efficiency", data=effs)
+        if self.plot_effs_ones:
+            self.plot_vals(
+                ylabel="efficiency",
+                xlabel="epoch",
+                plot_name="eff_per_epoch_ones",
+                vals=[effs_ones],
+                labels=[""],
+                point_styles=get_point_styles(1),
+            )
+            if self.recalculate_effs_ones:
+                self.save_vals(dataset_name="efficiency_ones_only", data=effs_ones)
+        if self.plot_effs_zeros:
+            self.plot_vals(
+                ylabel="efficiency",
+                xlabel="epoch",
+                plot_name="eff_per_epoch_zeros",
+                vals=[effs_zeros],
+                labels=[""],
+                point_styles=get_point_styles(1),
+            )
+            if self.recalculate_effs_zeros:
+                self.save_vals(dataset_name="efficiency_zeros_only", data=effs_zeros)
+        if self.plot_parameters:
+            params = np.array(params).T  # .squeeze(0)
+            labels = [var.name.replace(":0", "") for var in layer.trainable_weights]
+            if self.plot_parameters_one:
                 self.plot_vals(
-                    ylabel="efficiency",
+                    ylabel="parameter value",
                     xlabel="epoch",
-                    plot_name="eff_per_epoch_zeros",
-                    vals=[effs],
-                    labels=[""],
-                    point_styles=get_point_styles(1),
+                    plot_name="parameters",
+                    vals=params,
+                    labels=labels,
+                    point_styles=get_point_styles(len(labels)),
                 )
-
-            if config.evaluation["plot_parameters"]:
-                params = np.array(params).T.squeeze(0)
-                labels = [var.name.replace(":0", "") for var in layer.trainable_weights]
-                if self.config.evaluation.get("plot_params_one", False):
+            if self.plot_parameters_split:
+                for param, label, point_style in zip(
+                    params, labels, get_point_styles(len(labels))
+                ):
                     self.plot_vals(
                         ylabel="parameter value",
                         xlabel="epoch",
-                        plot_name="parameters",
-                        vals=params,
-                        labels=labels,
-                        point_styles=get_point_styles(len(labels)),
+                        plot_name=label,
+                        vals=[param],
+                        labels=[""],
+                        point_styles=[point_style],
+                        title=label,
                     )
-                if self.config.evaluation.get("plot_params_split", True):
-                    for param, label, point_style in zip(
-                        params, labels, get_point_styles(len(labels))
-                    ):
-                        self.plot_vals(
-                            ylabel="parameter value",
-                            xlabel="epoch",
-                            plot_name=label,
-                            vals=[param],
-                            labels=[""],
-                            point_styles=[point_style],
-                            title=label,
-                        )
+            if self.recalculate_parameters:
+                self.save_vals(dataset_name="parameters", data=params)
 
         if config.evaluation["plot_pt"]:
             logger.info("Plotting pT...")
@@ -181,58 +321,50 @@ class Plotter:
         return layer, model_sub, model
 
     def get_predictions(self, model, full_model=False):
-        DatasetGenerator = DataLoader(
-            input=self.test_file,
-            metadata_dict=self.metadata_dict,
-            get_inputs=True,
-            get_labels=False,
-            get_weight_labels=False,
-            stepsize=5000,
-            savetracks=True,
-            track_name=self.config.tracks_name,
-            edge_name=self.config.edge_name,
-            edge_feat_name=self.config.edge_feat_name,
-            vertex_feat_name=self.config.vertex_feat_name,
-            n_samples=self.config.evaluation.get("n_samples", None),
-        )
-
-        types, shapes = DatasetGenerator.get_types_shapes()
-
-        dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
         if full_model:
-            _, preds = model.predict(dataset)
+            _, preds = model.predict(self.dataset)
         else:
-            preds = model.predict(dataset)
+            preds = model.predict(self.dataset)
         return preds
 
-    def get_labels(self, get_weight_labels=False, get_labels=False):
+    def get_labels(self, n_samples, get_weight_labels=False, get_labels=False):
         with File(self.test_file, "r") as f:
             if get_weight_labels:
-                return f[self.config.edge_name][:]
+                return f[self.config.edge_name][:n_samples]
             if get_labels:
-                return f[self.config.vertex_feat_name][:]
+                return f[self.config.vertex_feat_name][:n_samples]
 
-    def plotting_efficiency(self, model, layer, Ntotal, logger, effs):
+    def get_pred_and_labels(self, model, layer):
         preds = self.get_predictions(model)
         weights = layer.trainable_weights
         slope = [weight for weight in weights if "relu_slope" in weight.name][0]
         shift = [weight for weight in weights if "relu_shift" in weight.name][0]
-        labels = self.get_labels(get_weight_labels=True).astype(int)
+        labels = self.get_labels(get_weight_labels=True, n_samples=len(preds)).astype(
+            int
+        )
+        return preds, labels, slope, shift
+
+    def get_efficiency(
+        self, preds, labels, slope, shift, effs, zeros_only=False, ones_only=False
+    ):
+        Ntotal = self.metadata_dict["n_trks"] * len(preds)
         eff = calculate_efficiency(
-            preds, labels, Ntotal, slope, shift, zeros_only=True
+            preds,
+            labels,
+            Ntotal,
+            slope,
+            shift,
+            zeros_only=zeros_only,
+            ones_only=ones_only,
         )()
         effs.append(eff)
-        with File(f"{self.config.output}/plotting_data.h5", "a") as f:
-            if "efficiency" in f.keys():
-                del f["efficiency"]
-            f.create_dataset("efficiency", data=effs)
         return effs
 
     def plotting_pT_regression(self, logger, modelfile=None):
         logger.info("plotting pT regression for model model_epoch")
-        model, _ = self.load_topomodel(modelfile)
+        _, _, model = self.load_topomodel(modelfile)
         preds = self.get_predictions(model, full_model=True)
-        labels = self.get_labels(get_labels=True).flatten()
+        labels = self.get_labels(n_samples=len(preds), get_labels=True).flatten()
         plot_pT = PlotBase(
             ylabel="predicted pT",
             xlabel="true pT",
@@ -252,12 +384,18 @@ class Plotter:
     def plot_vals(
         self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
     ):
-        plot_eff = PlotBase(
+        plot = PlotBase(
             ylabel=ylabel, xlabel=xlabel, n_ratio_panels=0, logy=False, title=title
         )
-        plot_eff.initialise_figure()
+        plot.initialise_figure()
         for val, label, point_style in zip(vals, labels, point_styles):
-            plot_eff.axis_top.plot(val, point_style, label=label)
-        plot_eff.axis_top.legend()
-        plot_eff = create_figure(plot=plot_eff)
-        plot_eff.savefig(f"{self.plot_dir}/{plot_name}.pdf")
+            plot.axis_top.plot(val, point_style, label=label)
+        plot.axis_top.legend()
+        plot = create_figure(plot=plot)
+        plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
+
+    def save_vals(self, dataset_name, data):
+        with File(self.plot_file, "a") as f:
+            if dataset_name in f.keys():
+                del f[dataset_name]
+            f.create_dataset(dataset_name, data=data)

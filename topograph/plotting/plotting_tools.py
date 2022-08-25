@@ -1,9 +1,5 @@
 def comp_pred_label(pred_f_val, label_f_val, slope, shift):
     cut_val = (slope * (1 - shift)) / 4
-    print(f"slope is {slope}")
-    print(f"shift is {shift}")
-    print(f"cut value is {cut_val}")
-    print(f"pred val = {pred_f_val}, label val = {label_f_val}")
     pred_f_val = 1 if pred_f_val >= cut_val else 0
     return 1 if pred_f_val == label_f_val else 0
 
@@ -14,7 +10,7 @@ def comp_pred_label_pt(pred_f_val, label_f_val):
 
 class calculate_efficiency:
     def __init__(
-        self, pred, label, Ntotal, slope, shift, ones_only=False, zeros_only=False
+        self, pred, label, Ntotal, slope, shift, zeros_only=False, ones_only=False
     ):
         self.pred_f = pred.flatten()
         self.label_f = label.flatten()
@@ -22,6 +18,7 @@ class calculate_efficiency:
         self.slope = slope
         self.shift = shift
         self.cut_val = (self.slope * (1 - self.shift)) / 4
+        self.cut_val = 0.0623
         self.ones_only = ones_only
         self.zeros_only = zeros_only
 
@@ -48,14 +45,6 @@ class calculate_efficiency:
 
     def comp_pred_label_zeros_only(self, pred_f_val):
         return 1 if pred_f_val <= self.cut_val else 0
-
-
-# def calculate_jetwise_efficiency(pred, label):
-#     pred_f = [pred_tr.flatten() for pred_tr in pred]
-#     label_f = [label_tr.flatten() for label_tr in label]
-# effs = map()
-# print(pred_f)
-# print(label_f)
 
 
 def calculate_delta_pt(pred, label):

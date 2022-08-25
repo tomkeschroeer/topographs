@@ -1,16 +1,15 @@
 import argparse as pars
 
-from topograph.modules import (
-    GetConfiguration,
+from topograph.modules import GetConfiguration
+from topograph.preprocessing_tools import (
+    Apply_Scaler,
+    H5toTfrecordsConverter,
+    Merge,
+    OneFileMaker,
+    Prepare,
+    Scaler,
 )
 
-from topograph.preprocessing_tools import (
-    Prepare,
-    Merge,
-    Scaler,
-    Apply_Scaler,
-    OneFileMaker
-)
 
 def get_parser():
     """
@@ -22,54 +21,44 @@ def get_parser():
     """
     parser = pars.ArgumentParser()
     parser.add_argument(
-        '--config', 
-        '-c', 
+        "--config",
+        "-c",
         type=str,
-        required=True, 
-        help='config file giving the network parameters'
+        required=True,
+        help="config file giving the network parameters",
     )
     parser.add_argument(
-        '--onefile',
-        '-o',
-        action="store_true",
-        help='make one samples files'
+        "--onefile", "-o", action="store_true", help="make one samples files"
     )
+    parser.add_argument("--scale", "-s", action="store_true", help="scale samples")
     parser.add_argument(
-        '--scale',
-        '-s',
-        action="store_true",
-        help='scale samples'
+        "--apply_scales", "-a", action="store_true", help="apply scales"
     )
-    parser.add_argument(
-        '--apply_scales',
-        '-a',
-        action="store_true",
-        help='apply scales'
-    )
-    parser.add_argument(
-        '--prepare',
-        '-p',
-        action="store_true",
-        help='prepares samples'
-    )
-    parser.add_argument(
-        '--merge',
-        '-m',
-        action="store_true",
-        help='merge samples'
-    )
+    parser.add_argument("--prepare", "-p", action="store_true", help="prepares samples")
+    parser.add_argument("--merge", "-m", action="store_true", help="merge samples")
+    parser.add_argument("--to_records", "-r", action="store_true", help="merge samples")
 
     args = parser.parse_args()
     return args
+
 
 if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
     output_dir = f"{config.output}"
     dataset_types = {
-        "": {"njets":config.njets, "final_filename": f"{output_dir}/{config.training_file_name}"},
-        "_val": {"njets": config.njets_val, "final_filename": f"{output_dir}/{config.validation_file_name}"},
-        "_test": {"njets": config.njets_test, "final_filename": f"{output_dir}/{config.testing_file_name}"}
+        "": {
+            "njets": config.njets,
+            "final_filename": f"{output_dir}/{config.training_file_name}",
+        },
+        "_val": {
+            "njets": config.njets_val,
+            "final_filename": f"{output_dir}/{config.validation_file_name}",
+        },
+        "_test": {
+            "njets": config.njets_test,
+            "final_filename": f"{output_dir}/{config.testing_file_name}",
+        },
     }
     if args.onefile:
         onefile = OneFileMaker(config, dataset_types)
@@ -86,5 +75,6 @@ if __name__ == "__main__":
     if args.merge:
         merge = Merge(config)
         merge.Run()
-    
-        
+    if args.to_records:
+        records = H5toTfrecordsConverter(config)
+        records.Run()

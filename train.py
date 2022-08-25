@@ -45,6 +45,7 @@ if __name__ == "__main__":
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
         _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
+    print(metadata_dict)
     edge_weight_layer_name = "edge_weight"
     edge_feat_layer_name = "edge_feat"
     vertex_network_layer_name = "vertex_network"
@@ -93,7 +94,7 @@ if __name__ == "__main__":
         get_labels=True,
         get_weight_labels=True,
         get_inputs=True,
-        get_sample_weights=True,
+        get_sample_weights=False,
         metadata_dict=metadata_dict_val,
         savetracks=True,
         track_name=config.tracks_name,
@@ -145,7 +146,7 @@ if __name__ == "__main__":
     model.fit(
         tf_dataset,
         epochs=config.epochs,
-        validation_data=tf_dataset_val,
+        # validation_data=tf_dataset_val,
         steps_per_epoch=metadata_dict["n_jets"] // config.stepsize,
         callbacks=callbacks,
     )
