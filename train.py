@@ -57,17 +57,6 @@ if __name__ == "__main__":
     input_feat_layer_name = "input_2"
 
     if config.tfrecords["use_tfrecords_to_train"]:
-        # types, shapes = get_types_shapes(
-        #     get_labels=True,
-        #     get_weight_labels=True,
-        #     get_inputs=self.config.use_sample_weights,
-        #     metadata_dict=metadata_dict,
-        #     input_feat_layer_name=input_weight_layer_name,
-        #     input_weight_layer_name=input_weight_layer_name,
-        #     edge_feat_layer_name=edge_feat_layer_name,
-        #     edge_weight_layer_name=edge_feat_layer_name,
-        #     vertex_network_layer_name=vertex_network_layer_name
-        # )
         tf_dataset, metadata_dict = load_tfrecords_train_dataset(config=config)
 
     else:
