@@ -80,6 +80,164 @@ def get_track_mask(trks):
             return track_mask
 
 
+def get_types_shapes(
+    get_labels: bool = True,
+    get_inputs: bool = True,
+    get_weight_labels: bool = False,
+    get_sample_weights: bool = False,
+    input_weight_layer_name: str = None,
+    input_feat_layer_name: str = None,
+    edge_weight_layer_name: str = None,
+    edge_feat_layer_name: str = None,
+    vertex_network_layer_name: str = None,
+    metadata_dict: dict = None,
+):
+    if get_labels and get_inputs and get_weight_labels and get_sample_weights:
+        types = (
+            {
+                input_weight_layer_name: float32,
+                input_feat_layer_name: float32,
+            },
+            {
+                edge_weight_layer_name: float32,
+                vertex_network_layer_name: float32,
+            },
+            {edge_weight_layer_name: float32},
+        )
+        shapes = (
+            {
+                input_weight_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_trk_features"],
+                    )
+                ),
+                input_feat_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_trk_features"],
+                    )
+                ),
+            },
+            {
+                edge_weight_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_edge_y"],
+                    )
+                ),
+                vertex_network_layer_name: TensorShape(
+                    (None, metadata_dict["n_vertex_feat"])
+                ),
+            },
+            {
+                edge_weight_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_edge_y"],
+                    )
+                ),
+            },
+        )
+    elif get_labels and get_inputs and get_weight_labels:
+        types = (
+            {
+                input_weight_layer_name: float32,
+                input_feat_layer_name: float32,
+            },
+            {
+                edge_weight_layer_name: float32,
+                vertex_network_layer_name: float32,
+            },
+        )
+        shapes = (
+            {
+                input_weight_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_trk_features"],
+                    )
+                ),
+                input_feat_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_trk_features"],
+                    )
+                ),
+            },
+            {
+                edge_weight_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_edge_y"],
+                    )
+                ),
+                vertex_network_layer_name: TensorShape(
+                    (None, metadata_dict["n_vertex_feat"])
+                ),
+            },
+        )
+    elif get_labels and get_inputs:
+        types = (
+            {
+                input_weight_layer_name: float32,
+                input_feat_layer_name: float32,
+            },
+            float32,
+        )
+        shapes = (
+            {
+                input_weight_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_trk_features"],
+                    )
+                ),
+                input_feat_layer_name: TensorShape(
+                    (
+                        None,
+                        metadata_dict["n_trks"],
+                        metadata_dict["n_trk_features"],
+                    )
+                ),
+            },
+            TensorShape((None, metadata_dict["n_vertex_feat"])),
+        )
+    elif get_labels:
+        types = float32
+        shapes = TensorShape((None, metadata_dict["n_vertex_feat"]))
+    elif get_inputs:
+        types = {
+            input_weight_layer_name: float32,
+            input_feat_layer_name: float32,
+        }
+        shapes = {
+            input_weight_layer_name: TensorShape(
+                (
+                    None,
+                    metadata_dict["n_trks"],
+                    metadata_dict["n_trk_features"],
+                )
+            ),
+            input_feat_layer_name: TensorShape(
+                (
+                    None,
+                    metadata_dict["n_trks"],
+                    metadata_dict["n_trk_features"],
+                )
+            ),
+        }
+    return types, shapes
+
+
 class CustomFormatter(logging.Formatter):
     """Logging Formatter to add colors and count warning / errors
     using implementation from
@@ -332,155 +490,17 @@ class DataGenerator:
                 )
 
     def get_types_shapes(self):
-        if (
-            self.get_labels
-            and self.get_inputs
-            and self.get_weight_labels
-            and self.get_sample_weights
-        ):
-            types = (
-                {
-                    self.input_weight_layer_name: float32,
-                    self.input_feat_layer_name: float32,
-                },
-                {
-                    self.edge_weight_layer_name: float32,
-                    self.vertex_network_layer_name: float32,
-                },
-                {self.edge_weight_layer_name: float32},
-            )
-            shapes = (
-                {
-                    self.input_weight_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_trk_features"],
-                        )
-                    ),
-                    self.input_feat_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_trk_features"],
-                        )
-                    ),
-                },
-                {
-                    self.edge_weight_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_edge_y"],
-                        )
-                    ),
-                    self.vertex_network_layer_name: TensorShape(
-                        (None, self.metadata_dict["n_vertex_feat"])
-                    ),
-                },
-                {
-                    self.edge_weight_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_edge_y"],
-                        )
-                    ),
-                },
-            )
-        elif self.get_labels and self.get_inputs and self.get_weight_labels:
-            types = (
-                {
-                    self.input_weight_layer_name: float32,
-                    self.input_feat_layer_name: float32,
-                },
-                {
-                    self.edge_weight_layer_name: float32,
-                    self.vertex_network_layer_name: float32,
-                },
-            )
-            shapes = (
-                {
-                    self.input_weight_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_trk_features"],
-                        )
-                    ),
-                    self.input_feat_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_trk_features"],
-                        )
-                    ),
-                },
-                {
-                    self.edge_weight_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_edge_y"],
-                        )
-                    ),
-                    self.vertex_network_layer_name: TensorShape(
-                        (None, self.metadata_dict["n_vertex_feat"])
-                    ),
-                },
-            )
-        elif self.get_labels and self.get_inputs:
-            types = (
-                {
-                    self.input_weight_layer_name: float32,
-                    self.input_feat_layer_name: float32,
-                },
-                float32,
-            )
-            shapes = (
-                {
-                    self.input_weight_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_trk_features"],
-                        )
-                    ),
-                    self.input_feat_layer_name: TensorShape(
-                        (
-                            None,
-                            self.metadata_dict["n_trks"],
-                            self.metadata_dict["n_trk_features"],
-                        )
-                    ),
-                },
-                TensorShape((None, self.metadata_dict["n_vertex_feat"])),
-            )
-        elif self.get_labels:
-            types = float32
-            shapes = TensorShape((None, self.metadata_dict["n_vertex_feat"]))
-        elif self.get_inputs:
-            types = {
-                self.input_weight_layer_name: float32,
-                self.input_feat_layer_name: float32,
-            }
-            shapes = {
-                self.input_weight_layer_name: TensorShape(
-                    (
-                        None,
-                        self.metadata_dict["n_trks"],
-                        self.metadata_dict["n_trk_features"],
-                    )
-                ),
-                self.input_feat_layer_name: TensorShape(
-                    (
-                        None,
-                        self.metadata_dict["n_trks"],
-                        self.metadata_dict["n_trk_features"],
-                    )
-                ),
-            }
-        return types, shapes
+        return get_types_shapes(
+            get_labels=self.get_labels,
+            get_inputs=self.get_inputs,
+            get_weight_labels=self.get_weight_labels,
+            get_sample_weights=self.get_sample_weights,
+            input_weight_layer_name=self.input_weight_layer_name,
+            input_feat_layer_name=self.input_feat_layer_name,
+            edge_weight_layer_name=self.edge_weight_layer_name,
+            vertex_network_layer_name=self.vertex_network_layer_name,
+            metadata_dict=self.metadata_dict,
+        )
 
 
 class DataLoader(DataGenerator):

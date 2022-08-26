@@ -40,6 +40,10 @@ edge_weight_network:
 vertex_network:
   nodes: [50, 50, 50, 1]
 
+tfrecords:
+  use_tf_records_to_train: True
+  nfiles_to_load: 10
+
 evaluation:
   model: model_epoch001.h5
   n_samples: 10_000
