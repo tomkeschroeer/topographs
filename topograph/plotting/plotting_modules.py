@@ -72,7 +72,7 @@ class Plotter:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
-        self.plot_file = f"{self.config.output}/plotting_data.h5"
+        self.plot_file = f"{self.config.output_training}/plotting_data.h5"
         self.add_activation = self.config.edge_weight_network.get(
             "add_activation", None
         )
@@ -138,7 +138,7 @@ class Plotter:
 
         self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
 
-        self.plot_dir = f"{self.config.output}/plots"
+        self.plot_dir = f"{self.config.output_training}/plots"
         makedirs(self.plot_dir, exist_ok=True)
         effs = []
         effs_ones = []
@@ -169,10 +169,12 @@ class Plotter:
             or self.recalculate_effs_ones
             or self.plot_parameters
         ):
-            n_modelfiles = len(glob(f"{self.config.output}/modelfiles/model_epoch*"))
+            n_modelfiles = len(
+                glob(f"{self.config.output_training}/modelfiles/model_epoch*")
+            )
             for i in range(1, n_modelfiles + 1):
                 layer, model_sub, _ = self.load_topomodel(
-                    f"{self.config.output}/modelfiles/model_epoch{i:03d}.h5"
+                    f"{self.config.output_training}/modelfiles/model_epoch{i:03d}.h5"
                 )
                 if (
                     (self.plot_effs and self.recalculate_effs)
@@ -287,8 +289,10 @@ class Plotter:
     def load_topomodel(self, modelfile=None):
         if modelfile is None:
             modelfile_name = self.config.evaluation["model"]
-            modelfile = f"{self.config.output}/modelfiles/{modelfile_name}".replace(
-                "//", "/"
+            modelfile = (
+                f"{self.config.output_training}/modelfiles/{modelfile_name}".replace(
+                    "//", "/"
+                )
             )
         with CustomObjectScope(
             {

@@ -143,9 +143,9 @@ if __name__ == "__main__":
         DatasetGeneratorVal, types_val, shapes_val
     ).prefetch(tf.data.AUTOTUNE)
 
-    modelfile_dir = (config.output + "/modelfiles/model_epoch{epoch:03d}.h5").replace(
-        "//", "/"
-    )
+    modelfile_dir = (
+        config.output_training + "/modelfiles/model_epoch{epoch:03d}.h5"
+    ).replace("//", "/")
 
     model_checkpoint = ModelCheckpoint(
         modelfile_dir,
