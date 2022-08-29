@@ -39,16 +39,6 @@ def get_parser():
 if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
-    metadata_dict = {}
-    train_file = f"{config.output}/{config.training_file_name}".replace("//", "/")
-    with File(train_file, "r") as f:
-        (
-            metadata_dict["n_jets"],
-            metadata_dict["n_trks"],
-            metadata_dict["n_trk_features"],
-        ) = f[f"{config.tracks_name}"].shape
-        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
-        _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
     edge_weight_layer_name = "edge_weight"
     edge_feat_layer_name = "edge_feat"
@@ -57,9 +47,41 @@ if __name__ == "__main__":
     input_feat_layer_name = "input_2"
 
     if config.tfrecords["use_tfrecords_to_train"]:
-        tf_dataset, metadata_dict = load_tfrecords_train_dataset(config=config)
+        train_file_folder = f"{config.output}/{config.training_file_name}".replace(
+            "//", "/"
+        ).replace(".h5", "")
+        tf_dataset, metadata_dict = load_tfrecords_train_dataset(
+            train_file_folder=train_file_folder,
+            nfiles=config.tfrecords["nfiles_to_load"],
+            batch_size=config.tfrecords["batch_size"],
+            get_vertex_labels=True,
+            get_edge_feat_labels=False,
+            get_edge_labels=True,
+            get_inputs=True,
+            get_sample_weights=config.use_sample_weights,
+            track_name=config.tracks_name,
+            edge_name=config.edge_name,
+            edge_feat_name=config.edge_feat_name,
+            vertex_feat_name=config.vertex_feat_name,
+            edge_weight_layer_name=edge_weight_layer_name,
+            edge_feat_layer_name=edge_feat_layer_name,
+            vertex_network_layer_name=vertex_network_layer_name,
+            input_weight_layer_name=input_weight_layer_name,
+            input_feat_layer_name=input_feat_layer_name,
+        )
 
     else:
+        metadata_dict = {}
+        train_file = f"{config.output}/{config.training_file_name}".replace("//", "/")
+        with File(train_file, "r") as f:
+            (
+                metadata_dict["n_jets"],
+                metadata_dict["n_trks"],
+                metadata_dict["n_trk_features"],
+            ) = f[f"{config.tracks_name}"].shape
+            _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
+            _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
+
         DatasetGenerator = DataLoader(
             input=train_file,
             get_labels=True,
@@ -86,42 +108,40 @@ if __name__ == "__main__":
             .prefetch(tf.data.AUTOTUNE)
         )
 
-        metadata_dict_val = {}
-        val_file = f"{config.output}/{config.validation_file_name}".replace("//", "/")
-        with File(val_file, "r") as f:
-            (
-                metadata_dict_val["n_jets"],
-                metadata_dict_val["n_trks"],
-                metadata_dict_val["n_trk_features"],
-            ) = f[f"{config.tracks_name}"].shape
-            _, metadata_dict_val["n_vertex_feat"] = f[
-                f"{config.vertex_feat_name}"
-            ].shape
-            _, _, metadata_dict_val["n_edge_y"] = f[f"{config.edge_name}"].shape
+    metadata_dict_val = {}
+    val_file = f"{config.output}/{config.validation_file_name}".replace("//", "/")
+    with File(val_file, "r") as f:
+        (
+            metadata_dict_val["n_jets"],
+            metadata_dict_val["n_trks"],
+            metadata_dict_val["n_trk_features"],
+        ) = f[f"{config.tracks_name}"].shape
+        _, metadata_dict_val["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
+        _, _, metadata_dict_val["n_edge_y"] = f[f"{config.edge_name}"].shape
 
-        DatasetGeneratorVal = DataLoader(
-            input=val_file,
-            get_labels=True,
-            get_weight_labels=True,
-            get_inputs=True,
-            get_sample_weights=False,
-            metadata_dict=metadata_dict_val,
-            savetracks=True,
-            track_name=config.tracks_name,
-            edge_name=config.edge_name,
-            edge_feat_name=config.edge_feat_name,
-            vertex_feat_name=config.vertex_feat_name,
-            edge_weight_layer_name=edge_weight_layer_name,
-            edge_feat_layer_name=edge_feat_layer_name,
-            vertex_network_layer_name=vertex_network_layer_name,
-            input_weight_layer_name=input_weight_layer_name,
-            input_feat_layer_name=input_feat_layer_name,
-        )
+    DatasetGeneratorVal = DataLoader(
+        input=val_file,
+        get_labels=True,
+        get_weight_labels=True,
+        get_inputs=True,
+        get_sample_weights=False,
+        metadata_dict=metadata_dict_val,
+        savetracks=True,
+        track_name=config.tracks_name,
+        edge_name=config.edge_name,
+        edge_feat_name=config.edge_feat_name,
+        vertex_feat_name=config.vertex_feat_name,
+        edge_weight_layer_name=edge_weight_layer_name,
+        edge_feat_layer_name=edge_feat_layer_name,
+        vertex_network_layer_name=vertex_network_layer_name,
+        input_weight_layer_name=input_weight_layer_name,
+        input_feat_layer_name=input_feat_layer_name,
+    )
 
-        types_val, shapes_val = DatasetGeneratorVal.get_types_shapes()
-        tf_dataset_val = Dataset.from_generator(
-            DatasetGeneratorVal, types_val, shapes_val
-        ).prefetch(tf.data.AUTOTUNE)
+    types_val, shapes_val = DatasetGeneratorVal.get_types_shapes()
+    tf_dataset_val = Dataset.from_generator(
+        DatasetGeneratorVal, types_val, shapes_val
+    ).prefetch(tf.data.AUTOTUNE)
 
     modelfile_dir = (config.output + "/modelfiles/model_epoch{epoch:03d}.h5").replace(
         "//", "/"

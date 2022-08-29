@@ -41,7 +41,8 @@ vertex_network:
   nodes: [50, 50, 50, 1]
 
 tfrecords:
-  use_tf_records_to_train: True
+  batch_size: 5000
+  use_tfrecords_to_train: True
   nfiles_to_load: 10
 
 evaluation:

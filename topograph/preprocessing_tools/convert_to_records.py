@@ -72,10 +72,7 @@ class H5toTfrecordsConverter:
                 vertex_feat = hFile[self.vertex_feat_name][start:end]
                 sample_weights = np.array(list(map(get_sample_weights, edges)))
 
-                # Yield the chunk
-                if self.get_sample_weights:
-                    yield tracks, edges, vertex_feat, sample_weights  # edge_feat, vertex_feat
-                yield tracks, edges, vertex_feat, None
+                yield tracks, edges, vertex_feat, sample_weights
 
     def save_parameters(self, record_dir):
         """
@@ -119,7 +116,7 @@ class H5toTfrecordsConverter:
         n = 0
 
         # Iterate over chunks
-        for (tracks, edges, vertex_feat, sample_weights) in self.load_h5File_Train():
+        for (tracks, edges, vertex_feat, sample_weight) in self.load_h5File_Train():
             n += 1
 
             # Get filename of the chunk
@@ -152,7 +149,6 @@ class H5toTfrecordsConverter:
                     record_bytes.features.feature[
                         self.edge_name
                     ].int64_list.value.extend(edges[iterator].reshape(-1))
-
                     record_bytes.features.feature[
                         self.vertex_feat_name
                     ].float_list.value.extend(vertex_feat[iterator].reshape(-1))
@@ -160,7 +156,7 @@ class H5toTfrecordsConverter:
                     if self.get_sample_weights:
                         record_bytes.features.feature[
                             "sample_weight"
-                        ].float_list.value.extend(vertex_feat[iterator].reshape(-1))
+                        ].float_list.value.extend(sample_weight[iterator].reshape(-1))
 
                     # Write to file
                     file_writer.write(record_bytes.SerializeToString())
