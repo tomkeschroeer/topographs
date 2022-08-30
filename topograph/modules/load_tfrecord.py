@@ -23,6 +23,7 @@ def load_tfrecords_train_dataset(
     vertex_network_layer_name: str = "vertex_network",
     input_weight_layer_name: str = "input_1",
     input_feat_layer_name: str = "input_2",
+    repeat: bool = True,
 ):
     """
     Load the train dataset from tfrecords files.
@@ -82,6 +83,7 @@ def load_tfrecords_train_dataset(
         vertex_network_layer_name=vertex_network_layer_name,
         input_weight_layer_name=input_weight_layer_name,
         input_feat_layer_name=input_feat_layer_name,
+        repeat=repeat,
     )
 
     train_dataset = tfrecord_reader.load_dataset()
@@ -113,6 +115,7 @@ class TFRecordReader:
         vertex_network_layer_name: str = "vertex_network",
         input_weight_layer_name: str = "input_1",
         input_feat_layer_name: str = "input_2",
+        repeat: bool = True,
     ):
         """
         Reads the tf records dataset.
@@ -161,6 +164,8 @@ class TFRecordReader:
         self.input_weight_layer_name = input_weight_layer_name
         self.input_feat_layer_name = input_feat_layer_name
 
+        self.repeat = repeat
+
     def load_dataset(self):
         """
         Load TFRecord and create Dataset for training
@@ -184,9 +189,10 @@ class TFRecordReader:
                 self.decode_fn,
                 num_parallel_calls=tf.data.experimental.AUTOTUNE,
             )
-            .repeat()
-            .prefetch(3)
         )
+        if self.repeat:
+            tf_dataset.repeat().prefetch(3)
+
         return tf_dataset
 
     def decode_fn(self, record_bytes):

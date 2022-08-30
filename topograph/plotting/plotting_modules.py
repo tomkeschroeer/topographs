@@ -18,6 +18,7 @@ from topograph.modules import (
     ShiftRelu,
     Sigmoid,
     get_logger,
+    load_tfrecords_train_dataset,
 )
 from topograph.plotting.plotting_tools import calculate_efficiency
 
@@ -108,35 +109,61 @@ class Plotter:
             "recalculate", True
         )
         self.recalculate_pt = self.config.evaluation["plot_pt"].get("recalculate", True)
+        if self.config.evaluation["use_tfrecords"]:
+            testing_file_folder = f"{config.output}/{config.testing_file_name}".replace(
+                "//", "/"
+            ).replace(".h5", "")
+            self.dataset, self.metadata_dict = load_tfrecords_train_dataset(
+                train_file_folder=testing_file_folder,
+                nfiles=config.tfrecords["nfiles_to_load"],
+                batch_size=config.tfrecords["batch_size"],
+                get_vertex_labels=True,
+                get_edge_feat_labels=False,
+                get_edge_labels=True,
+                get_inputs=True,
+                get_sample_weights=config.use_sample_weights,
+                track_name=config.tracks_name,
+                edge_name=config.edge_name,
+                edge_feat_name=config.edge_feat_name,
+                vertex_feat_name=config.vertex_feat_name,
+                repeat=False
+                # edge_weight_layer_name=edge_weight_layer_name,
+                # edge_feat_layer_name=edge_feat_layer_name,
+                # vertex_network_layer_name=vertex_network_layer_name,
+                # input_weight_layer_name=input_weight_layer_name,
+                # input_feat_layer_name=input_feat_layer_name,
+            )
+            self.use_stepsize = False
+        else:
+            with File(self.test_file, "r") as f:
+                (
+                    self.metadata_dict["n_jets"],
+                    self.metadata_dict["n_trks"],
+                    self.metadata_dict["n_trk_features"],
+                ) = f[f"{self.config.tracks_name}"].shape
+                _, self.metadata_dict["n_vertex_feat"] = f[
+                    f"{self.config.vertex_feat_name}"
+                ].shape
 
-        with File(self.test_file, "r") as f:
-            (
-                self.metadata_dict["n_jets"],
-                self.metadata_dict["n_trks"],
-                self.metadata_dict["n_trk_features"],
-            ) = f[f"{self.config.tracks_name}"].shape
-            _, self.metadata_dict["n_vertex_feat"] = f[
-                f"{self.config.vertex_feat_name}"
-            ].shape
+            DatasetGenerator = DataLoader(
+                input=self.test_file,
+                metadata_dict=self.metadata_dict,
+                get_inputs=True,
+                get_labels=False,
+                get_weight_labels=False,
+                stepsize=3000,
+                savetracks=True,
+                track_name=self.config.tracks_name,
+                edge_name=self.config.edge_name,
+                edge_feat_name=self.config.edge_feat_name,
+                vertex_feat_name=self.config.vertex_feat_name,
+                n_samples=self.config.evaluation.get("n_samples", None),
+            )
 
-        DatasetGenerator = DataLoader(
-            input=self.test_file,
-            metadata_dict=self.metadata_dict,
-            get_inputs=True,
-            get_labels=False,
-            get_weight_labels=False,
-            stepsize=3000,
-            savetracks=True,
-            track_name=self.config.tracks_name,
-            edge_name=self.config.edge_name,
-            edge_feat_name=self.config.edge_feat_name,
-            vertex_feat_name=self.config.vertex_feat_name,
-            n_samples=self.config.evaluation.get("n_samples", None),
-        )
+            types, shapes = DatasetGenerator.get_types_shapes()
 
-        types, shapes = DatasetGenerator.get_types_shapes()
-
-        self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
+            self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
+            self.use_stepsize = True
 
         self.plot_dir = f"{self.config.output_training}/plots"
         makedirs(self.plot_dir, exist_ok=True)
@@ -332,6 +359,8 @@ class Plotter:
         return preds
 
     def get_labels(self, n_samples, get_weight_labels=False, get_labels=False):
+        if not self.use_stepsize:
+            n_samples = -1
         with File(self.test_file, "r") as f:
             if get_weight_labels:
                 return f[self.config.edge_name][:n_samples]

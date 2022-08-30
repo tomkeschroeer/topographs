@@ -12,17 +12,41 @@ from topograph.modules.layers import (
 
 
 class TopographModel:
+    """
+    class building the topograph model
+    """
+
     def __init__(
         self,
-        config,
-        metadata_dict,
-        edge_weight_layer_name,
-        edge_feat_layer_name,
-        vertex_network_layer_name,
-        input_weight_layer_name,
-        input_feat_layer_name,
+        config: object,
+        metadata_dict: dict,
+        edge_weight_layer_name: str = "edge_weight",
+        edge_feat_layer_name: str = "edge_feat",
+        vertex_network_layer_name: str = "vertex_network",
+        input_weight_layer_name: str = "input_1",
+        input_feat_layer_name: str = "input_2",
     ):
-        # super(TopographModel, self).__init__()
+        """
+        Init of TopographModel class
+
+        Parameters
+        ----------
+        config : object
+            GetConfiguration object including information about the model
+            architecture, train parameter etc.
+        metadata_dict: dict
+            dictionary giving the number of jets, tracks, features, etc.
+        edge_weight_layer_name : str
+            name of the layer predicting the edge weights.
+        edge_feat_layer_name : str
+            name of the layer predicting the edge features.
+        vertex_network_layer_name : str
+            name of the layer predicting the vertex features.
+        input_weight_layer_name : str
+            name of the input layer for the edge weight layer
+        input_feat_layer_name : str
+            name of the input layer for the edge feature layer
+        """
         self.config = config
         self.metadata_dict = metadata_dict
         self.edge_weight_layer_name = edge_weight_layer_name
@@ -59,6 +83,21 @@ class TopographModel:
         )
 
     def get_model(self, input_feat, input_weight):
+        """
+        function to build and return the topograph model
+
+        Parameters
+        ----------
+        input_feat : tensorflow.keras.layers.Input
+            Input for the layer for the edge feature prediction.
+        input_weight : tensorflow.keras.layers.Input
+            Input for the layer for the edge weights prediction.
+
+        Returns
+        -------
+        model
+            topograph model ready to be trained.
+        """
         edge_wt_out = self.edge_layer(input_feat)
         edge_feat_out = self.feat_layer(input_weight)
         if self.add_activation:
