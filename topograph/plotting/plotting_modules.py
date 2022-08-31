@@ -311,7 +311,7 @@ class Plotter:
             logger.info("Plotting pT...")
             self.plotting_pT_regression(
                 logger=logger,
-                model_file_number=self.config.evaluation["model_file_number"],
+                model_file_number=self.config.evaluation.get("model_file_number", 1),
             )
 
     def get_pred_and_labels(self, model, layer):
@@ -345,8 +345,8 @@ class Plotter:
         with File(
             f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
         ) as f:
-            preds = f["pred_vertex_features"]
-            labels = f["labels_vertex_features"]
+            preds = f["pred_vertex_features"][:]
+            labels = f["labels_vertex_features"][:]
         plot_pT = PlotBase(
             ylabel="predicted pT",
             xlabel="true pT",
