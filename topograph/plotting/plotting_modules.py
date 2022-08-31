@@ -95,7 +95,6 @@ def load_topomodel(modelfile=None, add_activation=None):
         )
     layer = model.get_layer(name=activation_name)
     model_sub = Model(inputs=[input], outputs=[layer.output])
-    print(model_sub)
     return layer, model_sub, model
 
 
@@ -406,7 +405,7 @@ class GetEpochPrediction:
             get_inputs=True,
             get_labels=False,
             get_weight_labels=False,
-            stepsize=40,
+            stepsize=3_000,
             savetracks=True,
             track_name=self.config.tracks_name,
             edge_name=self.config.edge_name,
@@ -417,12 +416,11 @@ class GetEpochPrediction:
 
         types, shapes = DatasetGenerator.get_types_shapes()
         self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
-        print(self.dataset)
 
         weights = layer.trainable_weights
         slope = [weight for weight in weights if "relu_slope" in weight.name][0]
         shift = [weight for weight in weights if "relu_shift" in weight.name][0]
-        pred_sub = self.get_predictions(model=model_sub)
+        pred_sub = get_predictions(model=model_sub, dataset=self.dataset)
         pred = get_predictions(model=model, dataset=self.dataset, full_model=True)
         label_sub = get_labels(
             label_name=self.config.edge_name,
@@ -438,24 +436,10 @@ class GetEpochPrediction:
             "//", "/"
         )
         makedirs(self.output_folder, exist_ok=True)
-        print(np.shape(pred_sub))
-        print(np.shape(pred))
-        print(np.shape(label_sub))
         with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
-            f.create_dataset(
-                name="pred_edge", data=pred_sub
-            )  # , shape=(None, self.metadata_dict["n_trks"], 1))
-            f.create_dataset(
-                name="pred_vertex_features", data=pred
-            )  # , shape=(None, 1))
+            f.create_dataset(name="pred_edge", data=pred_sub)
+            f.create_dataset(name="pred_vertex_features", data=pred)
             f.create_dataset(name="labels_edge", data=label_sub)
             f.create_dataset(name="labels_vertex_features", data=label)
             f.create_dataset(name="slope", data=slope)
             f.create_dataset(name="shift", data=shift)
-
-    def get_predictions(self, model, full_model=False):
-        if full_model:
-            _, preds = model.predict(self.dataset)
-        else:
-            preds = model.predict(self.dataset)
-        return preds
