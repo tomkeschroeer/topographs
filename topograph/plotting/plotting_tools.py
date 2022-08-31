@@ -18,7 +18,7 @@ class calculate_efficiency:
         self.slope = slope
         self.shift = shift
         self.cut_val = (self.slope * (1 - self.shift)) / 4
-        self.cut_val = 0.0623
+        # self.cut_val = 0.0623
         self.ones_only = ones_only
         self.zeros_only = zeros_only
 

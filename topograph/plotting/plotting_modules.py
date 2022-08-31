@@ -18,7 +18,6 @@ from topograph.modules import (
     ShiftRelu,
     Sigmoid,
     get_logger,
-    load_tfrecords_train_dataset,
 )
 from topograph.plotting.plotting_tools import calculate_efficiency
 
@@ -65,6 +64,54 @@ def get_point_styles(N):
     return point_styles[:N]
 
 
+def load_topomodel(modelfile=None, add_activation=None):
+    if modelfile is None:
+        raise KeyError("Please provide vaild modelfile.")
+    with CustomObjectScope(
+        {
+            "Sigmoid": Sigmoid,
+            "ShiftRelu": ShiftRelu,
+            "EdgeLayers": EdgeLayers,
+            "FeatLayers": FeatLayers,
+            "DenseNetwork": DenseNetwork,
+            "DotProduct": DotProduct,
+        }
+    ):
+        model = load_model(filepath=modelfile)
+
+    input = model.input
+    layer_names = [layer.name for layer in model.layers]
+    if add_activation is None:
+        activation_name = "edge_weight"
+    elif add_activation == "shifted_relu":
+        activation_name = [layer for layer in layer_names if "relu" in layer][0]
+    elif add_activation == "sigmoid":
+        activation_name = [layer for layer in layer_names if "sigmoid" in layer][0]
+    else:
+        raise KeyError(
+            f"Undefined additional actrivation: {add_activation}. Please"
+            ' select one of the following: ["shifted_relu", "sigmoid"] or leave'
+            " empty/remove option."
+        )
+    layer = model.get_layer(name=activation_name)
+    model_sub = Model(inputs=[input], outputs=[layer.output])
+    print(model_sub)
+    return layer, model_sub, model
+
+
+def get_predictions(model, dataset, full_model=False):
+    if full_model:
+        _, preds = model.predict(dataset)
+    else:
+        preds = model.predict(dataset)
+    return preds
+
+
+def get_labels(label_name, file_name, n_samples):
+    with File(file_name, "r") as f:
+        return f[label_name][:n_samples]
+
+
 class Plotter:
     def __init__(self, config):
         self.config = config
@@ -73,7 +120,7 @@ class Plotter:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
-        self.plot_file = f"{self.config.output_training}/plotting_data.h5"
+        self.plot_file = f"{self.config.output_training}/plotting_data_tr.h5"
         self.add_activation = self.config.edge_weight_network.get(
             "add_activation", None
         )
@@ -109,63 +156,8 @@ class Plotter:
             "recalculate", True
         )
         self.recalculate_pt = self.config.evaluation["plot_pt"].get("recalculate", True)
-        if self.config.evaluation["use_tfrecords"]:
-            testing_file_folder = f"{config.output}/{config.testing_file_name}".replace(
-                "//", "/"
-            ).replace(".h5", "")
-            self.dataset, self.metadata_dict = load_tfrecords_train_dataset(
-                train_file_folder=testing_file_folder,
-                nfiles=config.tfrecords["nfiles_to_load"],
-                batch_size=config.tfrecords["batch_size"],
-                get_vertex_labels=True,
-                get_edge_feat_labels=False,
-                get_edge_labels=True,
-                get_inputs=True,
-                get_sample_weights=config.use_sample_weights,
-                track_name=config.tracks_name,
-                edge_name=config.edge_name,
-                edge_feat_name=config.edge_feat_name,
-                vertex_feat_name=config.vertex_feat_name,
-                repeat=False
-                # edge_weight_layer_name=edge_weight_layer_name,
-                # edge_feat_layer_name=edge_feat_layer_name,
-                # vertex_network_layer_name=vertex_network_layer_name,
-                # input_weight_layer_name=input_weight_layer_name,
-                # input_feat_layer_name=input_feat_layer_name,
-            )
-            self.use_stepsize = False
-        else:
-            with File(self.test_file, "r") as f:
-                (
-                    self.metadata_dict["n_jets"],
-                    self.metadata_dict["n_trks"],
-                    self.metadata_dict["n_trk_features"],
-                ) = f[f"{self.config.tracks_name}"].shape
-                _, self.metadata_dict["n_vertex_feat"] = f[
-                    f"{self.config.vertex_feat_name}"
-                ].shape
 
-            DatasetGenerator = DataLoader(
-                input=self.test_file,
-                metadata_dict=self.metadata_dict,
-                get_inputs=True,
-                get_labels=False,
-                get_weight_labels=False,
-                stepsize=3000,
-                savetracks=True,
-                track_name=self.config.tracks_name,
-                edge_name=self.config.edge_name,
-                edge_feat_name=self.config.edge_feat_name,
-                vertex_feat_name=self.config.vertex_feat_name,
-                n_samples=self.config.evaluation.get("n_samples", None),
-            )
-
-            types, shapes = DatasetGenerator.get_types_shapes()
-
-            self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
-            self.use_stepsize = True
-
-        self.plot_dir = f"{self.config.output_training}/plots"
+        self.plot_dir = f"{self.config.output_training}/plots_tr"
         makedirs(self.plot_dir, exist_ok=True)
         effs = []
         effs_ones = []
@@ -200,7 +192,7 @@ class Plotter:
                 glob(f"{self.config.output_training}/modelfiles/model_epoch*")
             )
             for i in range(1, n_modelfiles + 1):
-                layer, model_sub, _ = self.load_topomodel(
+                layer, model_sub, _ = load_topomodel(
                     f"{self.config.output_training}/modelfiles/model_epoch{i:03d}.h5"
                 )
                 if (
@@ -313,68 +305,14 @@ class Plotter:
             logger.info("Plotting pT...")
             self.plotting_pT_regression(logger=logger)
 
-    def load_topomodel(self, modelfile=None):
-        if modelfile is None:
-            modelfile_name = self.config.evaluation["model"]
-            modelfile = (
-                f"{self.config.output_training}/modelfiles/{modelfile_name}".replace(
-                    "//", "/"
-                )
-            )
-        with CustomObjectScope(
-            {
-                "Sigmoid": Sigmoid,
-                "ShiftRelu": ShiftRelu,
-                "EdgeLayers": EdgeLayers,
-                "FeatLayers": FeatLayers,
-                "DenseNetwork": DenseNetwork,
-                "DotProduct": DotProduct,
-            }
-        ):
-            model = load_model(filepath=modelfile)
-
-        input = model.input
-        layer_names = [layer.name for layer in model.layers]
-        if self.add_activation is None:
-            activation_name = "edge_weight"
-        elif self.add_activation == "shifted_relu":
-            activation_name = [layer for layer in layer_names if "relu" in layer][0]
-        elif self.add_activation == "sigmoid":
-            activation_name = [layer for layer in layer_names if "sigmoid" in layer][0]
-        else:
-            raise KeyError(
-                f"Undefined additional actrivation: {self.add_activation}. Please"
-                ' select one of the following: ["shifted_relu", "sigmoid"] or leave'
-                " empty/remove option."
-            )
-        layer = model.get_layer(name=activation_name)
-        model_sub = Model(inputs=[input], outputs=[layer.output])
-        return layer, model_sub, model
-
-    def get_predictions(self, model, full_model=False):
-        if full_model:
-            _, preds = model.predict(self.dataset)
-        else:
-            preds = model.predict(self.dataset)
-        return preds
-
-    def get_labels(self, n_samples, get_weight_labels=False, get_labels=False):
-        if not self.use_stepsize:
-            n_samples = -1
-        with File(self.test_file, "r") as f:
-            if get_weight_labels:
-                return f[self.config.edge_name][:n_samples]
-            if get_labels:
-                return f[self.config.vertex_feat_name][:n_samples]
-
     def get_pred_and_labels(self, model, layer):
-        preds = self.get_predictions(model)
+        preds = get_predictions(model, self.dataset)
         weights = layer.trainable_weights
         slope = [weight for weight in weights if "relu_slope" in weight.name][0]
         shift = [weight for weight in weights if "relu_shift" in weight.name][0]
-        labels = self.get_labels(get_weight_labels=True, n_samples=len(preds)).astype(
-            int
-        )
+        labels = get_labels(
+            label_name=self.config.edge_name, file_name=self.test_file
+        )  # get_weight_labels=True, n_samples=len(preds)).astype(int)
         return preds, labels, slope, shift
 
     def get_efficiency(
@@ -395,9 +333,13 @@ class Plotter:
 
     def plotting_pT_regression(self, logger, modelfile=None):
         logger.info("plotting pT regression for model model_epoch")
-        _, _, model = self.load_topomodel(modelfile)
-        preds = self.get_predictions(model, full_model=True)
-        labels = self.get_labels(n_samples=len(preds), get_labels=True).flatten()
+        _, _, model = load_topomodel(
+            f"{self.config.output_training}/modelfiles/{modelfile}"
+        )
+        preds = get_predictions(model, self.dataset, full_model=True)
+        labels = get_labels(
+            label_name=self.config.vertex_feat_name, file_name=self.test_file
+        ).flatten()
         plot_pT = PlotBase(
             ylabel="predicted pT",
             xlabel="true pT",
@@ -432,3 +374,88 @@ class Plotter:
             if dataset_name in f.keys():
                 del f[dataset_name]
             f.create_dataset(dataset_name, data=data)
+
+
+class GetEpochPrediction:
+    def __init__(self, config, epoch):
+        self.config = config
+        self.epoch = epoch
+        self.test_file = (
+            f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
+        )
+
+        layer, model_sub, model = load_topomodel(
+            modelfile=f"{self.config.output_training}/modelfiles/model_epoch{self.epoch:03d}.h5",
+            add_activation=self.config.edge_weight_network["add_activation"],
+        )
+
+        self.metadata_dict = {}
+        with File(self.test_file, "r") as f:
+            (
+                self.metadata_dict["n_jets"],
+                self.metadata_dict["n_trks"],
+                self.metadata_dict["n_trk_features"],
+            ) = f[f"{self.config.tracks_name}"].shape
+            _, self.metadata_dict["n_vertex_feat"] = f[
+                f"{self.config.vertex_feat_name}"
+            ].shape
+
+        DatasetGenerator = DataLoader(
+            input=self.test_file,
+            metadata_dict=self.metadata_dict,
+            get_inputs=True,
+            get_labels=False,
+            get_weight_labels=False,
+            stepsize=40,
+            savetracks=True,
+            track_name=self.config.tracks_name,
+            edge_name=self.config.edge_name,
+            edge_feat_name=self.config.edge_feat_name,
+            vertex_feat_name=self.config.vertex_feat_name,
+            n_samples=self.config.evaluation.get("n_samples", None),
+        )
+
+        types, shapes = DatasetGenerator.get_types_shapes()
+        self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
+        print(self.dataset)
+
+        weights = layer.trainable_weights
+        slope = [weight for weight in weights if "relu_slope" in weight.name][0]
+        shift = [weight for weight in weights if "relu_shift" in weight.name][0]
+        pred_sub = self.get_predictions(model=model_sub)
+        pred = get_predictions(model=model, dataset=self.dataset, full_model=True)
+        label_sub = get_labels(
+            label_name=self.config.edge_name,
+            file_name=self.test_file,
+            n_samples=len(pred_sub),
+        )
+        label = get_labels(
+            label_name=self.config.vertex_feat_name,
+            file_name=self.test_file,
+            n_samples=len(pred),
+        )
+        self.output_folder = f"{self.config.output_training}/model_predictions".replace(
+            "//", "/"
+        )
+        makedirs(self.output_folder, exist_ok=True)
+        print(np.shape(pred_sub))
+        print(np.shape(pred))
+        print(np.shape(label_sub))
+        with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
+            f.create_dataset(
+                name="pred_edge", data=pred_sub
+            )  # , shape=(None, self.metadata_dict["n_trks"], 1))
+            f.create_dataset(
+                name="pred_vertex_features", data=pred
+            )  # , shape=(None, 1))
+            f.create_dataset(name="labels_edge", data=label_sub)
+            f.create_dataset(name="labels_vertex_features", data=label)
+            f.create_dataset(name="slope", data=slope)
+            f.create_dataset(name="shift", data=shift)
+
+    def get_predictions(self, model, full_model=False):
+        if full_model:
+            _, preds = model.predict(self.dataset)
+        else:
+            preds = model.predict(self.dataset)
+        return preds
