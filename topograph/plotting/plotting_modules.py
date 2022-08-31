@@ -115,7 +115,6 @@ class Plotter:
     def __init__(self, config):
         self.config = config
         logger = get_logger()
-        self.metadata_dict = {}
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
@@ -156,8 +155,22 @@ class Plotter:
         )
         self.recalculate_pt = self.config.evaluation["plot_pt"].get("recalculate", True)
 
-        self.plot_dir = f"{self.config.output_training}/plots_tr"
+        self.plot_dir = f"{self.config.output_training}/plots"
         makedirs(self.plot_dir, exist_ok=True)
+
+        self.model_pred_folder = f"{self.config.output_training}/model_predictions"
+
+        self.metadata_dict = {}
+        with File(self.test_file, "r") as f:
+            (
+                self.metadata_dict["n_jets"],
+                self.metadata_dict["n_trks"],
+                self.metadata_dict["n_trk_features"],
+            ) = f[f"{self.config.tracks_name}"].shape
+            _, self.metadata_dict["n_vertex_feat"] = f[
+                f"{self.config.vertex_feat_name}"
+            ].shape
+
         effs = []
         effs_ones = []
         effs_zeros = []
@@ -177,67 +190,58 @@ class Plotter:
                 params = f["parameters"][:]
 
         if (
-            self.plot_effs
-            or self.plot_effs_ones
-            or self.plot_effs_zeros
-            or self.plot_parameters
-        ) and (
-            self.recalculate_effs
-            or self.recalculate_effs_zeros
-            or self.recalculate_effs_ones
-            or self.plot_parameters
+            (self.plot_effs and self.recalculate_effs)
+            or (self.plot_effs_ones and self.recalculate_effs_zeros)
+            or (self.plot_effs_zeros and self.recalculate_effs_ones)
+            or (self.plot_parameters and self.recalculate_pt)
         ):
-            n_modelfiles = len(
-                glob(f"{self.config.output_training}/modelfiles/model_epoch*")
-            )
+            n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
             for i in range(1, n_modelfiles + 1):
-                layer, model_sub, _ = load_topomodel(
-                    f"{self.config.output_training}/modelfiles/model_epoch{i:03d}.h5"
-                )
-                if (
-                    (self.plot_effs and self.recalculate_effs)
-                    or (self.plot_effs_ones and self.recalculate_effs_ones)
-                    or (self.plot_effs_zeros and self.recalculate_effs_ones)
-                ):
-                    preds, labels, slope, shift = self.get_pred_and_labels(
-                        model=model_sub, layer=layer
-                    )
-                if self.plot_effs and self.recalculate_effs:
-                    logger.info(f"plotting efficiency for model model_epoch{i:03d}")
-                    effs = self.get_efficiency(
-                        preds=preds,
-                        labels=labels,
-                        slope=slope,
-                        shift=shift,
-                        effs=effs,
-                    )
-                if self.plot_effs_ones and self.recalculate_effs_ones:
-                    logger.info(
-                        f"plotting efficiency, ones only, for model model_epoch{i:03d}"
-                    )
-                    effs_ones = self.get_efficiency(
-                        preds=preds,
-                        labels=labels,
-                        slope=slope,
-                        shift=shift,
-                        effs=effs_ones,
-                        ones_only=True,
-                    )
-                if self.plot_effs_zeros and self.recalculate_effs_zeros:
-                    logger.info(
-                        f"plotting efficiency, zeros only, for model model_epoch{i:03d}"
-                    )
-                    effs_zeros = self.get_efficiency(
-                        preds=preds,
-                        labels=labels,
-                        slope=slope,
-                        shift=shift,
-                        effs=effs_zeros,
-                        zeros_only=True,
-                    )
-                if self.plot_parameters and self.recalculate_parameters:
-                    logger.info(f"plotting parameters for model model_epoch{i:03d}")
-                    params = self.plotting_parameters(layer, params=params)
+                with File(
+                    f"{self.model_pred_folder}/epoch_pred_{i:03d}.h5", "r"
+                ) as model_data:
+                    preds = model_data["pred_edge"][:]
+                    labels = model_data["labels_edge"][:]
+                    slope = model_data["slope"][()]
+                    shift = model_data["shift"][()]
+                    if self.plot_effs and self.recalculate_effs:
+                        logger.info(f"plotting efficiency for model model_epoch{i:03d}")
+                        effs = self.get_efficiency(
+                            preds=preds,
+                            labels=labels,
+                            slope=slope,
+                            shift=shift,
+                            effs=effs,
+                        )
+                    if self.plot_effs_ones and self.recalculate_effs_ones:
+                        logger.info(
+                            "plotting efficiency, ones only, for model"
+                            f" model_epoch{i:03d}"
+                        )
+                        effs_ones = self.get_efficiency(
+                            preds=preds,
+                            labels=labels,
+                            slope=slope,
+                            shift=shift,
+                            effs=effs_ones,
+                            ones_only=True,
+                        )
+                    if self.plot_effs_zeros and self.recalculate_effs_zeros:
+                        logger.info(
+                            "plotting efficiency, zeros only, for model"
+                            f" model_epoch{i:03d}"
+                        )
+                        effs_zeros = self.get_efficiency(
+                            preds=preds,
+                            labels=labels,
+                            slope=slope,
+                            shift=shift,
+                            effs=effs_zeros,
+                            zeros_only=True,
+                        )
+                    if self.plot_parameters and self.recalculate_parameters:
+                        logger.info(f"plotting parameters for model model_epoch{i:03d}")
+                        params.append([slope, shift])
 
         if self.plot_effs:
             self.plot_vals(
@@ -250,6 +254,7 @@ class Plotter:
             )
             if self.recalculate_effs:
                 self.save_vals(dataset_name="efficiency", data=effs)
+
         if self.plot_effs_ones:
             self.plot_vals(
                 ylabel="efficiency",
@@ -261,6 +266,7 @@ class Plotter:
             )
             if self.recalculate_effs_ones:
                 self.save_vals(dataset_name="efficiency_ones_only", data=effs_ones)
+
         if self.plot_effs_zeros:
             self.plot_vals(
                 ylabel="efficiency",
@@ -272,9 +278,10 @@ class Plotter:
             )
             if self.recalculate_effs_zeros:
                 self.save_vals(dataset_name="efficiency_zeros_only", data=effs_zeros)
+
         if self.plot_parameters:
-            params = np.array(params).T  # .squeeze(0)
-            labels = [var.name.replace(":0", "") for var in layer.trainable_weights]
+            labels = ["slope", "shift"]
+            params = np.array(params).T
             if self.plot_parameters_one:
                 self.plot_vals(
                     ylabel="parameter value",
@@ -302,7 +309,10 @@ class Plotter:
 
         if config.evaluation["plot_pt"]:
             logger.info("Plotting pT...")
-            self.plotting_pT_regression(logger=logger)
+            self.plotting_pT_regression(
+                logger=logger,
+                model_file_number=self.config.evaluation["model_file_number"],
+            )
 
     def get_pred_and_labels(self, model, layer):
         preds = get_predictions(model, self.dataset)
@@ -330,15 +340,13 @@ class Plotter:
         effs.append(eff)
         return effs
 
-    def plotting_pT_regression(self, logger, modelfile=None):
+    def plotting_pT_regression(self, logger, model_file_number):
         logger.info("plotting pT regression for model model_epoch")
-        _, _, model = load_topomodel(
-            f"{self.config.output_training}/modelfiles/{modelfile}"
-        )
-        preds = get_predictions(model, self.dataset, full_model=True)
-        labels = get_labels(
-            label_name=self.config.vertex_feat_name, file_name=self.test_file
-        ).flatten()
+        with File(
+            f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+        ) as f:
+            preds = f["pred_vertex_features"]
+            labels = f["labels_vertex_features"]
         plot_pT = PlotBase(
             ylabel="predicted pT",
             xlabel="true pT",
@@ -346,14 +354,9 @@ class Plotter:
             logy=False,
         )
         plot_pT.initialise_figure()
-        plot_pT.axis_top.plot(labels, preds, "bo")
+        plot_pT.axis_top.plot(labels, preds, "b.")
         plot_pT = create_figure(plot=plot_pT)
         plot_pT.savefig(f"{self.plot_dir}/pT_regression.pdf")
-
-    def plotting_parameters(self, layer, params):
-        weights = layer.trainable_weights
-        params.append(np.array(weights))
-        return params
 
     def plot_vals(
         self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
