@@ -1,9 +1,3 @@
-def comp_pred_label(pred_f_val, label_f_val, slope, shift):
-    cut_val = (slope * (1 - shift)) / 4
-    pred_f_val = 1 if pred_f_val >= cut_val else 0
-    return 1 if pred_f_val == label_f_val else 0
-
-
 def comp_pred_label_pt(pred_f_val, label_f_val):
     return pred_f_val - label_f_val
 
@@ -45,6 +39,22 @@ class calculate_efficiency:
 
     def comp_pred_label_zeros_only(self, pred_f_val):
         return 1 if pred_f_val <= self.cut_val else 0
+
+
+class calculate_binary_preds:
+    def __init__(self, preds, slope, shift):
+        self.preds = preds
+        self.slope = slope
+        self.shift = shift
+        self.cut_val = (self.slope * (1 - self.shift)) / 4
+
+    def __call__(self):
+        preds_bin = list(map(self.convert_preds_to_bin, self.preds))
+        return preds_bin
+
+    def convert_preds_to_bin(self, pred):
+        pred = 1 if pred >= self.cut_val else 0
+        return pred
 
 
 def calculate_delta_pt(pred, label):

@@ -3,11 +3,13 @@ from os import makedirs
 
 import numpy as np
 from h5py import File
+from matplotlib.cm import ScalarMappable
 from puma import PlotBase
 from tensorflow.data import Dataset
 from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import CustomObjectScope
+from tensorflow.math import confusion_matrix
 
 from topograph.modules import (
     DataLoader,
@@ -19,7 +21,10 @@ from topograph.modules import (
     Sigmoid,
     get_logger,
 )
-from topograph.plotting.plotting_tools import calculate_efficiency
+from topograph.plotting.plotting_tools import (
+    calculate_binary_preds,
+    calculate_efficiency,
+)
 
 
 def create_figure(plot):
@@ -140,6 +145,9 @@ class Plotter:
             "in_one", False
         )
         self.plot_pt = self.config.evaluation["plot_pt"].get("plot", False)
+        self.plot_conf_matrix = self.config.evaluation["plot_conf_matrix"].get(
+            "plot", False
+        )
 
         self.recalculate_effs = self.config.evaluation["plot_efficiency"].get(
             "recalculate", True
@@ -204,44 +212,44 @@ class Plotter:
                     labels = model_data["labels_edge"][:]
                     slope = model_data["slope"][()]
                     shift = model_data["shift"][()]
-                    if self.plot_effs and self.recalculate_effs:
-                        logger.info(f"plotting efficiency for model model_epoch{i:03d}")
-                        effs = self.get_efficiency(
-                            preds=preds,
-                            labels=labels,
-                            slope=slope,
-                            shift=shift,
-                            effs=effs,
-                        )
-                    if self.plot_effs_ones and self.recalculate_effs_ones:
-                        logger.info(
-                            "plotting efficiency, ones only, for model"
-                            f" model_epoch{i:03d}"
-                        )
-                        effs_ones = self.get_efficiency(
-                            preds=preds,
-                            labels=labels,
-                            slope=slope,
-                            shift=shift,
-                            effs=effs_ones,
-                            ones_only=True,
-                        )
-                    if self.plot_effs_zeros and self.recalculate_effs_zeros:
-                        logger.info(
-                            "plotting efficiency, zeros only, for model"
-                            f" model_epoch{i:03d}"
-                        )
-                        effs_zeros = self.get_efficiency(
-                            preds=preds,
-                            labels=labels,
-                            slope=slope,
-                            shift=shift,
-                            effs=effs_zeros,
-                            zeros_only=True,
-                        )
-                    if self.plot_parameters and self.recalculate_parameters:
-                        logger.info(f"plotting parameters for model model_epoch{i:03d}")
-                        params.append([slope, shift])
+
+                if self.plot_effs and self.recalculate_effs:
+                    logger.info(f"plotting efficiency for model model_epoch{i:03d}")
+                    effs = self.get_efficiency(
+                        preds=preds,
+                        labels=labels,
+                        slope=slope,
+                        shift=shift,
+                        effs=effs,
+                    )
+                if self.plot_effs_ones and self.recalculate_effs_ones:
+                    logger.info(
+                        f"plotting efficiency, ones only, for model model_epoch{i:03d}"
+                    )
+                    effs_ones = self.get_efficiency(
+                        preds=preds,
+                        labels=labels,
+                        slope=slope,
+                        shift=shift,
+                        effs=effs_ones,
+                        ones_only=True,
+                    )
+                if self.plot_effs_zeros and self.recalculate_effs_zeros:
+                    logger.info(
+                        f"plotting efficiency, zeros only, for model model_epoch{i:03d}"
+                    )
+                    effs_zeros = self.get_efficiency(
+                        preds=preds,
+                        labels=labels,
+                        slope=slope,
+                        shift=shift,
+                        effs=effs_zeros,
+                        zeros_only=True,
+                    )
+                if self.plot_parameters and self.recalculate_parameters:
+                    logger.info(f"plotting parameters for model model_epoch{i:03d}")
+                    params.append([slope, shift])
+                # preds_passed = self.plot_pred_with_cut(preds=preds, slope=slope, shift=shift, preds_passed=preds_passed)
 
         if self.plot_effs:
             self.plot_vals(
@@ -279,6 +287,15 @@ class Plotter:
             if self.recalculate_effs_zeros:
                 self.save_vals(dataset_name="efficiency_zeros_only", data=effs_zeros)
 
+        # self.plot_vals(
+        #     ylabel="n_passed",
+        #     xlabel="epoch",
+        #     plot_name="npassed",
+        #     vals=[preds_passed],
+        #     labels=[""],
+        #     point_styles=["b."]
+        # )
+
         if self.plot_parameters:
             labels = ["slope", "shift"]
             params = np.array(params).T
@@ -307,22 +324,19 @@ class Plotter:
             if self.recalculate_parameters:
                 self.save_vals(dataset_name="parameters", data=params)
 
-        if config.evaluation["plot_pt"]:
+        if self.plot_pt:
             logger.info("Plotting pT...")
             self.plotting_pT_regression(
                 logger=logger,
                 model_file_number=self.config.evaluation.get("model_file_number", 1),
             )
 
-    def get_pred_and_labels(self, model, layer):
-        preds = get_predictions(model, self.dataset)
-        weights = layer.trainable_weights
-        slope = [weight for weight in weights if "relu_slope" in weight.name][0]
-        shift = [weight for weight in weights if "relu_shift" in weight.name][0]
-        labels = get_labels(
-            label_name=self.config.edge_name, file_name=self.test_file
-        )  # get_weight_labels=True, n_samples=len(preds)).astype(int)
-        return preds, labels, slope, shift
+        if self.plot_conf_matrix:
+            logger.info("Plotting confusion matrix...")
+            self.plotting_confusion_matrix(
+                logger=logger,
+                model_file_number=self.config.evaluation.get("model_file_number", 1),
+            )
 
     def get_efficiency(
         self, preds, labels, slope, shift, effs, zeros_only=False, ones_only=False
@@ -341,22 +355,68 @@ class Plotter:
         return effs
 
     def plotting_pT_regression(self, logger, model_file_number):
-        logger.info("plotting pT regression for model model_epoch")
+        logger.info(f"plotting pT regression for model {model_file_number}")
         with File(
             f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
         ) as f:
             preds = f["pred_vertex_features"][:]
             labels = f["labels_vertex_features"][:]
+        min = np.min(labels)
+        max = np.max(labels)
         plot_pT = PlotBase(
-            ylabel="predicted pT",
-            xlabel="true pT",
+            ylabel="predicted log($p_T$)",
+            xlabel="true log($p_T$)",
             n_ratio_panels=0,
             logy=False,
         )
         plot_pT.initialise_figure()
         plot_pT.axis_top.plot(labels, preds, "b.")
+        plot_pT.axis_top.plot([min, max], [min, max], "r-")
         plot_pT = create_figure(plot=plot_pT)
         plot_pT.savefig(f"{self.plot_dir}/pT_regression.pdf")
+
+    def plotting_confusion_matrix(self, logger, model_file_number):
+        logger.info(f"plotting confusion matrix for model {model_file_number}")
+        with File(
+            f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+        ) as f:
+            preds = f["pred_edge"][:].flatten()
+            labels = f["labels_edge"][:].flatten()
+            slope = f["slope"][()]
+            shift = f["shift"][()]
+        preds = calculate_binary_preds(preds=preds, slope=slope, shift=shift)()
+        conf_mat = confusion_matrix(labels, preds, num_classes=2)
+        plot_conf_mat = PlotBase(
+            ylabel="label",
+            xlabel="prediction",
+            n_ratio_panels=0,
+            logy=False,
+        )
+        plot_conf_mat.initialise_figure()
+        conf_mat = np.array(
+            [
+                conf_mat[0] / (conf_mat[0, 0] + conf_mat[0, 1]),
+                conf_mat[1] / (conf_mat[1, 0] + conf_mat[1, 1]),
+            ]
+        )
+        plot_conf_mat.axis_top.pcolormesh(
+            [0, 1], [0, 1], conf_mat
+        )  # , norm=Normalize())
+        # plot_conf_mat.axis_top.fig_conf_matr
+        plot_conf_mat.fig.colorbar(ScalarMappable())
+        plot_conf_mat = create_figure(plot=plot_conf_mat)
+        plot_conf_mat.fig.text(0.28, 0.35, round(conf_mat[0, 0], 4))
+        plot_conf_mat.fig.text(0.6, 0.35, round(conf_mat[0, 1], 4), c="w")
+        plot_conf_mat.fig.text(0.28, 0.75, round(conf_mat[1, 0], 4), c="w")
+        plot_conf_mat.fig.text(0.6, 0.75, round(conf_mat[1, 1], 4))
+        plot_conf_mat.savefig(
+            f"{self.plot_dir}/conf_matrix_model_{model_file_number}.pdf"
+        )
+
+    def plot_pred_with_cut(self, preds, slope, shift, preds_passed):
+        cut_val = slope * (1 - shift) / 4
+        preds_passed.append(sum([preds > cut_val]))
+        return preds_passed
 
     def plot_vals(
         self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
