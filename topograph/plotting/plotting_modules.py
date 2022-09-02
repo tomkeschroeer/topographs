@@ -1,15 +1,16 @@
 from glob import glob
 from os import makedirs
 
+import matplotlib.pyplot as plt
 import numpy as np
 from h5py import File
-from matplotlib.cm import ScalarMappable
+from mlxtend.evaluate import confusion_matrix
+from mlxtend.plotting import plot_confusion_matrix
 from puma import PlotBase
 from tensorflow.data import Dataset
 from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import CustomObjectScope
-from tensorflow.math import confusion_matrix
 
 from topograph.modules import (
     DataLoader,
@@ -24,6 +25,7 @@ from topograph.modules import (
 from topograph.plotting.plotting_tools import (
     calculate_binary_preds,
     calculate_efficiency,
+    calculate_pT_diff,
 )
 
 
@@ -127,6 +129,7 @@ class Plotter:
         self.add_activation = self.config.edge_weight_network.get(
             "add_activation", None
         )
+        self.model_file_numbers = self.config.evaluation.get("model_file_numbers", [1])
 
         self.plot_effs = self.config.evaluation["plot_efficiency"].get("plot", False)
         self.plot_effs_zeros = self.config.evaluation["plot_efficiency_zeros_only"].get(
@@ -249,7 +252,6 @@ class Plotter:
                 if self.plot_parameters and self.recalculate_parameters:
                     logger.info(f"plotting parameters for model model_epoch{i:03d}")
                     params.append([slope, shift])
-                # preds_passed = self.plot_pred_with_cut(preds=preds, slope=slope, shift=shift, preds_passed=preds_passed)
 
         if self.plot_effs:
             self.plot_vals(
@@ -287,15 +289,6 @@ class Plotter:
             if self.recalculate_effs_zeros:
                 self.save_vals(dataset_name="efficiency_zeros_only", data=effs_zeros)
 
-        # self.plot_vals(
-        #     ylabel="n_passed",
-        #     xlabel="epoch",
-        #     plot_name="npassed",
-        #     vals=[preds_passed],
-        #     labels=[""],
-        #     point_styles=["b."]
-        # )
-
         if self.plot_parameters:
             labels = ["slope", "shift"]
             params = np.array(params).T
@@ -328,14 +321,14 @@ class Plotter:
             logger.info("Plotting pT...")
             self.plotting_pT_regression(
                 logger=logger,
-                model_file_number=self.config.evaluation.get("model_file_number", 1),
+                model_file_numbers=self.model_file_numbers,
             )
 
         if self.plot_conf_matrix:
             logger.info("Plotting confusion matrix...")
             self.plotting_confusion_matrix(
                 logger=logger,
-                model_file_number=self.config.evaluation.get("model_file_number", 1),
+                model_file_numbers=self.model_file_numbers,
             )
 
     def get_efficiency(
@@ -354,69 +347,68 @@ class Plotter:
         effs.append(eff)
         return effs
 
-    def plotting_pT_regression(self, logger, model_file_number):
-        logger.info(f"plotting pT regression for model {model_file_number}")
-        with File(
-            f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-        ) as f:
-            preds = f["pred_vertex_features"][:]
-            labels = f["labels_vertex_features"][:]
-        min = np.min(labels)
-        max = np.max(labels)
-        plot_pT = PlotBase(
-            ylabel="predicted log($p_T$)",
-            xlabel="true log($p_T$)",
-            n_ratio_panels=0,
-            logy=False,
-        )
-        plot_pT.initialise_figure()
-        plot_pT.axis_top.plot(labels, preds, "b.")
-        plot_pT.axis_top.plot([min, max], [min, max], "r-")
-        plot_pT = create_figure(plot=plot_pT)
-        plot_pT.savefig(f"{self.plot_dir}/pT_regression.pdf")
+    def plotting_pT_regression(self, logger, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            logger.info(f"plotting pT regression for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                preds = f["pred_vertex_features"][:]
+                labels = f["labels_vertex_features"][:]
+            min = np.min(labels)
+            max = np.max(labels)
+            plot_pT = PlotBase(
+                ylabel="predicted log($p_T$)",
+                xlabel="true log($p_T$)",
+                n_ratio_panels=0,
+                logy=False,
+            )
+            plot_pT.initialise_figure()
+            plot_pT.axis_top.plot(labels, preds, "b.")
+            plot_pT.axis_top.plot([min, max], [min, max], "r-")
+            plot_pT = create_figure(plot=plot_pT)
+            plot_pT.savefig(
+                f"{self.plot_dir}/pT_regression_model_{model_file_number}.pdf"
+            )
 
-    def plotting_confusion_matrix(self, logger, model_file_number):
-        logger.info(f"plotting confusion matrix for model {model_file_number}")
-        with File(
-            f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-        ) as f:
-            preds = f["pred_edge"][:].flatten()
-            labels = f["labels_edge"][:].flatten()
-            slope = f["slope"][()]
-            shift = f["shift"][()]
-        preds = calculate_binary_preds(preds=preds, slope=slope, shift=shift)()
-        conf_mat = confusion_matrix(labels, preds, num_classes=2)
-        plot_conf_mat = PlotBase(
-            ylabel="label",
-            xlabel="prediction",
-            n_ratio_panels=0,
-            logy=False,
-        )
-        plot_conf_mat.initialise_figure()
-        conf_mat = np.array(
-            [
-                conf_mat[0] / (conf_mat[0, 0] + conf_mat[0, 1]),
-                conf_mat[1] / (conf_mat[1, 0] + conf_mat[1, 1]),
-            ]
-        )
-        plot_conf_mat.axis_top.pcolormesh(
-            [0, 1], [0, 1], conf_mat
-        )  # , norm=Normalize())
-        # plot_conf_mat.axis_top.fig_conf_matr
-        plot_conf_mat.fig.colorbar(ScalarMappable())
-        plot_conf_mat = create_figure(plot=plot_conf_mat)
-        plot_conf_mat.fig.text(0.28, 0.35, round(conf_mat[0, 0], 4))
-        plot_conf_mat.fig.text(0.6, 0.35, round(conf_mat[0, 1], 4), c="w")
-        plot_conf_mat.fig.text(0.28, 0.75, round(conf_mat[1, 0], 4), c="w")
-        plot_conf_mat.fig.text(0.6, 0.75, round(conf_mat[1, 1], 4))
-        plot_conf_mat.savefig(
-            f"{self.plot_dir}/conf_matrix_model_{model_file_number}.pdf"
-        )
+            plot_pT_diff = PlotBase(
+                ylabel="Delta log($p_T$)",
+                xlabel="predicted log($p_T$)",
+                n_ratio_panels=0,
+                logy=False,
+            )
+            regs = calculate_pT_diff(pred=preds, label=labels)()
+            plot_pT_diff.initialise_figure()
+            plot_pT_diff.axis_top.plot(labels, regs, "b.")
+            plot_pT_diff.axis_top.plot([min, max], [0, 0], "r-")
+            plot_pT_diff = create_figure(plot=plot_pT_diff)
+            plot_pT_diff.savefig(
+                f"{self.plot_dir}/Delta_pT_model_{model_file_number}.pdf"
+            )
 
-    def plot_pred_with_cut(self, preds, slope, shift, preds_passed):
-        cut_val = slope * (1 - shift) / 4
-        preds_passed.append(sum([preds > cut_val]))
-        return preds_passed
+    def plotting_confusion_matrix(self, logger, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            logger.info(f"plotting confusion matrix for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                preds = f["pred_edge"][:].flatten()
+                labels = f["labels_edge"][:].flatten()
+                slope = f["slope"][()]
+                shift = f["shift"][()]
+            preds = calculate_binary_preds(preds=preds, slope=slope, shift=shift)()
+            conf_mat = confusion_matrix(labels, preds, binary=True)
+            plot_confusion_matrix(
+                conf_mat=conf_mat,
+                colorbar=True,
+                show_normed=True,
+                show_absolute=True,
+                class_names=[0, 1],
+            )
+
+            plt.tight_layout()
+            plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}.pdf")
+            plt.close()
 
     def plot_vals(
         self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None

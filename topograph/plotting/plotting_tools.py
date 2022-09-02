@@ -1,7 +1,3 @@
-def comp_pred_label_pt(pred_f_val, label_f_val):
-    return pred_f_val - label_f_val
-
-
 class calculate_efficiency:
     def __init__(
         self, pred, label, Ntotal, slope, shift, zeros_only=False, ones_only=False
@@ -57,8 +53,16 @@ class calculate_binary_preds:
         return pred
 
 
-def calculate_delta_pt(pred, label):
-    pred_f = pred.flatten()
-    label_f = label.flatten()
-    reg = list(map(comp_pred_label_pt, pred_f, label_f))
-    return reg
+class calculate_pT_diff:
+    def __init__(self, pred, label):
+        self.pred = pred
+        self.label = label
+
+    def __call__(self):
+        pred_f = self.pred.flatten()
+        label_f = self.label.flatten()
+        reg = list(map(self.comp_pred_label_pt, pred_f, label_f))
+        return reg
+
+    def comp_pred_label_pt(self, pred_f_val, label_f_val):
+        return pred_f_val - label_f_val
