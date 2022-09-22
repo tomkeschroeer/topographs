@@ -4,17 +4,15 @@ import pathlib
 from glob import glob
 
 import numpy as np
-import tensorflow.keras.backend as K
+# import tensorflow.keras.backend as K
 import yaml
 from h5py import File
-from tensorflow import TensorShape, Variable, constant, float32
+# from tensorflow import TensorShape, Variable, constant, float32
 
 
 def get_sample_weights(x):
-    # print(f"x in get sample weights = {x}")
     x = x.flatten()
     length = len(x)
-    # print(f"Therefore, the length is {length}")
     n_b = sum(x)
     n_nonb = length - n_b
     fac_b = length / (n_b + 1e-5)
@@ -22,7 +20,6 @@ def get_sample_weights(x):
     weights = np.ones(len(x))
     weights[x == 1] = fac_b
     weights[x == 0] = fac_nonb
-    # print(f"Let's check the weights: what do they look like?! {weights}")
     return weights.reshape((length, 1))
 
 

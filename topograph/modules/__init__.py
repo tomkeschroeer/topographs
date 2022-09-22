@@ -2,7 +2,7 @@
 # pylint: skip-file
 from topograph.modules.build_network import TopographModel
 from topograph.modules.layers import (
-    DenseNetwork,
+    VertexNetwork,
     DotProduct,
     EdgeLayers,
     FeatLayers,

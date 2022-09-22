@@ -1,11 +1,10 @@
 """Training script to perform topograph training."""
 import argparse as pars
 
-import tensorflow as tf
 from h5py import File
-from tensorflow.data import Dataset
-from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.keras.layers import Input
+import torch.nn as nn
+from torch import tensor
+import numpy as np
 
 from topograph.modules import (
     DataLoader,
@@ -13,6 +12,8 @@ from topograph.modules import (
     TopographModel,
     load_tfrecords_train_dataset,
 )
+
+import torch as T
 
 
 def get_parser():
@@ -46,137 +47,50 @@ if __name__ == "__main__":
     input_weight_layer_name = "input_1"
     input_feat_layer_name = "input_2"
 
-    if config.tfrecords["use_tfrecords_to_train"]:
-        train_file_folder = f"{config.output}/{config.training_file_name}".replace(
-            "//", "/"
-        ).replace(".h5", "")
-        tf_dataset, metadata_dict = load_tfrecords_train_dataset(
-            train_file_folder=train_file_folder,
-            nfiles=config.tfrecords["nfiles_to_load"],
-            batch_size=config.tfrecords["batch_size"],
-            get_vertex_labels=True,
-            get_edge_feat_labels=False,
-            get_edge_labels=True,
-            get_inputs=True,
-            get_sample_weights=config.use_sample_weights,
-            track_name=config.tracks_name,
-            edge_name=config.edge_name,
-            edge_feat_name=config.edge_feat_name,
-            vertex_feat_name=config.vertex_feat_name,
-            edge_weight_layer_name=edge_weight_layer_name,
-            edge_feat_layer_name=edge_feat_layer_name,
-            vertex_network_layer_name=vertex_network_layer_name,
-            input_weight_layer_name=input_weight_layer_name,
-            input_feat_layer_name=input_feat_layer_name,
-        )
-
-    else:
-        metadata_dict = {}
-        train_file = f"{config.output}/{config.training_file_name}".replace("//", "/")
-        with File(train_file, "r") as f:
-            (
-                metadata_dict["n_jets"],
-                metadata_dict["n_trks"],
-                metadata_dict["n_trk_features"],
-            ) = f[f"{config.tracks_name}"].shape
-            _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
-            _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
-
-        DatasetGenerator = DataLoader(
-            input=train_file,
-            get_labels=True,
-            get_weight_labels=True,
-            get_inputs=True,
-            get_sample_weights=config.use_sample_weights,
-            metadata_dict=metadata_dict,
-            savetracks=True,
-            track_name=config.tracks_name,
-            edge_name=config.edge_name,
-            edge_feat_name=config.edge_feat_name,
-            vertex_feat_name=config.vertex_feat_name,
-            edge_weight_layer_name=edge_weight_layer_name,
-            edge_feat_layer_name=edge_feat_layer_name,
-            vertex_network_layer_name=vertex_network_layer_name,
-            input_weight_layer_name=input_weight_layer_name,
-            input_feat_layer_name=input_feat_layer_name,
-        )
-
-        types, shapes = DatasetGenerator.get_types_shapes()
-        tf_dataset = (
-            Dataset.from_generator(DatasetGenerator, types, shapes)
-            .repeat()
-            .prefetch(tf.data.AUTOTUNE)
-        )
-
-    metadata_dict_val = {}
-    val_file = f"{config.output}/{config.validation_file_name}".replace("//", "/")
+    metadata_dict = {}
+    val_file = f"{config.output}/{config.training_file_name}".replace("//", "/")
     with File(val_file, "r") as f:
         (
-            metadata_dict_val["n_jets"],
-            metadata_dict_val["n_trks"],
-            metadata_dict_val["n_trk_features"],
+            metadata_dict["n_jets"],
+            metadata_dict["n_trks"],
+            metadata_dict["n_trk_features"],
         ) = f[f"{config.tracks_name}"].shape
-        _, metadata_dict_val["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
-        _, _, metadata_dict_val["n_edge_y"] = f[f"{config.edge_name}"].shape
+        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
+        _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
-    DatasetGeneratorVal = DataLoader(
-        input=val_file,
-        get_labels=True,
-        get_weight_labels=True,
-        get_inputs=True,
-        get_sample_weights=False,
-        metadata_dict=metadata_dict_val,
-        savetracks=True,
-        track_name=config.tracks_name,
-        edge_name=config.edge_name,
-        edge_feat_name=config.edge_feat_name,
-        vertex_feat_name=config.vertex_feat_name,
-        edge_weight_layer_name=edge_weight_layer_name,
-        edge_feat_layer_name=edge_feat_layer_name,
-        vertex_network_layer_name=vertex_network_layer_name,
-        input_weight_layer_name=input_weight_layer_name,
-        input_feat_layer_name=input_feat_layer_name,
+    topomodel = TopographModel(
+        nodes_feat=[20, 70, 70, 70, 30],
+        nodes_weight=[20, 70, 70, 70, 1],
+        nodes_vertex=[30, 50, 50, 50, 1]
     )
 
-    types_val, shapes_val = DatasetGeneratorVal.get_types_shapes()
-    tf_dataset_val = Dataset.from_generator(
-        DatasetGeneratorVal, types_val, shapes_val
-    ).prefetch(tf.data.AUTOTUNE)
+    training_file = f"{config.output}/{config.training_file_name}".replace("//","/")
+    with File(training_file, "r") as f:
+        tracks_all = f["X_train_tracks"][:500]
+        Y_edge_all = f["Y_edge"][:500]
+        Y_vertex_all = f["Y_vertex_features"][:500]
 
-    modelfile_dir = (
-        config.output_training + "/modelfiles/model_epoch{epoch:03d}.h5"
-    ).replace("//", "/")
+    for step in range(0,10):
+        tracks = tensor(tracks_all[step*50:(step+1)*50])
+        Y_edge = tensor(np.float32(Y_edge_all[step*50:(step+1)*50]))
+        Y_vertex = tensor(np.float32(Y_vertex_all[step*50:(step+1)*50]))
+        topomodel.train()
 
-    model_checkpoint = ModelCheckpoint(
-        modelfile_dir,
-        verbose=True,
-        monitor="accuracy",
-        save_best_only=False,
-        save_weights_only=False,
-    )
-
-    callbacks = [model_checkpoint]
-    input_feat = Input(shape=(metadata_dict["n_trks"], metadata_dict["n_trk_features"]))
-    input_weight = Input(
-        shape=(metadata_dict["n_trks"], metadata_dict["n_trk_features"])
-    )
-
-    model_builder = TopographModel(
-        config=config,
-        metadata_dict=metadata_dict,
-        edge_weight_layer_name=edge_weight_layer_name,
-        edge_feat_layer_name=edge_feat_layer_name,
-        vertex_network_layer_name=vertex_network_layer_name,
-        input_weight_layer_name=input_weight_layer_name,
-        input_feat_layer_name=input_feat_layer_name,
-    )
-
-    model = model_builder.get_model(input_feat, input_weight)
-
-    model.fit(
-        tf_dataset,
-        epochs=config.epochs,
-        # validation_data=tf_dataset_val,
-        steps_per_epoch=metadata_dict["n_jets"] // config.stepsize,
-        callbacks=callbacks,
-    )
+        model, model_edge = topomodel(tracks, tracks)
+        topograph_loss_edges = nn.BCELoss()
+        topograph_loss_vertex = nn.MSELoss()
+        loss_edges = (
+            topograph_loss_edges(
+                model_edge,
+                Y_edge,
+            )
+        )
+        loss_vertex = (
+            topograph_loss_vertex(
+                model,
+                Y_vertex
+            )
+        )
+        loss = loss_vertex + 100*loss_edges
+        loss.backward()
+        print(loss)

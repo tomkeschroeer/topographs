@@ -1,16 +1,20 @@
-import tensorflow.keras.backend as K
-from tensorflow import cast, greater
-from tensorflow.keras import activations, initializers  # pylint: disable=import-error
-from tensorflow.keras.layers import (  # pylint: disable=import-error
-    Activation,
-    Dense,
-    Layer,
-    TimeDistributed,
+from torch.nn import (
+    ReLU,
+    Softmax,
+    Linear,
+    Module,
+    init
 )
-from tensorflow.math import exp
 
+from torch import(
+    bmm,
+    squeeze,
+    empty,
+    greater,
+    exp
+)
 
-class Sigmoid(Layer):
+class Sigmoid(Module):
     """
     class for the Sigmoid Layer to be used as an Activation for the edge weights.
     """
@@ -20,10 +24,12 @@ class Sigmoid(Layer):
         Init of the Sigmoid Layer.
         """
         super(Sigmoid, self).__init__(**kwargs)
-        self.c1 = self.add_weight(shape=(), trainable=True, name="c1_sigmoid")
-        self.c2 = self.add_weight(shape=(), trainable=True, name="c2_sigmoid")
+        self.c1 = empty(1)
+        init.constant_(self.c1, 1)
+        self.c2 = empty(1)
+        init.constant_(self.c2, 1)
 
-    def call(self, x):
+    def forward(self, x):
         """
         Define what happens when layer is called.
 
@@ -39,7 +45,7 @@ class Sigmoid(Layer):
         return 1 / (1 + exp(-self.c1 * (x - self.c2)))
 
 
-class ShiftRelu(Layer):
+class ShiftRelu(Module):
     """
     class for the Shifted ReLu Layer to be used as an Activation for the edge weights.
     """
@@ -49,16 +55,12 @@ class ShiftRelu(Layer):
         Init of the ShiftReLu Layer.
         """
         super(ShiftRelu, self).__init__(**kwargs)
-        shift_initializer = initializers.Constant(0.8)
-        slope_initializer = initializers.Constant(1.0)
-        self.shift = self.add_weight(
-            shape=(), trainable=True, name="relu_shift", initializer=shift_initializer
-        )
-        self.slope = self.add_weight(
-            shape=(), trainable=True, name="relu_slope", initializer=slope_initializer
-        )
+        self.shift = empty(1)
+        init.constant_(self.shift, 0.8)
+        self.slope = empty(1)
+        init.constant_(self.slope, 1.0)
 
-    def call(self, x):
+    def forward(self, x):
         """
         Define what happens when layer is called.
 
@@ -72,16 +74,16 @@ class ShiftRelu(Layer):
         x with Shifted ReLu activation applied.
         """
         return (
-            self.slope * (x - self.shift) * cast(greater(x, self.shift), dtype=x.dtype)
+            self.slope * (x - self.shift) * greater(x, self.shift)
         )
 
 
-class EdgeLayers(Layer):
+class EdgeLayers(Module):
     """
     class for the layer to predict the edge weights.
     """
 
-    def __init__(self, nodes, net_name, **kwargs):
+    def __init__(self, nodes):
         """
         Init for EdgeLayers
 
@@ -92,28 +94,24 @@ class EdgeLayers(Layer):
         net_name: str
             name of the network.
         """
-        super(EdgeLayers, self).__init__(name=net_name)
+        super().__init__()
         self.nodes = nodes
-        self.net_name = net_name
-
-        # self.fac = self.add_weight(shape=(1,), trainable=True, name="new_relu_factor")
         self.layers = []
-        for i, phi_nodes in enumerate(self.nodes[:-1]):
+        for i in range(1,len(self.nodes)-1):
             self.layers.append(
-                TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")
+                Linear(self.nodes[i-1], self.nodes[i])
             )
             self.layers.append(
-                TimeDistributed(
-                    Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
-                )
+                ReLU()
             )
         self.layers.append(
-            TimeDistributed(
-                Dense(self.nodes[-1], activation="sigmoid"), name=f"{self.net_name}"
-            )
+            Linear(self.nodes[-2], self.nodes[-1])
+        )
+        self.layers.append(
+            Softmax(dim=2)
         )
 
-    def call(self, input_layer):
+    def forward(self, input_layer):
         """
         Define what happens when layer is called.
 
@@ -129,7 +127,6 @@ class EdgeLayers(Layer):
         """
         # Set the track input
         tdd = self.layers[0](input_layer)
-        # Define the TimeDistributed layers for the different tracks
         for layer in self.layers[1:]:
             tdd = layer(tdd)
         return tdd
@@ -148,12 +145,12 @@ class EdgeLayers(Layer):
         return config
 
 
-class FeatLayers(Layer):
+class FeatLayers(Module):
     """
     class for the layer to predict the edge weights.
     """
 
-    def __init__(self, nodes, net_name, **kwargs):
+    def __init__(self, nodes):
         """
         Init for FeatLayers.
 
@@ -164,29 +161,23 @@ class FeatLayers(Layer):
         net_name: str
             name of the network.
         """
-        super(FeatLayers, self).__init__(name=net_name)  # , **kwargs)
+        super().__init__()
         self.nodes = nodes
-        self.net_name = net_name
         self.layers = []
-        for i, phi_nodes in enumerate(self.nodes[:-1]):
+        for i in range(1,len(self.nodes)-1):
             self.layers.append(
-                TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")
+                Linear(self.nodes[i-1], self.nodes[i])
             )
             self.layers.append(
-                TimeDistributed(
-                    Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU"
-                )
+                ReLU()
             )
 
         # Set output and activation function
         self.layers.append(
-            TimeDistributed(
-                Dense(self.nodes[-1], activation="linear"),
-                name=f"{self.net_name}_Phi{len(self.nodes)}_Dense",
-            )
+            Linear(self.nodes[-2], self.nodes[-1])
         )
 
-    def call(self, input_layer):
+    def forward(self, input_layer):
         """
         Define what happens when layer is called.
 
@@ -221,12 +212,12 @@ class FeatLayers(Layer):
         return config
 
 
-class DenseNetwork(Layer):
+class VertexNetwork(Module):
     """
     class for the dense layer to predict the vertex feature.
     """
 
-    def __init__(self, nodes, net_name, **kwargs):
+    def __init__(self, nodes, **kwargs):
         """
         Init for DenseNetwork.
 
@@ -234,23 +225,23 @@ class DenseNetwork(Layer):
         ----------
         nodes: list
             list of the number of nodes for all hidden layers.
-        net_name: str
-            name of the network.
         """
-        super(DenseNetwork, self).__init__(name=net_name)
+        super().__init__()
         self.nodes = nodes
-        self.net_name = net_name
         self.layers = []
-        for i, node in enumerate(self.nodes[:-1]):
-            self.layers.append(Dense(node, name=f"{self.net_name}_layer_{i}"))
+        for i in range(1,len(self.nodes)-1):
             self.layers.append(
-                Activation(activations.relu, name=f"{self.net_name}_ReLu_{i}")
+                Linear(self.nodes[i-1], self.nodes[i])
             )
+            self.layers.append(
+                ReLU()
+            )
+
         self.layers.append(
-            Dense(self.nodes[-1], activation="linear", name=self.net_name)
+            Linear(self.nodes[-2], self.nodes[-1])
         )
 
-    def call(self, input_layer):
+    def forward(self, input_layer):
         """
         Define what happens when layer is called.
 
@@ -286,7 +277,7 @@ class DenseNetwork(Layer):
         return config
 
 
-class DotProduct(Layer):
+class DotProduct(Module):
     """
     class for the dense layer to predict the vertex feature.
     """
@@ -297,7 +288,7 @@ class DotProduct(Layer):
         """
         super().__init__(**kwargs)
 
-    def call(self, inputs):
+    def forward(self, inputs):
         """
         Define what happens when layer is called.
 
@@ -312,6 +303,66 @@ class DotProduct(Layer):
             dot product of the inputs.
         """
         feat_layer, edge_layer = inputs[:2]
-        pool = K.batch_dot(K.permute_dimensions(edge_layer, (0, 2, 1)), feat_layer)
-        pool = K.squeeze(pool, -2)
+        edge_shape = edge_layer.size()
+        edge_shape = (edge_shape[0], edge_shape[2], edge_shape[1])
+        pool = bmm(edge_layer.view(edge_shape), feat_layer)
+        pool = squeeze(pool, -2)
         return pool
+
+class TopographModel(Module):
+    """
+    class building the topograph model
+    """
+
+    def __init__(
+        self,
+        nodes_feat: list = [128, 30, 30, 30],
+        nodes_weight : list = [128, 30, 30, 1],
+        nodes_vertex : list = [30, 50, 50, 50, 1],
+        activation_name: str = None,
+    ):
+        """
+        Init of TopographModel class
+
+        Parameters
+        ----------
+        config : object
+            GetConfiguration object including information about the model
+            architecture, train parameter etc.
+        metadata_dict: dict
+            dictionary giving the number of jets, tracks, features, etc.
+        edge_weight_layer_name : str
+            name of the layer predicting the edge weights.
+        edge_feat_layer_name : str
+            name of the layer predicting the edge features.
+        vertex_network_layer_name : str
+            name of the layer predicting the vertex features.
+        input_weight_layer_name : str
+            name of the input layer for the edge weight layer
+        input_feat_layer_name : str
+            name of the input layer for the edge feature layer
+        """
+        super().__init__()
+        self.activation_name = activation_name
+
+        self.nodes_feat = nodes_feat
+        self.nodes_weight = nodes_weight
+        self.nodes_vertex = nodes_vertex
+
+        self.feat_layer = FeatLayers(nodes=self.nodes_feat)
+        self.edge_layer = EdgeLayers(nodes=self.nodes_weight)
+
+        if self.activation_name == "shifted_relu":
+            self.add_activation = ShiftRelu()
+        elif self.activation_name == "sigmoid":
+            self.add_activation = Sigmoid()
+        elif self.activation_name is None:
+            self.add_activation = False
+        else:
+            raise KeyError(
+                f"Undefined additional actrivation: {self.activation_name}. Please select one"
+                ' of the following: ["shifted_relu", "sigmoid"] or leave empty/remove'
+                " option."
+            )
+        self.dot_product = DotProduct()
+        self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)

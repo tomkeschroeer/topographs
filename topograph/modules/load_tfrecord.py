@@ -2,7 +2,7 @@
 import json
 import os
 
-import tensorflow as tf
+# import tensorflow as tf
 
 
 def load_tfrecords_train_dataset(
