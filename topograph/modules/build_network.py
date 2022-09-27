@@ -76,7 +76,7 @@ class TopographModel(Module):
             )
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
-
+        
     def forward(self, input_feat, input_weight):
         """
         function to build and return the topograph model
@@ -102,3 +102,11 @@ class TopographModel(Module):
         dt_product = self.dot_product([edge_feat_out, add_activation])
         dense_vertex_out = self.vertex_network(dt_product)
         return dense_vertex_out, edge_wt_out
+
+    def get_losses(self, sample: tuple, _batch_idx: int, _epoch_num: int):
+        input_feat, input_weight, labels_edge, labels_vertex, sample_weights = sample
+        vertex_out, edge_out = self.forward(input_feat=input_feat, input_weight=input_weight)
+
+        self.loss_edge_cal = self.loss_edges(
+            edge_out, labels_edge
+        )

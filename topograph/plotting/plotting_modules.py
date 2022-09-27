@@ -7,19 +7,13 @@ from h5py import File
 from mlxtend.evaluate import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
 from puma import PlotBase
-from tensorflow.data import Dataset
-from tensorflow.keras import Model
-from tensorflow.keras.models import load_model
-from tensorflow.keras.utils import CustomObjectScope
+
+import torch.optim as optim
+from torch import load
+from torch import tensor
 
 from topograph.modules import (
-    DataLoader,
-    DenseNetwork,
-    DotProduct,
-    EdgeLayers,
-    FeatLayers,
-    ShiftRelu,
-    Sigmoid,
+    TopographModel,
     get_logger,
 )
 from topograph.plotting.plotting_tools import (
@@ -71,22 +65,29 @@ def get_point_styles(N):
     return point_styles[:N]
 
 
-def load_topomodel(modelfile=None, add_activation=None):
+def load_topomodel(
+        modelfile=None, 
+        add_activation=None, 
+        lr=0.01, 
+        nodes_feat=[20, 70, 70, 70, 30],
+        nodes_weight=[20, 70, 70, 70, 1],
+        nodes_vertex=[30, 50, 50, 50, 1]
+    ):
     if modelfile is None:
         raise KeyError("Please provide vaild modelfile.")
-    with CustomObjectScope(
-        {
-            "Sigmoid": Sigmoid,
-            "ShiftRelu": ShiftRelu,
-            "EdgeLayers": EdgeLayers,
-            "FeatLayers": FeatLayers,
-            "DenseNetwork": DenseNetwork,
-            "DotProduct": DotProduct,
-        }
-    ):
-        model = load_model(filepath=modelfile)
+    topomodel = TopographModel(
+        nodes_feat=nodes_feat,
+        nodes_weight=nodes_weight,
+        nodes_vertex=nodes_vertex
+    )
+    optimiser = optim.Adam(topomodel.parameters(), lr=lr)
+    checkpoint = load(modelfile)
+    topomodel.load_state_dict(checkpoint["model_state_dict"])
+    optimiser.load_state_dict(checkpoint["optimiser_state_dict"])
+    loss = checkpoint["loss"]
 
-    input = model.input
+    layers = [layer for layer in topomodel.modules]
+
     layer_names = [layer.name for layer in model.layers]
     if add_activation is None:
         activation_name = "edge_weight"
@@ -100,9 +101,8 @@ def load_topomodel(modelfile=None, add_activation=None):
             ' select one of the following: ["shifted_relu", "sigmoid"] or leave'
             " empty/remove option."
         )
-    layer = model.get_layer(name=activation_name)
-    model_sub = Model(inputs=[input], outputs=[layer.output])
-    return layer, model_sub, model
+
+    return topomodel
 
 
 def get_predictions(model, dataset, full_model=False):
@@ -181,6 +181,9 @@ class Plotter:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
+            x=tensor(f[f"{self.config.X_train_tracks}"])
+            y_edge=tensor(f[f"{self.config.Y_edge}"])
+            y=tensor(f[f"{self.config.Y_vertex_features}"])
 
         effs = []
         effs_ones = []
@@ -441,6 +444,10 @@ class GetEpochPrediction:
         layer, model_sub, model = load_topomodel(
             modelfile=f"{self.config.output_training}/modelfiles/model_epoch{self.epoch:03d}.h5",
             add_activation=self.config.edge_weight_network["add_activation"],
+            lr=self.config.lr,
+            nodes_feat=self.config.edge_feature_network["nodes"],
+            nodes_weight=self.config.edge_weight_network["nodes"],
+            nodes_vertex=self.config.vertex_network["nodes"]
         )
 
         self.metadata_dict = {}
@@ -453,24 +460,7 @@ class GetEpochPrediction:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
-
-        DatasetGenerator = DataLoader(
-            input=self.test_file,
-            metadata_dict=self.metadata_dict,
-            get_inputs=True,
-            get_labels=False,
-            get_weight_labels=False,
-            stepsize=3_000,
-            savetracks=True,
-            track_name=self.config.tracks_name,
-            edge_name=self.config.edge_name,
-            edge_feat_name=self.config.edge_feat_name,
-            vertex_feat_name=self.config.vertex_feat_name,
-            n_samples=self.config.evaluation.get("n_samples", None),
-        )
-
-        types, shapes = DatasetGenerator.get_types_shapes()
-        self.dataset = Dataset.from_generator(DatasetGenerator, types, shapes)
+            
 
         weights = layer.trainable_weights
         slope = [weight for weight in weights if "relu_slope" in weight.name][0]

@@ -3,7 +3,8 @@ from torch.nn import (
     Softmax,
     Linear,
     Module,
-    init
+    init,
+    ModuleList
 )
 
 from torch import(
@@ -96,7 +97,7 @@ class EdgeLayers(Module):
         """
         super().__init__()
         self.nodes = nodes
-        self.layers = []
+        self.layers = ModuleList()
         for i in range(1,len(self.nodes)-1):
             self.layers.append(
                 Linear(self.nodes[i-1], self.nodes[i])
@@ -163,7 +164,7 @@ class FeatLayers(Module):
         """
         super().__init__()
         self.nodes = nodes
-        self.layers = []
+        self.layers = ModuleList()
         for i in range(1,len(self.nodes)-1):
             self.layers.append(
                 Linear(self.nodes[i-1], self.nodes[i])
@@ -228,7 +229,7 @@ class VertexNetwork(Module):
         """
         super().__init__()
         self.nodes = nodes
-        self.layers = []
+        self.layers = ModuleList()
         for i in range(1,len(self.nodes)-1):
             self.layers.append(
                 Linear(self.nodes[i-1], self.nodes[i])

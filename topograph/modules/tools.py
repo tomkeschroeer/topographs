@@ -8,6 +8,7 @@ import numpy as np
 import yaml
 from h5py import File
 # from tensorflow import TensorShape, Variable, constant, float32
+from torch.utils.data import IterableDataset
 
 
 def get_sample_weights(x):
@@ -410,7 +411,7 @@ class DatasetCreater:
         return track_input
 
 
-class DataGenerator:
+class DataGenerator(IterableDataset):
     def __init__(
         self,
         input: str,
@@ -447,6 +448,7 @@ class DataGenerator:
         savejets:
             bool defining if jets are supposed to be saved
         """
+        IterableDataset.__init__(self)
         self.input = input
         self.get_inputs = get_inputs
         self.get_labels = get_labels
@@ -499,9 +501,7 @@ class DataGenerator:
             metadata_dict=self.metadata_dict,
         )
 
-
-class DataLoader(DataGenerator):
-    def __call__(self):
+    def __iter__(self):
         if self.n_samples is None:
             self.n_samples = self.metadata_dict["n_jets"]
         n_steps = self.n_samples // self.stepsize
@@ -515,33 +515,25 @@ class DataLoader(DataGenerator):
                 and self.get_weight_labels
                 and self.get_sample_weights
             ):
-                yield {
-                    self.input_weight_layer_name: self.track_batch,
-                    self.input_feat_layer_name: self.track_batch,
-                }, {
-                    self.edge_weight_layer_name: self.edge_batch,
-                    self.vertex_network_layer_name: self.vertex_feat_batch,
-                }, {
-                    self.edge_weight_layer_name: self.sample_weight_batch
-                }
+                yield (
+                    self.track_batch,self.track_batch,
+                    self.edge_batch, self.vertex_feat_batch,
+                    self.sample_weight_batch
+                )
             elif self.get_inputs and self.get_labels and self.get_weight_labels:
-                yield {
-                    self.input_weight_layer_name: self.track_batch,
-                    self.input_feat_layer_name: self.track_batch,
-                }, {
-                    self.edge_weight_layer_name: self.edge_batch,
-                    self.vertex_network_layer_name: self.vertex_feat_batch,
-                }
+                yield (
+                    self.track_batch, self.track_batch,
+                    self.edge_batch, self.vertex_feat_batch
+                )
             elif self.get_inputs and self.get_labels and not self.get_weight_labels:
-                yield {
-                    self.input_weight_layer_name: self.track_batch,
-                    self.input_feat_layer_name: self.track_batch,
-                }, self.vertex_feat_batch
+                yield (
+                    self.track_batch, self.track_batch,
+                    self.vertex_feat_batch
+                )
             elif self.get_inputs:
-                yield {
-                    self.input_weight_layer_name: self.track_batch,
-                    self.input_feat_layer_name: self.track_batch,
-                }
+                yield (
+                    self.track_batch, self.track_batch
+                )
             elif self.get_labels:
                 yield self.vertex_feat_batch
             elif self.get_weight_labels:
