@@ -15,8 +15,18 @@ from torch.nn import (
     MSELoss
 ) 
 
+import torch.optim as optim
+import pytorch_lightning as pl
+import torch as T
+import numpy as np
+from pathlib import Path
+from typing import Union
 
-class TopographModel(Module):
+from mattstools.torch_utils import sel_device
+from mattstools.network import MyNetBase
+
+
+class TopographModel(pl.LightningModule):
     """
     class building the topograph model
     """
@@ -27,6 +37,10 @@ class TopographModel(Module):
         nodes_weight : list = [128, 30, 30, 1],
         nodes_vertex : list = [30, 50, 50, 50, 1],
         activation_name: str = None,
+        save_dir: str = None,
+        name: str = None,
+        device: str = "gpu",
+        lr: float = 1e-3
     ):
         """
         Init of TopographModel class
@@ -51,6 +65,9 @@ class TopographModel(Module):
         """
         super().__init__()
         self.activation_name = activation_name
+        self.loss_names = ["total", "edge_loss", "vertex_loss"]
+        self.lr = lr
+        self.full_name = Path(save_dir, name)
 
         self.nodes_feat = nodes_feat
         self.nodes_weight = nodes_weight
@@ -58,9 +75,6 @@ class TopographModel(Module):
 
         self.feat_layer = FeatLayers(nodes=self.nodes_feat)
         self.edge_layer = EdgeLayers(nodes=self.nodes_weight)
-
-        self.loss_edges = BCELoss()
-        self.loss_vertex = MSELoss()
 
         if self.activation_name == "shifted_relu":
             self.add_activation = ShiftRelu()
@@ -76,7 +90,7 @@ class TopographModel(Module):
             )
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
-        
+
     def forward(self, input_feat, input_weight):
         """
         function to build and return the topograph model
@@ -103,10 +117,38 @@ class TopographModel(Module):
         dense_vertex_out = self.vertex_network(dt_product)
         return dense_vertex_out, edge_wt_out
 
-    def get_losses(self, sample: tuple, _batch_idx: int, _epoch_num: int):
+    def basis_step(self, sample, _batch_idx):
         input_feat, input_weight, labels_edge, labels_vertex, sample_weights = sample
         vertex_out, edge_out = self.forward(input_feat=input_feat, input_weight=input_weight)
-
-        self.loss_edge_cal = self.loss_edges(
-            edge_out, labels_edge
+        loss_edges = BCELoss(weight=sample_weights)
+        loss_vertex = MSELoss()
+        loss_edge_cal = loss_edges(
+            T.tensor(edge_out, dtype=float), T.tensor(labels_edge, dtype=float)
         )
+        loss_vertex_cal = loss_vertex(
+            vertex_out, labels_vertex
+        )
+        total = loss_edge_cal + loss_vertex_cal
+        return loss_edge_cal, loss_vertex_cal, total
+
+    def training_step(self, sample: tuple, _batch_idx: int):
+        loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+        self.log("train/total", total)
+        self.log("train/vertex", loss_vertex_cal)
+        self.log("train/edge", loss_edge_cal)
+        return total
+
+    def validation_step(self, sample: tuple, _batch_idx: int):
+        loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+        self.log("valid/total", total)
+        self.log("valid/vertex", loss_vertex_cal)
+        self.log("valid/edge", loss_edge_cal)
+
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters(), lr=self.lr)
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=self.lr,
+            total_steps=self.trainer.estimated_stepping_batches,
+        )
+        return [optimizer], [scheduler]

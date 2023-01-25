@@ -1,19 +1,28 @@
 """Training script to perform topograph training."""
 import argparse as pars
+import pytorch_lightning as pl
 import numpy as np
 import random as rd
 from h5py import File
 from os import makedirs
+import sys
+sys.path.insert(0, "/home/users/s/schroeer/scratch/PhD/Topograph_repos/flavour_tagging")
 
 import torch.nn as nn
 from torch import tensor, save
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 from topograph.modules import (
     GetConfiguration,
-    TopographModel
+    TopographModel,
+    get_sample_weights,
 )
+
+from topograph.modules import IterableFlavourTaggingDataset
+from mattstools.trainer import Trainer
+from mattstools.network  import MyNetBase
 
 
 def get_parser():
@@ -64,7 +73,10 @@ if __name__ == "__main__":
     topomodel = TopographModel(
         nodes_feat=[20, 70, 70, 70, 30],
         nodes_weight=[20, 70, 70, 70, 1],
-        nodes_vertex=[30, 50, 50, 50, 1]
+        nodes_vertex=[30, 50, 50, 50, 1],
+        save_dir=config.output_training,
+        name=config.model_name,
+        lr=config.lr
     )
 
     n_jets = metadata_dict['n_jets']
@@ -74,53 +86,48 @@ if __name__ == "__main__":
 
     makedirs(f"{config.output_training}/modelfiles", exist_ok=True)
     training_file = f"{config.output}/{config.training_file_name}".replace("//","/")
-    with File(training_file, "r") as f:
-        tracks_all = f["X_train_tracks"][:]
-        Y_edge_all = f["Y_edge"][:]
-        Y_vertex_all = f["Y_vertex_features"][:]
-    ind = np.linspace(0,len(tracks_all)-1, len(tracks_all), dtype=int)
+    val_file = f"{config.output}/{config.validation_file_name}".replace("//","/")
 
-    optimiser = optim.Adam(topomodel.parameters(), lr=lr)
+    topomodel.train()
+    topograph_loss_edges = nn.BCELoss()
+    topograph_loss_vertex = nn.MSELoss()
 
-    for epoch in range(1,n_epochs+1):
-        print(f"start epoch {epoch}")
-        rd.shuffle(ind)
-        tracks_all = tracks_all[ind]
-        Y_edge_all = Y_edge_all[ind]
-        Y_vertex_all = Y_vertex_all[ind]
-        topomodel.train()
-        topograph_loss_edges = nn.BCELoss()
-        topograph_loss_vertex = nn.MSELoss()
-        for step in range(n_steps):
-            tracks = tensor(tracks_all[step*50:(step+1)*50])
-            Y_edge = tensor(np.float32(Y_edge_all[step*50:(step+1)*50]))
-            Y_vertex = tensor(np.float32(Y_vertex_all[step*50:(step+1)*50]))
+    tracks_dataset = IterableFlavourTaggingDataset(
+        dset="train",
+        buffer_shuffle=True,
+        file_name = training_file,
+        batch_size = 1024,
+        drop_last = True,
+        buffer_size = 100_000
+    )
 
-            model, model_edge = topomodel(tracks, tracks)
-            loss_edges = (
-                topograph_loss_edges(
-                    model_edge,
-                    Y_edge,
-                )
-            )
-            loss_vertex = (
-                topograph_loss_vertex(
-                    model,
-                    Y_vertex
-                )
-            )
-            loss = loss_vertex + 100*loss_edges
-            optimiser.zero_grad()
-            loss.backward()
-            optimiser.step()
+    tracks_loader = DataLoader(tracks_dataset)
 
-        modelfile_dir = (
-        config.output_training + f"/modelfiles/model_epoch{epoch:03d}.h5"
-        ).replace("//", "/")
+    valid_dataset = IterableFlavourTaggingDataset(
+        dset="valid",
+        buffer_shuffle=False,
+        file_name = val_file,
+        batch_size = 1024,
+        drop_last = True,
+        buffer_size = 100_000,
+    )
+    valid_loader = DataLoader(valid_dataset)
 
-        save({
-            'epoch': epoch,
-            'model_state_dict': topomodel.state_dict(),
-            'optimiser_state_dict': optimiser.state_dict(),
-            'loss': loss,
-            }, modelfile_dir)            
+    makedirs(f"{config.output}/checkpoints".replace("//","/"), exist_ok=True)
+    trainer = pl.Trainer(
+        max_epochs=200,
+        callbacks=[
+            ModelCheckpoint(
+                monitor="valid/total",
+                filename="checkpoint_train_{epoch}",
+                dirpath=f"{config.output}/checkpoints",
+                save_top_k=-1
+                )],
+        accelerator="gpu"
+    )
+
+    trainer.fit(
+        model=topomodel,
+        train_dataloaders=tracks_loader,
+        val_dataloaders=valid_loader,
+    )

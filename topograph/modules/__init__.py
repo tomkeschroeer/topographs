@@ -12,7 +12,7 @@ from topograph.modules.layers import (
 from topograph.modules.load_tfrecord import load_tfrecords_train_dataset
 from topograph.modules.tools import (
     DataGenerator,
-    DataLoader,
+    # DataLoader,
     DatasetCreater,
     GetConfiguration,
     GlobalConfig,
@@ -25,3 +25,7 @@ from topograph.modules.tools import (
     step_activation,
 )
 from topograph.modules.Vertex_properties import Matcher
+
+from topograph.modules.datasets import (
+    IterableFlavourTaggingDataset
+)

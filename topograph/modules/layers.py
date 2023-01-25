@@ -12,7 +12,8 @@ from torch import(
     squeeze,
     empty,
     greater,
-    exp
+    exp,
+    reshape
 )
 
 class Sigmoid(Module):
@@ -260,6 +261,8 @@ class VertexNetwork(Module):
         dense_ntw = self.layers[0](input_layer)
         for layer in self.layers[1:]:
             dense_ntw = layer(dense_ntw)
+        shape = dense_ntw.size()
+        dense_ntw = reshape(dense_ntw, (1, shape[0], shape[1]))
         return dense_ntw
 
     def get_config(self):
@@ -305,7 +308,10 @@ class DotProduct(Module):
         """
         feat_layer, edge_layer = inputs[:2]
         edge_shape = edge_layer.size()
-        edge_shape = (edge_shape[0], edge_shape[2], edge_shape[1])
+        feat_shape = feat_layer.size()
+        feat_layer = reshape(feat_layer,feat_shape[1:])
+        edge_shape = (edge_shape[1], edge_shape[3], edge_shape[2])
+
         pool = bmm(edge_layer.view(edge_shape), feat_layer)
         pool = squeeze(pool, -2)
         return pool
