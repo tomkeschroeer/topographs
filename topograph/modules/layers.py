@@ -4,7 +4,8 @@ from torch.nn import (
     Linear,
     Module,
     init,
-    ModuleList
+    ModuleList,
+    parameter,
 )
 
 from torch import(
@@ -13,7 +14,9 @@ from torch import(
     empty,
     greater,
     exp,
-    reshape
+    reshape,
+    tensor,
+    Tensor
 )
 
 class Sigmoid(Module):
@@ -57,10 +60,8 @@ class ShiftRelu(Module):
         Init of the ShiftReLu Layer.
         """
         super(ShiftRelu, self).__init__(**kwargs)
-        self.shift = empty(1)
-        init.constant_(self.shift, 0.8)
-        self.slope = empty(1)
-        init.constant_(self.slope, 1.0)
+        self.shift = parameter.Parameter(Tensor(tensor(0.01)), requires_grad=True)
+        self.slope = parameter.Parameter(Tensor(tensor(1.0)), requires_grad=True)
 
     def forward(self, x):
         """
@@ -75,10 +76,10 @@ class ShiftRelu(Module):
         -------
         x with Shifted ReLu activation applied.
         """
+        print(x)
         return (
-            self.slope * (x - self.shift) * greater(x, self.shift)
+            self.slope * (x - self.shift) * greater(x, self.shift) 
         )
-
 
 class EdgeLayers(Module):
     """
@@ -310,6 +311,7 @@ class DotProduct(Module):
         edge_shape = edge_layer.size()
         feat_shape = feat_layer.size()
         feat_layer = reshape(feat_layer,feat_shape[1:])
+        print(edge_shape)
         edge_shape = (edge_shape[1], edge_shape[3], edge_shape[2])
 
         pool = bmm(edge_layer.view(edge_shape), feat_layer)

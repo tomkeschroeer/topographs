@@ -64,6 +64,7 @@ class TopographModel(pl.LightningModule):
             name of the input layer for the edge feature layer
         """
         super().__init__()
+        self.save_hyperparameters()
         self.activation_name = activation_name
         self.loss_names = ["total", "edge_loss", "vertex_loss"]
         self.lr = lr
@@ -75,7 +76,6 @@ class TopographModel(pl.LightningModule):
 
         self.feat_layer = FeatLayers(nodes=self.nodes_feat)
         self.edge_layer = EdgeLayers(nodes=self.nodes_weight)
-
         if self.activation_name == "shifted_relu":
             self.add_activation = ShiftRelu()
         elif self.activation_name == "sigmoid":
@@ -109,11 +109,11 @@ class TopographModel(pl.LightningModule):
         """
         edge_wt_out = self.edge_layer(input_weight)
         edge_feat_out = self.feat_layer(input_feat)
-        if self.add_activation:
+        if self.activation_name is not None:
             add_activation = self.add_activation(edge_wt_out)
+            dt_product = self.dot_product([edge_feat_out, add_activation])
         else:
-            add_activation = edge_wt_out
-        dt_product = self.dot_product([edge_feat_out, add_activation])
+            dt_product = self.dot_product([edge_feat_out, edge_wt_out])
         dense_vertex_out = self.vertex_network(dt_product)
         return dense_vertex_out, edge_wt_out
 

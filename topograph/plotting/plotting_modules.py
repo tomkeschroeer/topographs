@@ -4,13 +4,14 @@ from os import makedirs
 import matplotlib.pyplot as plt
 import numpy as np
 from h5py import File
-from mlxtend.evaluate import confusion_matrix
-from mlxtend.plotting import plot_confusion_matrix
-from puma import PlotBase
+# from mlxtend.evaluate import confusion_matrix
+# from mlxtend.plotting import plot_confusion_matrix
+# from puma import PlotBase
 
 import torch.optim as optim
 from torch import load
 from torch import tensor
+from pytorch_lightning.callbacks import ModelSummary
 
 from topograph.modules import (
     TopographModel,
@@ -67,45 +68,41 @@ def get_point_styles(N):
 
 def load_topomodel(
         modelfile=None, 
-        add_activation=None, 
-        lr=0.01, 
         nodes_feat=[20, 70, 70, 70, 30],
         nodes_weight=[20, 70, 70, 70, 1],
-        nodes_vertex=[30, 50, 50, 50, 1]
+        nodes_vertex=[30, 50, 50, 50, 1],
+        activation_name=None,
     ):
     if modelfile is None:
         raise KeyError("Please provide vaild modelfile.")
-    topomodel = TopographModel(
+    
+    # t = TopographModel.load_from_checkpoint()
+    topomodel = TopographModel.load_from_checkpoint(
+        checkpoint_path=modelfile, 
+        save_dir="./",
+        name="name",
         nodes_feat=nodes_feat,
         nodes_weight=nodes_weight,
-        nodes_vertex=nodes_vertex
+        nodes_vertex=nodes_vertex,
+        activation_name=activation_name
     )
-    optimiser = optim.Adam(topomodel.parameters(), lr=lr)
-    checkpoint = load(modelfile)
-    topomodel.load_state_dict(checkpoint["model_state_dict"])
-    optimiser.load_state_dict(checkpoint["optimiser_state_dict"])
-    loss = checkpoint["loss"]
-
-    layers = [layer for layer in topomodel.modules]
-
-    layer_names = [layer.name for layer in model.layers]
-    if add_activation is None:
-        activation_name = "edge_weight"
-    elif add_activation == "shifted_relu":
-        activation_name = [layer for layer in layer_names if "relu" in layer][0]
-    elif add_activation == "sigmoid":
-        activation_name = [layer for layer in layer_names if "sigmoid" in layer][0]
-    else:
-        raise KeyError(
-            f"Undefined additional actrivation: {add_activation}. Please"
-            ' select one of the following: ["shifted_relu", "sigmoid"] or leave'
-            " empty/remove option."
-        )
-
+    
+    # topomodel = TopographModel(
+    #     nodes_feat=[20, 70, 70, 70, 30],
+    #     nodes_weight=[20, 70, 70, 70, 1],
+    #     nodes_vertex=[30, 50, 50, 50, 1],
+    #     save_dir="/.",
+    #     name="name",
+    #     activation_name="shifted_relu",
+    #     lr=0.001
+    # )
+    
+    paras = topomodel.state_dict().keys()
+    print(paras)
+    # print(topomodel)
     return topomodel
 
-
-def get_predictions(model, dataset, full_model=False):
+def get_predictions(model, dataset, full_model=True):
     if full_model:
         _, preds = model.predict(dataset)
     else:
@@ -181,10 +178,11 @@ class Plotter:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
-            x=tensor(f[f"{self.config.X_train_tracks}"])
-            y_edge=tensor(f[f"{self.config.Y_edge}"])
-            y=tensor(f[f"{self.config.Y_vertex_features}"])
-
+            x=tensor(f[f"{self.config.tracks_name}"][:10])
+            y_edge=tensor(f[f"{self.config.edge_name}"][:10])
+            y=tensor(f[f"{self.config.vertex_feat_name}"][:10])
+        # get = GetEpochPrediction(config=self.config, epoch=200)
+        
         effs = []
         effs_ones = []
         effs_zeros = []
@@ -440,14 +438,14 @@ class GetEpochPrediction:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
-
-        layer, model_sub, model = load_topomodel(
-            modelfile=f"{self.config.output_training}/modelfiles/model_epoch{self.epoch:03d}.h5",
-            add_activation=self.config.edge_weight_network["add_activation"],
-            lr=self.config.lr,
+        # print(self.config.edge_weight_network.get("add_activation", None))
+        # layer, model_sub, model 
+        topomodel = load_topomodel(
+            modelfile=f"{self.config.output}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
             nodes_feat=self.config.edge_feature_network["nodes"],
             nodes_weight=self.config.edge_weight_network["nodes"],
-            nodes_vertex=self.config.vertex_network["nodes"]
+            nodes_vertex=self.config.vertex_network["nodes"],
+            activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
 
         self.metadata_dict = {}
@@ -460,13 +458,20 @@ class GetEpochPrediction:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
+            x=tensor(f[f"{self.config.tracks_name}"][:10])
+            y_edge=tensor(f[f"{self.config.edge_name}"][:10])
+            y=tensor(f[f"{self.config.vertex_feat_name}"][:10])
+        for x_step in x:
+            preds = topomodel.to(x_step)
             
 
-        weights = layer.trainable_weights
-        slope = [weight for weight in weights if "relu_slope" in weight.name][0]
-        shift = [weight for weight in weights if "relu_shift" in weight.name][0]
-        pred_sub = get_predictions(model=model_sub, dataset=self.dataset)
-        pred = get_predictions(model=model, dataset=self.dataset, full_model=True)
+        # weights = layer.trainable_weights
+        pars = topomodel.state_dict()
+        slope = pars[f"add_activation.slope"]
+        shift = pars[f"add_activation.shift"]
+        print(slope, shift)
+        pred_sub = get_predictions(model=topomodel, dataset=self.dataset)
+        # pred = get_predictions(model=model, dataset=self.dataset, full_model=True)
         label_sub = get_labels(
             label_name=self.config.edge_name,
             file_name=self.test_file,

@@ -36,7 +36,6 @@ class calculate_efficiency:
     def comp_pred_label_zeros_only(self, pred_f_val):
         return 1 if pred_f_val <= self.cut_val else 0
 
-
 class calculate_binary_preds:
     def __init__(self, preds, slope, shift):
         self.preds = preds
@@ -51,7 +50,6 @@ class calculate_binary_preds:
     def convert_preds_to_bin(self, pred):
         pred = 1 if pred >= self.cut_val else 0
         return pred
-
 
 class calculate_pT_diff:
     def __init__(self, pred, label):

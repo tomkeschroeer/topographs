@@ -13,6 +13,7 @@ from torch import tensor, save
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from pytorch_lightning.callbacks import ModelCheckpoint
+from lightning_lite.utilities.exceptions import MisconfigurationException
 
 from topograph.modules import (
     GetConfiguration,
@@ -71,14 +72,14 @@ if __name__ == "__main__":
         _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
     topomodel = TopographModel(
-        nodes_feat=[20, 70, 70, 70, 30],
-        nodes_weight=[20, 70, 70, 70, 1],
-        nodes_vertex=[30, 50, 50, 50, 1],
+        nodes_feat=config.edge_feature_network["nodes"],
+        nodes_weight=config.edge_weight_network["nodes"],
+        nodes_vertex=config.vertex_network["nodes"],
         save_dir=config.output_training,
         name=config.model_name,
+        activation_name=config.edge_weight_network["add_activation"],
         lr=config.lr
     )
-
     n_jets = metadata_dict['n_jets']
     n_steps = n_jets // stepsize
     if n_jets % stepsize != 0:
@@ -114,18 +115,24 @@ if __name__ == "__main__":
     valid_loader = DataLoader(valid_dataset)
 
     makedirs(f"{config.output}/checkpoints".replace("//","/"), exist_ok=True)
-    trainer = pl.Trainer(
-        max_epochs=200,
-        callbacks=[
-            ModelCheckpoint(
-                monitor="valid/total",
-                filename="checkpoint_train_{epoch}",
-                dirpath=f"{config.output}/checkpoints",
-                save_top_k=-1
-                )],
-        accelerator="gpu"
+    checkpoint = ModelCheckpoint(
+        monitor="valid/total",
+        filename="checkpoint_train_{epoch}",
+        dirpath=f"{config.output}/checkpoints",
+        save_top_k=-1
     )
-
+    try:
+        trainer = pl.Trainer(
+            max_epochs=config.epochs,
+            callbacks=[checkpoint],
+            accelerator="gpu"
+        )
+    except MisconfigurationException:
+        print("No gpu found!")
+        trainer = pl.Trainer(
+            max_epochs=config.epochs,
+            callbacks=[checkpoint],
+        )
     trainer.fit(
         model=topomodel,
         train_dataloaders=tracks_loader,
