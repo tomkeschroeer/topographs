@@ -1,0 +1,71 @@
+input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fulltruth/user.toschroe.410470.e6337_s3681_r13167_p4931.tdd.EMPFlowTruth_n40.22_2_75.22-06-27_truth_40tracks_output.h5/*.h5
+#/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
+
+output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_subset/
+output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/
+model_name: Output_ttbar_pytorch_train
+
+one_file_name: topograph_ttbar_inputfiles_combined.h5
+preprocessing_file_name: preprocessed_ttbar_topograph.h5
+scale_dict: scale_dict_ttbar.json
+
+training_file_name: training_ttbar_topographs.h5
+validation_file_name: validation_ttbar_topographs.h5
+testing_file_name: testing_ttbar_topographs.h5
+
+njets: 1_000_000
+njets_val: 1_000_000
+njets_test: 1_000_000
+
+input_tracks_name: tracks_loose
+input_truth_name: truth_hadrons
+input_jet_name: jets
+
+tracks_name: "X_train_tracks"
+edge_name: "Y_edge"
+edge_feat_name: "Y_edge_features"
+vertex_feat_name: Y_vertex_features
+
+epochs: 20
+stepsize: 5000
+lr: 0.01
+use_sample_weights: True
+
+edge_feature_network:
+  nodes: [20, 70, 70, 70, 30]
+  n_tracks_name: tracks
+
+edge_weight_network:
+  nodes: [20, 70, 70, 70, 1]
+  n_tracks_name: tracks
+  add_activation: shifted_relu
+
+vertex_network:
+  nodes: [30, 50, 50, 50, 1]
+
+tfrecords:
+  batch_size: 5000
+  use_tfrecords_to_train: True
+  nfiles_to_load: 10
+
+evaluation:
+  model_file_number: 200
+  n_samples: 10_000
+  plot_efficiency:
+    plot: False
+    recalculate: False
+  plot_efficiency_zeros_only:
+    plot: False 
+    recalculate: False
+  plot_efficiency_ones_only:
+    plot: False
+    recalculate: False
+  plot_parameters:
+    plot: False
+    recalculate: False
+  plot_pt:
+    plot: False
+    recalculate: False
+  plot_conf_matrix:
+    plot: True
+    recalculate: True
