@@ -8,12 +8,17 @@ from topograph.modules.layers import (
     FeatLayers,
     ShiftRelu,
     Sigmoid,
+    Softplus_norm
 )
 from torch.nn import (
     Module,
     BCELoss,
-    MSELoss
+    MSELoss,
+    Softplus,
+    BCEWithLogitsLoss
 ) 
+
+from torch.nn.functional import binary_cross_entropy_with_logits
 
 import torch.optim as optim
 import pytorch_lightning as pl
@@ -21,6 +26,7 @@ import torch as T
 import numpy as np
 from pathlib import Path
 from typing import Union
+import wandb
 
 from mattstools.torch_utils import sel_device
 from mattstools.network import MyNetBase
@@ -80,18 +86,33 @@ class TopographModel(pl.LightningModule):
             self.add_activation = ShiftRelu()
         elif self.activation_name == "sigmoid":
             self.add_activation = Sigmoid()
+        elif self.activation_name == "softplus":
+            norm = T.tensor(np.log(1+np.exp(1)))
+            self.add_activation = Softplus_norm(norm=norm)
         elif self.activation_name is None:
             self.add_activation = False
         else:
             raise KeyError(
                 f"Undefined additional actrivation: {self.activation_name}. Please select one"
-                ' of the following: ["shifted_relu", "sigmoid"] or leave empty/remove'
+                ' of the following: ["shifted_relu", "sigmoid", "softplus"] or leave empty/remove'
                 " option."
             )
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
+        
+        # Define the loss funcitons
+        self.loss_fn_vertex = MSELoss()
+        
+    def on_fit_start(self):
+        if wandb.run:
+            wandb.define_metric("train/total", summary="min")
+            wandb.define_metric("train/edge", summary="min")
+            wandb.define_metric("train/vertex", summary="min")
+            wandb.define_metric("valid/total", summary="min")
+            wandb.define_metric("valid/edge", summary="min")
+            wandb.define_metric("valid/vertex", summary="min")
 
-    def forward(self, input_feat, input_weight):
+    def forward(self, inputs, mask):
         """
         function to build and return the topograph model
 
@@ -107,28 +128,28 @@ class TopographModel(pl.LightningModule):
         model
             topograph model ready to be trained.
         """
-        edge_wt_out = self.edge_layer(input_weight)
-        edge_feat_out = self.feat_layer(input_feat)
+        edge_wt_out = self.edge_layer(inputs)
+        edge_feat_out = self.feat_layer(inputs)
         if self.activation_name is not None:
             add_activation = self.add_activation(edge_wt_out)
-            dt_product = self.dot_product([edge_feat_out, add_activation])
+            dt_product = self.dot_product(edge_feat_out, add_activation, mask)
         else:
-            dt_product = self.dot_product([edge_feat_out, edge_wt_out])
+            dt_product = self.dot_product(edge_feat_out, edge_wt_out, mask)
         dense_vertex_out = self.vertex_network(dt_product)
+        # if self.activation_name is None:
         return dense_vertex_out, edge_wt_out
+        # else:
+        #     return dense_vertex_out, add_activation
 
     def basis_step(self, sample, _batch_idx):
-        input_feat, input_weight, labels_edge, labels_vertex, sample_weights = sample
-        vertex_out, edge_out = self.forward(input_feat=input_feat, input_weight=input_weight)
-        loss_edges = BCELoss(weight=sample_weights)
-        loss_vertex = MSELoss()
-        loss_edge_cal = loss_edges(
-            T.tensor(edge_out, dtype=float), T.tensor(labels_edge, dtype=float)
-        )
-        loss_vertex_cal = loss_vertex(
+        inputs, labels_edge, labels_vertex, sample_weights, mask = sample
+        vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
+        loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
+        loss_vertex_cal = self.loss_fn_vertex(
             vertex_out, labels_vertex
         )
-        total = loss_edge_cal + loss_vertex_cal
+        total = 100 * loss_edge_cal + loss_vertex_cal
+        # total = loss_edge_cal
         return loss_edge_cal, loss_vertex_cal, total
 
     def training_step(self, sample: tuple, _batch_idx: int):

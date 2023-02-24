@@ -6,6 +6,8 @@ from torch.nn import (
     init,
     ModuleList,
     parameter,
+    Softplus,
+    Sigmoid
 )
 
 from torch import(
@@ -16,10 +18,41 @@ from torch import(
     exp,
     reshape,
     tensor,
-    Tensor
+    Tensor,
+    log
 )
+import numpy as np
 
-class Sigmoid(Module):
+class Softplus_norm(Module):
+    """
+    class for the Softplus Layer to be used as an Activation for the edge weights.
+    """
+
+    def __init__(self,norm, **kwargs):
+        """
+        Init of the Sigmoid Layer.
+        """
+        super(Softplus_norm, self).__init__(**kwargs)
+        self.norm = norm
+        
+    def forward(self, x):
+        """
+        Define what happens when layer is called.
+
+        Parameters
+        ----------
+        x : tf.Tensor
+            output of previous layer.
+
+        Returns
+        -------
+        x with normalised Softmax activation applied.
+        """
+        out = log(1+exp(x))/self.norm
+        print(f"out = {out}")
+        return log(1+exp(x))/self.norm
+        
+class Sigmoid_tr(Module):
     """
     class for the Sigmoid Layer to be used as an Activation for the edge weights.
     """
@@ -60,7 +93,7 @@ class ShiftRelu(Module):
         Init of the ShiftReLu Layer.
         """
         super(ShiftRelu, self).__init__(**kwargs)
-        self.shift = parameter.Parameter(Tensor(tensor(0.01)), requires_grad=True)
+        self.shift = parameter.Parameter(Tensor(tensor(0.2)), requires_grad=True)
         self.slope = parameter.Parameter(Tensor(tensor(1.0)), requires_grad=True)
 
     def forward(self, x):
@@ -76,7 +109,6 @@ class ShiftRelu(Module):
         -------
         x with Shifted ReLu activation applied.
         """
-        print(x)
         return (
             self.slope * (x - self.shift) * greater(x, self.shift) 
         )
@@ -111,7 +143,7 @@ class EdgeLayers(Module):
             Linear(self.nodes[-2], self.nodes[-1])
         )
         self.layers.append(
-            Softmax(dim=2)
+            Sigmoid()
         )
 
     def forward(self, input_layer):
@@ -134,18 +166,18 @@ class EdgeLayers(Module):
             tdd = layer(tdd)
         return tdd
 
-    def get_config(self):
-        """
-        function to add parameters to class config.
+    # def get_config(self):
+    #     """
+    #     function to add parameters to class config.
 
-        Returns
-        -------
-        config : dict
-            modified config.
-        """
-        config = super().get_config()
-        config.update({"nodes": self.nodes, "net_name": self.net_name})
-        return config
+    #     Returns
+    #     -------
+    #     config : dict
+    #         modified config.
+    #     """
+    #     config = super().get_config()
+    #     config.update({"nodes": self.nodes, "net_name": self.net_name})
+    #     return config
 
 
 class FeatLayers(Module):
@@ -199,20 +231,20 @@ class FeatLayers(Module):
             tdd = layer(tdd)
         return tdd
 
-    def get_config(self):
-        """
-        function to add parameters to class config.
+    # def get_config(self):
+    #     """
+    #     function to add parameters to class config.
 
-        Returns
-        -------
-        config : dict
-            modified config.
-        """
-        config = super().get_config()
-        config.update(
-            {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
-        )
-        return config
+    #     Returns
+    #     -------
+    #     config : dict
+    #         modified config.
+    #     """
+    #     config = super().get_config()
+    #     config.update(
+    #         {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
+    #     )
+    #     return config
 
 
 class VertexNetwork(Module):
@@ -266,20 +298,20 @@ class VertexNetwork(Module):
         dense_ntw = reshape(dense_ntw, (1, shape[0], shape[1]))
         return dense_ntw
 
-    def get_config(self):
-        """
-        function to add parameters to class config.
+    # def get_config(self):
+    #     """
+    #     function to add parameters to class config.
 
-        Returns
-        -------
-        config : dict
-            modified config.
-        """
-        config = super().get_config()
-        config.update(
-            {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
-        )
-        return config
+    #     Returns
+    #     -------
+    #     config : dict
+    #         modified config.
+    #     """
+    #     config = super().get_config()
+    #     config.update(
+    #         {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
+    #     )
+    #     return config
 
 
 class DotProduct(Module):
@@ -293,7 +325,7 @@ class DotProduct(Module):
         """
         super().__init__(**kwargs)
 
-    def forward(self, inputs):
+    def forward(self, feat_layer, edge_layer, mask):
         """
         Define what happens when layer is called.
 
@@ -307,71 +339,65 @@ class DotProduct(Module):
         pool : object
             dot product of the inputs.
         """
-        feat_layer, edge_layer = inputs[:2]
-        edge_shape = edge_layer.size()
-        feat_shape = feat_layer.size()
-        feat_layer = reshape(feat_layer,feat_shape[1:])
-        print(edge_shape)
-        edge_shape = (edge_shape[1], edge_shape[3], edge_shape[2])
-
-        pool = bmm(edge_layer.view(edge_shape), feat_layer)
-        pool = squeeze(pool, -2)
+        pool = feat_layer * edge_layer  #* mask.unsqueeze(-1)
+        pool = pool.sum(-2)
+        pool = squeeze(pool,0)
         return pool
 
-class TopographModel(Module):
-    """
-    class building the topograph model
-    """
+# class TopographModel(Module):
+#     """
+#     class building the topograph model
+#     """
 
-    def __init__(
-        self,
-        nodes_feat: list = [128, 30, 30, 30],
-        nodes_weight : list = [128, 30, 30, 1],
-        nodes_vertex : list = [30, 50, 50, 50, 1],
-        activation_name: str = None,
-    ):
-        """
-        Init of TopographModel class
+#     def __init__(
+#         self,
+#         nodes_feat: list = [128, 30, 30, 30],
+#         nodes_weight : list = [128, 30, 30, 1],
+#         nodes_vertex : list = [30, 50, 50, 50, 1],
+#         activation_name: str = None,
+#     ):
+#         """
+#         Init of TopographModel class
 
-        Parameters
-        ----------
-        config : object
-            GetConfiguration object including information about the model
-            architecture, train parameter etc.
-        metadata_dict: dict
-            dictionary giving the number of jets, tracks, features, etc.
-        edge_weight_layer_name : str
-            name of the layer predicting the edge weights.
-        edge_feat_layer_name : str
-            name of the layer predicting the edge features.
-        vertex_network_layer_name : str
-            name of the layer predicting the vertex features.
-        input_weight_layer_name : str
-            name of the input layer for the edge weight layer
-        input_feat_layer_name : str
-            name of the input layer for the edge feature layer
-        """
-        super().__init__()
-        self.activation_name = activation_name
+#         Parameters
+#         ----------
+#         config : object
+#             GetConfiguration object including information about the model
+#             architecture, train parameter etc.
+#         metadata_dict: dict
+#             dictionary giving the number of jets, tracks, features, etc.
+#         edge_weight_layer_name : str
+#             name of the layer predicting the edge weights.
+#         edge_feat_layer_name : str
+#             name of the layer predicting the edge features.
+#         vertex_network_layer_name : str
+#             name of the layer predicting the vertex features.
+#         input_weight_layer_name : str
+#             name of the input layer for the edge weight layer
+#         input_feat_layer_name : str
+#             name of the input layer for the edge feature layer
+#         """
+#         super().__init__()
+#         self.activation_name = activation_name
 
-        self.nodes_feat = nodes_feat
-        self.nodes_weight = nodes_weight
-        self.nodes_vertex = nodes_vertex
+#         self.nodes_feat = nodes_feat
+#         self.nodes_weight = nodes_weight
+#         self.nodes_vertex = nodes_vertex
 
-        self.feat_layer = FeatLayers(nodes=self.nodes_feat)
-        self.edge_layer = EdgeLayers(nodes=self.nodes_weight)
+#         self.feat_layer = FeatLayers(nodes=self.nodes_feat)
+#         self.edge_layer = EdgeLayers(nodes=self.nodes_weight)
 
-        if self.activation_name == "shifted_relu":
-            self.add_activation = ShiftRelu()
-        elif self.activation_name == "sigmoid":
-            self.add_activation = Sigmoid()
-        elif self.activation_name is None:
-            self.add_activation = False
-        else:
-            raise KeyError(
-                f"Undefined additional actrivation: {self.activation_name}. Please select one"
-                ' of the following: ["shifted_relu", "sigmoid"] or leave empty/remove'
-                " option."
-            )
-        self.dot_product = DotProduct()
-        self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
+#         if self.activation_name == "shifted_relu":
+#             self.add_activation = ShiftRelu()
+#         elif self.activation_name == "sigmoid":
+#             self.add_activation = Sigmoid()
+#         elif self.activation_name is None:
+#             self.add_activation = False
+#         else:
+#             raise KeyError(
+#                 f"Undefined additional actrivation: {self.activation_name}. Please select one"
+#                 ' of the following: ["shifted_relu", "sigmoid"] or leave empty/remove'
+#                 " option."
+#             )
+#         self.dot_product = DotProduct()
+#         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
