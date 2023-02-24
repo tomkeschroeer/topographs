@@ -15,7 +15,10 @@ from torch.nn import (
     BCELoss,
     MSELoss,
     Softplus,
+    BCEWithLogitsLoss
 ) 
+
+from torch.nn.functional import binary_cross_entropy_with_logits
 
 import torch.optim as optim
 import pytorch_lightning as pl
@@ -97,6 +100,10 @@ class TopographModel(pl.LightningModule):
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
         
+        # Define the loss funcitons
+        self.loss_fn_vertex = MSELoss()
+        
+    def on_fit_start(self):
         if wandb.run:
             wandb.define_metric("train/total", summary="min")
             wandb.define_metric("train/edge", summary="min")
@@ -105,7 +112,7 @@ class TopographModel(pl.LightningModule):
             wandb.define_metric("valid/edge", summary="min")
             wandb.define_metric("valid/vertex", summary="min")
 
-    def forward(self, input_feat, input_weight, mask):
+    def forward(self, inputs, mask):
         """
         function to build and return the topograph model
 
@@ -121,32 +128,28 @@ class TopographModel(pl.LightningModule):
         model
             topograph model ready to be trained.
         """
-        edge_wt_out = self.edge_layer(input_weight)
-        edge_feat_out = self.feat_layer(input_feat)
+        edge_wt_out = self.edge_layer(inputs)
+        edge_feat_out = self.feat_layer(inputs)
         if self.activation_name is not None:
             add_activation = self.add_activation(edge_wt_out)
             dt_product = self.dot_product(edge_feat_out, add_activation, mask)
         else:
             dt_product = self.dot_product(edge_feat_out, edge_wt_out, mask)
         dense_vertex_out = self.vertex_network(dt_product)
-        if self.activation_name is None:
-            return dense_vertex_out, edge_wt_out
-        else:
-            return dense_vertex_out, add_activation
+        # if self.activation_name is None:
+        return dense_vertex_out, edge_wt_out
+        # else:
+        #     return dense_vertex_out, add_activation
 
     def basis_step(self, sample, _batch_idx):
-        input_feat, input_weight, labels_edge, labels_vertex, sample_weights, mask = sample
-        vertex_out, edge_out = self.forward(input_feat=input_feat, input_weight=input_weight, mask=mask)
-        loss_edges = BCELoss(weight=sample_weights)
-        loss_vertex = MSELoss()
-        check_e =edge_out.flatten()
-        loss_edge_cal = loss_edges(
-            T.tensor(edge_out, dtype=float), T.tensor(labels_edge, dtype=float)
-        )
-        loss_vertex_cal = loss_vertex(
+        inputs, labels_edge, labels_vertex, sample_weights, mask = sample
+        vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
+        loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
+        loss_vertex_cal = self.loss_fn_vertex(
             vertex_out, labels_vertex
         )
-        total = 100* loss_edge_cal + loss_vertex_cal
+        total = 100 * loss_edge_cal + loss_vertex_cal
+        # total = loss_edge_cal
         return loss_edge_cal, loss_vertex_cal, total
 
     def training_step(self, sample: tuple, _batch_idx: int):

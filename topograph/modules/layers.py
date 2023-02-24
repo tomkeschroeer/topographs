@@ -48,6 +48,8 @@ class Softplus_norm(Module):
         -------
         x with normalised Softmax activation applied.
         """
+        out = log(1+exp(x))/self.norm
+        print(f"out = {out}")
         return log(1+exp(x))/self.norm
         
 class Sigmoid_tr(Module):
@@ -164,18 +166,18 @@ class EdgeLayers(Module):
             tdd = layer(tdd)
         return tdd
 
-    def get_config(self):
-        """
-        function to add parameters to class config.
+    # def get_config(self):
+    #     """
+    #     function to add parameters to class config.
 
-        Returns
-        -------
-        config : dict
-            modified config.
-        """
-        config = super().get_config()
-        config.update({"nodes": self.nodes, "net_name": self.net_name})
-        return config
+    #     Returns
+    #     -------
+    #     config : dict
+    #         modified config.
+    #     """
+    #     config = super().get_config()
+    #     config.update({"nodes": self.nodes, "net_name": self.net_name})
+    #     return config
 
 
 class FeatLayers(Module):
@@ -229,20 +231,20 @@ class FeatLayers(Module):
             tdd = layer(tdd)
         return tdd
 
-    def get_config(self):
-        """
-        function to add parameters to class config.
+    # def get_config(self):
+    #     """
+    #     function to add parameters to class config.
 
-        Returns
-        -------
-        config : dict
-            modified config.
-        """
-        config = super().get_config()
-        config.update(
-            {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
-        )
-        return config
+    #     Returns
+    #     -------
+    #     config : dict
+    #         modified config.
+    #     """
+    #     config = super().get_config()
+    #     config.update(
+    #         {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
+    #     )
+    #     return config
 
 
 class VertexNetwork(Module):
@@ -296,20 +298,20 @@ class VertexNetwork(Module):
         dense_ntw = reshape(dense_ntw, (1, shape[0], shape[1]))
         return dense_ntw
 
-    def get_config(self):
-        """
-        function to add parameters to class config.
+    # def get_config(self):
+    #     """
+    #     function to add parameters to class config.
 
-        Returns
-        -------
-        config : dict
-            modified config.
-        """
-        config = super().get_config()
-        config.update(
-            {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
-        )
-        return config
+    #     Returns
+    #     -------
+    #     config : dict
+    #         modified config.
+    #     """
+    #     config = super().get_config()
+    #     config.update(
+    #         {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
+    #     )
+    #     return config
 
 
 class DotProduct(Module):
@@ -337,7 +339,7 @@ class DotProduct(Module):
         pool : object
             dot product of the inputs.
         """
-        pool = feat_layer * edge_layer * mask.unsqueeze(-1)
+        pool = feat_layer * edge_layer  #* mask.unsqueeze(-1)
         pool = pool.sum(-2)
         pool = squeeze(pool,0)
         return pool

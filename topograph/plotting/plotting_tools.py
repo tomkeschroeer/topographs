@@ -14,18 +14,18 @@ def get_cut_val(
         cut_val = np.log(4)/c1 + c2
     else:
         # cut_val = np.log(np.exp(0.8)-1)
-        cut_val = 0.8
+        cut_val = 0.6
     return cut_val
 
 class calculate_efficiency:
     def __init__(
-        self, pred, label, Ntotal, slope, shift, c1, c2, zeros_only=False, ones_only=False
+        self, pred, label, Ntotal, slope, shift, c1, c2, zeros_only=False, ones_only=False, cut_val=None
     ):
         self.pred_f = pred.flatten()
         self.label_f = label.flatten()
 
         self.Ntotal = Ntotal
-        self.cut_val = get_cut_val(slope, shift, c1, c2)
+        self.cut_val = get_cut_val(slope, shift, c1, c2) if cut_val is None else cut_val
         self.ones_only = ones_only
         self.zeros_only = zeros_only
 
@@ -41,8 +41,6 @@ class calculate_efficiency:
             n_true = list(map(self.comp_pred_label_zeros_only, self.pred_f))
             return sum(n_true) / Nsubset
         n_true = np.array(list(map(self.comp_pred_label, self.pred_f, self.label_f)))
-        # print(sum(n_true == 0))
-        # print(sum(n_true == 1))
         return sum(n_true) / self.Ntotal
 
     def comp_pred_label(self, pred_f_val, label_f_val):

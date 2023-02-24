@@ -58,6 +58,7 @@ if __name__ == "__main__":
 
     config_file_name = args.config
     input_file_name = config_file_name.split("/")[-1].replace(".yaml","")
+    makedirs(config.output_training, exist_ok=True)
     shutil.copyfile(config_file_name, f"{config.output_training}/{input_file_name}.yaml".replace("//","/"))
 
     edge_weight_layer_name = "edge_weight"

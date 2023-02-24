@@ -34,7 +34,6 @@ def create_figure(plot):
     plot.plotting_done = True
     return plot
 
-
 def get_point_styles(N):
     point_styles = [
         "r-",
@@ -65,7 +64,6 @@ def get_point_styles(N):
         "kv",
     ]
     return point_styles[:N]
-
 
 def load_topomodel(
         modelfile=None, 
@@ -107,10 +105,6 @@ def load_loss(
     #     name="name"
     # )
     checkpoint = load(modelfile, map_location=device('cpu'))
-    for k in checkpoint.keys():
-        if "total" in k:
-            print(checkpoint[k])
-    print(checkpoint["optimizer_states"])
     loss = checkpoint["train/total"]
     return loss
     
@@ -119,9 +113,8 @@ def get_predictions_and_labels(model, dataset, full_model=True):
     labels_e, labels_v = ([], [])
     masks = []
     for sample in dataset:
-        input_feat, input_weight, labels_edge, labels_vertex, _, mask = sample
-        print(input_feat)
-        output = model(input_feat, input_weight, mask)
+        inputs, labels_edge, labels_vertex, _, mask = sample
+        output = model(inputs, mask)
         output_v = output[0].detach().numpy()
         output_e = output[1].detach().numpy()
         preds_v.append(*output_v)
@@ -133,7 +126,7 @@ def get_predictions_and_labels(model, dataset, full_model=True):
     shape_labels_v = np.array(labels_v).shape
     shape_preds_e = np.array(preds_e).shape
     shape_preds_v = np.array(preds_v).shape
-    shape_masks = np.array(masks)
+    shape_masks = np.array(masks).shape
     preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1],*shape_preds_e[2:])
     preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1],*shape_preds_v[2:])
     labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1],*shape_labels_e[2:])
@@ -142,13 +135,17 @@ def get_predictions_and_labels(model, dataset, full_model=True):
     return preds_e, preds_v, labels_e, labels_v, masks
 
 class Plotter:
-    def __init__(self, config):
+    def __init__(self, config, cut_val=None):
         self.config = config
+        self.cut_val = cut_val
+        if cut_val is not None:
+            self.cut_val = cut_val if cut_val <= 1 else cut_val/100
         logger = get_logger()
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
-        self.plot_file = f"{self.config.output_training}/plotting_data_tr.h5"
+        datafilename = "plotting_data_tr.h5" if (self.cut_val is None) else f"plotting_data_tr_cutval={self.cut_val}.h5"
+        self.plot_file = f"{self.config.output_training}/{datafilename}"
         self.add_activation = self.config.edge_weight_network.get(
             "add_activation", None
         )
@@ -208,9 +205,6 @@ class Plotter:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
-            x=tensor(f[f"{self.config.tracks_name}"][:10])
-            y_edge=tensor(f[f"{self.config.edge_name}"][:10])
-            y=tensor(f[f"{self.config.vertex_feat_name}"][:10])
         
         effs = []
         effs_ones = []
@@ -241,7 +235,7 @@ class Plotter:
         if self.recalculate_parameters is False and self.plot_parameters:
             try:
                 with File(self.plot_file, "r+") as f:
-                    params = f["parameters"][:]
+                    params_old = f["parameters"][:]
             except KeyError:
                 logger.warn("No parameters found in file. Recalculate instead")
                 self.recalculate_parameters = True
@@ -256,16 +250,16 @@ class Plotter:
             (self.plot_effs and self.recalculate_effs)
             or (self.plot_effs_ones and self.recalculate_effs_zeros)
             or (self.plot_effs_zeros and self.recalculate_effs_ones)
-            or (self.plot_parameters and self.recalculate_pt)
+            or (self.plot_parameters and self.recalculate_parameters)
             or (self.plot_loss and self.recalculate_loss)
         ):
             n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
-            for i in range(1,n_modelfiles + 1):
+            for i in range(0,n_modelfiles):
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{i:03d}.h5", "r"
                 ) as model_data:
-                    mask = model_data["mask"][:]
-                    mask = mask.reshape(*mask.shape, 1)
+                    # mask = model_data["mask"][:]
+                    # mask = mask.reshape(*mask.shape, 1)
                     preds = model_data["pred_edge"][:]
                     labels = model_data["labels_edge"][:]
                     slope, shift, c1, c2 = None, None, None, None
@@ -325,7 +319,7 @@ class Plotter:
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
-                plot_name="eff_per_epoch",
+                plot_name="eff_per_epoch" if self.cut_val is None else f"eff_per_epoch_cutval={self.cut_val}",
                 vals=[effs],
                 labels=[""],
                 point_styles=get_point_styles(1),
@@ -337,7 +331,7 @@ class Plotter:
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
-                plot_name="eff_per_epoch_ones",
+                plot_name="eff_per_epoch_ones" if self.cut_val is None else f"eff_per_epoch_ones_cutval={self.cut_val}",
                 vals=[effs_ones],
                 labels=[""],
                 point_styles=get_point_styles(1),
@@ -346,10 +340,11 @@ class Plotter:
                 self.save_vals(dataset_name="efficiency_ones_only", data=effs_ones)
 
         if self.plot_effs_zeros:
+            # print(effs_zeros)
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
-                plot_name="eff_per_epoch_zeros",
+                plot_name="eff_per_epoch_zeros" if self.cut_val is None else f"eff_per_epoch_zeros_cutval={self.cut_val}",
                 vals=[effs_zeros],
                 labels=[""],
                 point_styles=get_point_styles(1),
@@ -429,6 +424,7 @@ class Plotter:
             c2,
             zeros_only=zeros_only,
             ones_only=ones_only,
+            cut_val=self.cut_val
         )()
         effs.append(eff)
         return effs
@@ -509,9 +505,15 @@ class Plotter:
 
     def plot_vals(
         self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
-    ):
+    ):  
+        print(f"vals = {vals}")
+        ymax = max(vals[0])
+        ymin = min(vals[0])
+        band = (ymax-ymin)/30
+        # print(ymax + band)
+        # print(ymin - band)
         plot = PlotBase(
-            ylabel=ylabel, xlabel=xlabel, n_ratio_panels=0, logy=False, title=title, ymin=0.89, ymax=0.897
+            ylabel=ylabel, xlabel=xlabel, n_ratio_panels=0, logy=False, title=title, ymax = ymax + band, ymin = ymin - band
         )
         print("plot vals")
         plot.initialise_figure()
@@ -562,15 +564,14 @@ class GetEpochPrediction:
             nodes_vertex=self.config.vertex_network["nodes"],
             activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
-        
-        loss = load_loss(
-            modelfile=f"{self.config.output_training}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
-            nodes_feat=self.config.edge_feature_network["nodes"],
-            nodes_weight=self.config.edge_weight_network["nodes"],
-            nodes_vertex=self.config.vertex_network["nodes"],
-            activation_name=self.config.edge_weight_network.get("add_activation", None)
-        )
-        
+
+        # loss = load_loss(
+        #     modelfile=f"{self.config.output_training}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
+        #     nodes_feat=self.config.edge_feature_network["nodes"],
+        #     nodes_weight=self.config.edge_weight_network["nodes"],
+        #     nodes_vertex=self.config.vertex_network["nodes"],
+        #     activation_name=self.config.edge_weight_network.get("add_activation", None)
+        # )
 
         self.metadata_dict = {}
         with File(self.test_file, "r") as f:
@@ -603,7 +604,7 @@ class GetEpochPrediction:
             f.create_dataset(name="labels_edge", data=labels_e)
             f.create_dataset(name="labels_vertex_features", data=labels_v)
             f.create_dataset(name="mask", data=mask)
-            f.create_dataset(name="loss", data=loss)
+            # f.create_dataset(name="loss", data=loss)
             if activation == "shifted_relu":
                 f.create_dataset(name="slope", data=slope)
                 f.create_dataset(name="shift", data=shift)
