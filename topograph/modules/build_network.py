@@ -28,8 +28,6 @@ from pathlib import Path
 from typing import Union
 import wandb
 
-from mattstools.torch_utils import sel_device
-from mattstools.network import MyNetBase
 
 
 class TopographModel(pl.LightningModule):

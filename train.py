@@ -24,8 +24,6 @@ from topograph.modules import (
 )
 
 from topograph.modules import IterableFlavourTaggingDataset
-from mattstools.trainer import Trainer
-from mattstools.network  import MyNetBase
 
 
 def get_parser():

@@ -173,6 +173,9 @@ class Plotter:
         self.plot_conf_matrix = self.config.evaluation["plot_conf_matrix"].get(
             "plot", False
         )
+        self.plot_preds_scatter = self.config.evaluation["plot_preds_scatter"].get(
+            "plot", False
+        )
         self.recalculate_effs = self.config.evaluation["plot_efficiency"].get(
             "recalculate", True
         )
@@ -187,6 +190,9 @@ class Plotter:
         )
         self.recalculate_pt = self.config.evaluation["plot_pt"].get("recalculate", True)
         self.recalculate_loss = self.config.evaluation["plot_loss"].get(
+            "recalculate", True
+        )
+        self.recalculate_preds_scatter = self.config.evaluation["plot_preds_scatter"].get(
             "recalculate", True
         )
 
@@ -205,46 +211,59 @@ class Plotter:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
-        
+
         effs = []
         effs_ones = []
         effs_zeros = []
+        preds_scatter = []
+        epochs_scatter = []
         params = []
+
+        nbins_scatter = 100
+        endpoint_scatter = 1.0
 
         if self.recalculate_effs is False and self.plot_effs:
             try:
                 with File(self.plot_file, "r+") as f:
                     effs = f["efficiency"][:]
-            except KeyError:
-                logger.warn("No efficiencies found in file. Recalculate instead")
+            except (KeyError, FileNotFoundError) as er:
+                logger.warn("No efficiencies found in file or file not found. Recalculate instead")
                 self.recalculate_effs = True
         if self.recalculate_effs_ones is False and self.plot_effs_ones:
             try:
                 with File(self.plot_file, "r+") as f:
                     effs_ones = f["efficiency_ones_only"][:]
-            except KeyError:
-                logger.warn("No efficiencies (ones only) found in file. Recalculate instead")
+            except (KeyError, FileNotFoundError) as er:
+                logger.warn("No efficiencies (ones only) found in file or file not found. Recalculate instead")
                 self.recalculate_effs_ones = True
         if self.recalculate_effs_zeros is False and self.plot_effs_zeros:
             try:
                 with File(self.plot_file, "r+") as f:
                     effs_zeros = f["efficiency_zeros_only"][:]
-            except KeyError:
-                logger.warn("No efficiencies (zeros only) found in file. Recalculate instead")
+            except (KeyError, FileNotFoundError) as er:
+                logger.warn("No efficiencies (zeros only) found in file or file not found. Recalculate instead")
                 self.recalculate_effs_zeros = True
         if self.recalculate_parameters is False and self.plot_parameters:
             try:
                 with File(self.plot_file, "r+") as f:
-                    params_old = f["parameters"][:]
-            except KeyError:
-                logger.warn("No parameters found in file. Recalculate instead")
+                    params = f["parameters"][:]
+            except (KeyError, FileNotFoundError) as er:
+                logger.warn("No parameters found in file or file not found. Recalculate instead")
                 self.recalculate_parameters = True
         if self.recalculate_loss is False and self.plot_loss:
             try:
                 with File(self.plot_file, "r+") as f:
                     loss = f["loss"][:]
-            except KeyError:
-                logger.warn("No loss found in file. Recalculate instead")
+            except (KeyError, FileNotFoundError) as er:
+                logger.warn("No loss found in file or file not found. Recalculate instead")
+                self.recalculate_loss = True
+        if self.recalculate_preds_scatter is False and self.plot_preds_scatter:
+            try:
+                with File(self.plot_file, "r+") as f:
+                    preds_scatter = f["preds_scatter"][:]
+                    endpoint_scatter = f["endpoint_scatter"][()]
+            except (KeyError, FileNotFoundError) as er:
+                logger.warn("No loss found in file or file not found. Recalculate instead")
                 self.recalculate_loss = True
         if (
             (self.plot_effs and self.recalculate_effs)
@@ -252,14 +271,13 @@ class Plotter:
             or (self.plot_effs_zeros and self.recalculate_effs_ones)
             or (self.plot_parameters and self.recalculate_parameters)
             or (self.plot_loss and self.recalculate_loss)
+            or (self.plot_preds_scatter and self.recalculate_preds_scatter)
         ):
             n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
             for i in range(0,n_modelfiles):
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{i:03d}.h5", "r"
                 ) as model_data:
-                    # mask = model_data["mask"][:]
-                    # mask = mask.reshape(*mask.shape, 1)
                     preds = model_data["pred_edge"][:]
                     labels = model_data["labels_edge"][:]
                     slope, shift, c1, c2 = None, None, None, None
@@ -269,8 +287,14 @@ class Plotter:
                     elif self.add_activation == "sigmoid":
                         c1 = model_data["c1"][()]
                         c2 = model_data["c2"][()]
+                if self.plot_preds_scatter and self.recalculate_preds_scatter:
+                    logger.info(f"getting predictions for a scatter plot for model model_epoch{i:03d}")
+                    preds_s = preds.shape
+                    hist, _ =  np.histogram(preds, bins = nbins_scatter, range=(0.999, endpoint_scatter))
+                    preds_scatter.append(hist)
+                    epochs_scatter.append(np.full((preds_s[0]*preds_s[1]), i))
                 if self.plot_effs and self.recalculate_effs:
-                    logger.info(f"plotting efficiency for model model_epoch{i:03d}")
+                    logger.info(f"getting efficiency for model model_epoch{i:03d}")
                     effs = self.get_efficiency(
                         preds=preds,
                         labels=labels,
@@ -282,7 +306,7 @@ class Plotter:
                     )
                 if self.plot_effs_ones and self.recalculate_effs_ones:
                     logger.info(
-                        f"plotting efficiency, ones only, for model model_epoch{i:03d}"
+                        f"getting efficiency, ones only, for model model_epoch{i:03d}"
                     )
                     effs_ones = self.get_efficiency(
                         preds=preds,
@@ -296,7 +320,7 @@ class Plotter:
                     )
                 if self.plot_effs_zeros and self.recalculate_effs_zeros:
                     logger.info(
-                        f"plotting efficiency, zeros only, for model model_epoch{i:03d}"
+                        f"getting efficiency, zeros only, for model model_epoch{i:03d}"
                     )
                     effs_zeros = self.get_efficiency(
                         preds=preds,
@@ -309,13 +333,14 @@ class Plotter:
                         zeros_only=True,
                     )
                 if self.plot_parameters and self.recalculate_parameters:
-                    logger.info(f"plotting parameters for model model_epoch{i:03d}")
+                    logger.info(f"getting parameters for model model_epoch{i:03d}")
                     params.append([slope, shift])
                 if self.plot_loss and self.recalculate_loss:
-                    logger.info(f"plotting loss for model model_epoch{i:03d}")
+                    logger.info(f"getting loss for model model_epoch{i:03d}")
                     # loss = self.load_loss()
 
         if self.plot_effs:
+            logger.info(f"plotting efficiencies...")
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
@@ -328,6 +353,7 @@ class Plotter:
                 self.save_vals(dataset_name="efficiency", data=effs)
 
         if self.plot_effs_ones:
+            logger.info(f"plotting efficiencies, ones only...")
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
@@ -340,7 +366,7 @@ class Plotter:
                 self.save_vals(dataset_name="efficiency_ones_only", data=effs_ones)
 
         if self.plot_effs_zeros:
-            # print(effs_zeros)
+            logger.info(f"plotting efficiencies, zeros only...")
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
@@ -353,6 +379,7 @@ class Plotter:
                 self.save_vals(dataset_name="efficiency_zeros_only", data=effs_zeros)
 
         if self.plot_parameters:
+            logger.info(f"plotting parameters...")
             if config.edge_weight_network["add_activation"] == "shifted_relu":
                 labels = ["slope", "shift"]
             elif config.edge_weight_network["add_activation"] == "sigmoid":
@@ -371,6 +398,7 @@ class Plotter:
                         point_styles=get_point_styles(len(labels)),
                     )
                 if self.plot_parameters_split:
+                    logger.info(f"plotting parameters in split plots...")
                     for param, label, point_style in zip(
                         params, labels, get_point_styles(len(labels))
                     ):
@@ -387,18 +415,33 @@ class Plotter:
                     self.save_vals(dataset_name="parameters", data=params)
 
         if self.plot_pt:
-            logger.info("Plotting pT...")
+            logger.info(f"plotting pT...")
             self.plotting_pT_regression(
                 logger=logger,
                 model_file_numbers=self.model_file_numbers,
             )
 
         if self.plot_conf_matrix:
-            logger.info("Plotting confusion matrix...")
+            logger.info("plotting confusion matrix...")
             self.plotting_confusion_matrix(
                 logger=logger,
                 model_file_numbers=self.model_file_numbers,
             )
+        
+        if self.plot_preds_scatter:
+            logger.info(f"plotting predictions in scatter plot...")
+            self.plot_scatter_vals(
+                ylabel="predicition", 
+                xlabel="epoch",
+                plot_name="predictions",
+                xvals=list(range(0,len(preds_scatter))),
+                yvals=np.linspace(0.999, endpoint_scatter, num=len(preds_scatter[0]), endpoint=True),
+                zvals=preds_scatter,
+                title="predictions"
+            )
+            if self.recalculate_preds_scatter:
+                self.save_vals(dataset_name="preds_scatter", data=preds_scatter)
+                self.save_vals(dataset_name="endpoint_scatter", data=endpoint_scatter)
 
     def get_efficiency(
         self,
@@ -502,13 +545,40 @@ class Plotter:
             plt.tight_layout()
             plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}.pdf")
             plt.close()
-
+    
+    def plot_scatter_vals(
+        self, ylabel, xlabel, plot_name, xvals, yvals, zvals, title=None
+    ):
+        width = 5.0
+        height = 3.5
+        zvals = np.array(zvals)
+        zvals_ref = np.array([zvals[:, i] for i in range(len(zvals[0]))])
+        z_min, z_max = (zvals_ref).min(), np.abs(zvals_ref).max()
+        figsize = (width, height)
+        fig = plt.Figure(figsize=figsize, layout="constrained")
+        fig, axis = plt.subplots(1)
+        axis.set_ylabel(ylabel)
+        axis.set_xlabel(xlabel)
+        axis.set_title(title)
+        c = axis.pcolor(xvals, yvals, zvals_ref, cmap='RdBu',vmin=z_min, vmax=z_max)
+        axis.set_title('pcolor')
+        fig.colorbar(c, ax=axis)
+        fig.tight_layout()
+        plt.savefig(f"{self.plot_dir}/{plot_name}.pdf")
+        fig.clear()
+        
     def plot_vals(
         self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
     ):  
-        print(f"vals = {vals}")
         ymax = max(vals[0])
         ymin = min(vals[0])
+        if len(vals) > 1:
+            for val in vals[0:]:
+                ymax_tmp = max(val)
+                ymin_tmp = min(val)
+                ymax = ymax_tmp if ymax < ymax_tmp else ymax
+                ymin = ymin_tmp if ymin > ymin_tmp else ymin
+                
         band = (ymax-ymin)/30
         # print(ymax + band)
         # print(ymin - band)
