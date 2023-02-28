@@ -17,6 +17,7 @@ from torch.nn import (
     Softplus,
     BCEWithLogitsLoss
 ) 
+import random
 
 from torch.nn.functional import binary_cross_entropy_with_logits
 
@@ -30,7 +31,7 @@ import wandb
 
 
 
-class TopographModel(pl.LightningModule):
+class TopographModel(Module):
     """
     class building the topograph model
     """
@@ -68,7 +69,7 @@ class TopographModel(pl.LightningModule):
             name of the input layer for the edge feature layer
         """
         super().__init__()
-        self.save_hyperparameters()
+        # self.save_hyperparameters()
         self.activation_name = activation_name
         self.loss_names = ["total", "edge_loss", "vertex_loss"]
         self.lr = lr
@@ -110,7 +111,7 @@ class TopographModel(pl.LightningModule):
             wandb.define_metric("valid/edge", summary="min")
             wandb.define_metric("valid/vertex", summary="min")
 
-    def forward(self, inputs, mask):
+    def forward(self, inputs):
         """
         function to build and return the topograph model
 
@@ -130,18 +131,106 @@ class TopographModel(pl.LightningModule):
         edge_feat_out = self.feat_layer(inputs)
         if self.activation_name is not None:
             add_activation = self.add_activation(edge_wt_out)
-            dt_product = self.dot_product(edge_feat_out, add_activation, mask)
+            dt_product = self.dot_product(edge_feat_out, add_activation)
         else:
-            dt_product = self.dot_product(edge_feat_out, edge_wt_out, mask)
+            dt_product = self.dot_product(edge_feat_out, edge_wt_out)
         dense_vertex_out = self.vertex_network(dt_product)
         # if self.activation_name is None:
         return dense_vertex_out, edge_wt_out
         # else:
         #     return dense_vertex_out, add_activation
 
+    # def basis_step(self, sample, _batch_idx):
+    #     inputs, labels_edge, labels_vertex, sample_weights, mask = sample
+    #     print(inputs.shape)
+    #     vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
+    #     loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
+    #     loss_vertex_cal = self.loss_fn_vertex(
+    #         vertex_out, labels_vertex
+    #     )
+    #     total = 100 * loss_edge_cal + loss_vertex_cal
+    #     # total = loss_edge_cal
+    #     return loss_edge_cal, loss_vertex_cal, total
+
+    # def training_step(self, sample: tuple, _batch_idx: int):
+    #     loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+    #     self.log("train/total", total)
+    #     self.log("train/vertex", loss_vertex_cal)
+    #     self.log("train/edge", loss_edge_cal)
+    #     return total
+
+    # def validation_step(self, sample: tuple, _batch_idx: int):
+    #     loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+    #     self.log("valid/total", total)
+    #     self.log("valid/vertex", loss_vertex_cal)
+    #     self.log("valid/edge", loss_edge_cal)
+
+    # def configure_optimizers(self):
+    #     optimizer = optim.Adam(self.parameters(), lr=self.lr)
+    #     scheduler = optim.lr_scheduler.OneCycleLR(
+    #         optimizer,
+    #         max_lr=self.lr,
+    #         total_steps=self.trainer.estimated_stepping_batches,
+    #     )
+    #     return [optimizer], [scheduler]
+    
+class TopographMultVertex(pl.LightningModule):
+    def __init__(self,
+        nodes_feat: list = [128, 30, 30, 30],
+        nodes_weight : list = [128, 30, 30, 1],
+        nodes_vertex : list = [30, 50, 50, 50, 1],
+        activation_name: str = None,
+        save_dir: str = None,
+        name: str = None,
+        device: str = "gpu",
+        lr: float = 1e-3
+    ):
+        super().__init__()
+        self.activation_name = activation_name
+        self.loss_names = ["total", "edge_loss", "vertex_loss"]
+        self.lr = lr
+        self.full_name = Path(save_dir, name)
+
+        self.nodes_feat = nodes_feat
+        self.nodes_weight = nodes_weight
+        self.nodes_vertex = nodes_vertex
+        self.topo_b = TopographModel(
+            nodes_feat=nodes_feat,
+            nodes_weight=nodes_weight,
+            nodes_vertex=nodes_vertex,
+            activation_name=activation_name,
+            save_dir=save_dir,
+            name=name,
+            device=device,
+            lr=lr
+        )
+        
+        self.topo_c = TopographModel(
+            nodes_feat=nodes_feat,
+            nodes_weight=nodes_weight,
+            nodes_vertex=nodes_vertex,
+            activation_name=activation_name,
+            save_dir=save_dir,
+            name=name,
+            device=device,
+            lr=lr
+        )
+        
+        self.loss_fn_vertex = MSELoss()
+    
+    def forward(self, inputs):
+        flag = "bjets"
+        flag =random.randint(0,1)
+        if flag == 0:
+            print("b")
+            return self.topo_b(inputs)
+        elif flag == 1:
+            print("c")
+            return self.topo_c(inputs)
+        
     def basis_step(self, sample, _batch_idx):
         inputs, labels_edge, labels_vertex, sample_weights, mask = sample
-        vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
+        vertex_out, edge_out = self.forward(inputs=inputs)
         loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
         loss_vertex_cal = self.loss_fn_vertex(
             vertex_out, labels_vertex
@@ -157,11 +246,11 @@ class TopographModel(pl.LightningModule):
         self.log("train/edge", loss_edge_cal)
         return total
 
-    def validation_step(self, sample: tuple, _batch_idx: int):
-        loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
-        self.log("valid/total", total)
-        self.log("valid/vertex", loss_vertex_cal)
-        self.log("valid/edge", loss_edge_cal)
+    # def validation_step(self, sample: tuple, _batch_idx: int):
+    #     loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+    #     self.log("valid/total", total)
+    #     self.log("valid/vertex", loss_vertex_cal)
+    #     self.log("valid/edge", loss_edge_cal)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)

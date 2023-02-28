@@ -348,15 +348,20 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             ]
 
-        self.ind_truthflav = self.get_b_indeces()
+        self.ind_truthflav = self.get_cb_indeces()
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
         self.edge_features = self.edge_features[self.ind_truthflav]
 
-    def get_b_indeces(self):
+    def get_cb_indeces(self):
         hadronflavour = self.truth["flavour"]
-        return np.logical_and(
-            self.HadrConeTruth == 5, [sum(hf == 5) == 1 for hf in hadronflavour]
+        return np.logical_or(
+            np.logical_and(
+                self.HadrConeTruth == 5, [sum(hf == 5) == 1 for hf in hadronflavour]
+            ),
+            np.logical_and(
+                self.HadrConeTruth == 4, [sum(hf == 4) == 1 for hf in hadronflavour]
+            )
         )
 
     def get_n_valid_jets(self):
@@ -369,6 +374,9 @@ class DatasetCreater:
         ]
         tOL_fromBC = [
             [OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel
+        ]
+        tOL_fromC = [
+            [OL == 5 for OL in tracklabels] for tracklabels in truthOriginLabel
         ]
         tOL = np.array(
             [

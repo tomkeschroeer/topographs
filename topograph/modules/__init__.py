@@ -1,6 +1,6 @@
 # flake8: noqa
 # pylint: skip-file
-from topograph.modules.build_network import TopographModel
+from topograph.modules.build_network import TopographModel, TopographMultVertex
 from topograph.modules.layers import (
     VertexNetwork,
     DotProduct,

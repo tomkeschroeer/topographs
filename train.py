@@ -20,6 +20,7 @@ from lightning_lite.utilities.exceptions import MisconfigurationException
 from topograph.modules import (
     GetConfiguration,
     TopographModel,
+    TopographMultVertex,
     get_sample_weights,
 )
 
@@ -76,7 +77,16 @@ if __name__ == "__main__":
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
         _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
-    topomodel = TopographModel(
+    # topomodel = TopographModel(
+    #     nodes_feat=config.edge_feature_network["nodes"],
+    #     nodes_weight=config.edge_weight_network["nodes"],
+    #     nodes_vertex=config.vertex_network["nodes"],
+    #     save_dir=config.output_training,
+    #     name=config.model_name,
+    #     activation_name=config.edge_weight_network["add_activation"],
+    #     lr=config.lr
+    # )
+    topomodel = TopographMultVertex(
         nodes_feat=config.edge_feature_network["nodes"],
         nodes_weight=config.edge_weight_network["nodes"],
         nodes_vertex=config.vertex_network["nodes"],
