@@ -24,7 +24,6 @@ from topograph.plotting.plotting_tools import (
     calculate_pT_diff,
 )
 
-
 def create_figure(plot):
     plot.set_title()
     plot.set_xlabel()
