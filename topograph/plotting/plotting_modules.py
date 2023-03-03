@@ -6,7 +6,7 @@ import numpy as np
 from h5py import File
 from mlxtend.evaluate import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
-from puma import PlotBase
+from puma import PlotBase, Histogram, HistogramPlot
 
 import torch.optim as optim
 from torch import load, device, tensor
@@ -65,6 +65,23 @@ def get_point_styles(N):
     ]
     return point_styles[:N]
 
+def get_colours(N):
+    colours = [
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#7c5295",
+        "#1f77b4",
+        "#012F51",
+        "#ff7f0e",
+        "#1f77b4",
+        "#B45F06",
+        "#A300A3",
+        "#38761D",
+        "#9ed670"
+    ]
+    return colours[:N]
+    
 def load_topomodel(
         modelfile=None, 
         nodes_feat=[20, 70, 70, 70, 30],
@@ -151,48 +168,51 @@ class Plotter:
         )
         self.model_file_numbers = self.config.evaluation.get("model_file_numbers", [1])
 
-        self.plot_effs = self.config.evaluation["plot_efficiency"].get("plot", False)
-        self.plot_effs_zeros = self.config.evaluation["plot_efficiency_zeros_only"].get(
+        self.plot_effs = self.config.evaluation.get("plot_efficiency", {}).get("plot", False)
+        self.plot_effs_zeros = self.config.evaluation.get("plot_efficiency_zeros_only", {}).get(
             "plot", False
         )
-        self.plot_effs_ones = self.config.evaluation["plot_efficiency_ones_only"].get(
+        self.plot_effs_ones = self.config.evaluation.get("plot_efficiency_ones_only", {}).get(
             "plot", False
         )
-        self.plot_parameters = self.config.evaluation["plot_parameters"].get(
+        self.plot_parameters = self.config.evaluation.get("plot_parameters", {}).get(
             "plot", False
         )
-        self.plot_parameters_split = self.config.evaluation["plot_parameters"].get(
+        self.plot_parameters_split = self.config.evaluation.get("plot_parameters", {}).get(
             "split", True
         )
-        self.plot_parameters_one = self.config.evaluation["plot_parameters"].get(
+        self.plot_parameters_one = self.config.evaluation.get("plot_parameters", {}).get(
             "in_one", False
         )
-        self.plot_pt = self.config.evaluation["plot_pt"].get("plot", False)
-        self.plot_loss = self.config.evaluation["plot_loss"].get("plot", False)
+        self.plot_pt = self.config.evaluation.get("plot_pt", {}).get("plot", False)
+        self.plot_loss = self.config.evaluation.get("plot_loss", {}).get("plot", False)
         
-        self.plot_conf_matrix = self.config.evaluation["plot_conf_matrix"].get(
+        self.plot_conf_matrix = self.config.evaluation.get("plot_conf_matrix", {}).get(
             "plot", False
         )
-        self.plot_preds_scatter = self.config.evaluation["plot_preds_scatter"].get(
+        self.plot_preds_per_epoch = self.config.evaluation.get("plot_preds_per_epoch", {}).get(
             "plot", False
         )
-        self.recalculate_effs = self.config.evaluation["plot_efficiency"].get(
+        self.plot_preds_scatter = self.config.evaluation.get("plot_preds_scatter", {}).get(
+            "plot", False
+        )
+        self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "recalculate", True
         )
-        self.recalculate_effs_zeros = self.config.evaluation[
-            "plot_efficiency_zeros_only"
-        ].get("recalculate", True)
-        self.recalculate_effs_ones = self.config.evaluation[
-            "plot_efficiency_ones_only"
-        ].get("recalculate", True)
-        self.recalculate_parameters = self.config.evaluation["plot_parameters"].get(
+        self.recalculate_effs_zeros = self.config.evaluation.get(
+            "plot_efficiency_zeros_only", {}
+        ).get("recalculate", True)
+        self.recalculate_effs_ones = self.config.evaluation.get(
+            "plot_efficiency_ones_only", {}
+        ).get("recalculate", True)
+        self.recalculate_parameters = self.config.evaluation.get("plot_parameters", {}).get(
             "recalculate", True
         )
-        self.recalculate_pt = self.config.evaluation["plot_pt"].get("recalculate", True)
-        self.recalculate_loss = self.config.evaluation["plot_loss"].get(
+        self.recalculate_pt = self.config.evaluation.get("plot_pt", {}).get("recalculate", True)
+        self.recalculate_loss = self.config.evaluation.get("plot_loss", {}).get(
             "recalculate", True
         )
-        self.recalculate_preds_scatter = self.config.evaluation["plot_preds_scatter"].get(
+        self.recalculate_preds_scatter = self.config.evaluation.get("plot_preds_scatter", {}).get(
             "recalculate", True
         )
 
@@ -427,7 +447,14 @@ class Plotter:
                 logger=logger,
                 model_file_numbers=self.model_file_numbers,
             )
-        
+
+        if self.plot_preds_per_epoch:
+            logger.info("plotting predictions per epoch...")
+            self.plotting_preds_per_epoch(
+                logger=logger,
+                model_file_numbers=self.model_file_numbers
+            )
+
         if self.plot_preds_scatter:
             logger.info(f"plotting predictions in scatter plot...")
             self.plot_scatter_vals(
@@ -545,6 +572,31 @@ class Plotter:
             plt.tight_layout()
             plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}.pdf")
             plt.close()
+            
+    def plotting_preds_per_epoch(self, logger, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            logger.info(f"plotting predictions per epoch for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                preds = f["pred_edge"][:].flatten()
+                labels = f["labels_edge"][:].flatten()
+            nbins = 50
+            binrange = (0,1)
+            legend_labels = ["$b$ tracks", "non-$b$ tracks"]
+            preds_one = preds[labels == 1]
+            preds_zeros = preds[labels == 0]
+            self.plot_hist(
+                ylabel="normalised number of tracks",
+                xlabel="prediction", 
+                vals=[preds_one, preds_zeros], 
+                labels=legend_labels, 
+                colours=get_colours(len(legend_labels)),
+                title=f"predictions for epoch {model_file_number}",
+                nbins=nbins,
+                binrange=binrange,
+                plot_name=f"predicitions_split_epoch_{model_file_number}"
+            )
     
     def plot_scatter_vals(
         self, ylabel, xlabel, plot_name, xvals, yvals, zvals, title=None
@@ -580,12 +632,9 @@ class Plotter:
                 ymin = ymin_tmp if ymin > ymin_tmp else ymin
                 
         band = (ymax-ymin)/30
-        # print(ymax + band)
-        # print(ymin - band)
         plot = PlotBase(
             ylabel=ylabel, xlabel=xlabel, n_ratio_panels=0, logy=False, title=title, ymax = ymax + band, ymin = ymin - band
         )
-        print("plot vals")
         plot.initialise_figure()
         plot.initialise_plot()
         for val, label, point_style in zip(vals, labels, point_styles):
@@ -593,6 +642,32 @@ class Plotter:
         plot.axis_top.legend()
         plot = create_figure(plot=plot)
         plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
+    
+    def plot_hist(
+        self, ylabel, xlabel, plot_name, vals, labels, nbins, binrange, colours, title=None
+    ):
+        plot_histo = HistogramPlot(
+            n_ratio_panels=0,
+            ylabel=ylabel,
+            xlabel=xlabel,
+            logy=False,
+            leg_ncol=1,
+            figsize=(5.5, 4.5),
+            bins=np.linspace(*binrange, nbins, endpoint=True),
+            y_scale=1.5,
+            norm=True
+        )
+
+        for val, label, col in zip(vals, labels, colours):
+            plot_histo.add(
+                Histogram(
+                    val,
+                    label=label,
+                    colour=col
+                )
+            )
+        plot_histo.draw()
+        plot_histo.savefig(f"{self.plot_dir}/{plot_name}.pdf")
 
     def save_vals(self, dataset_name, data):
         with File(self.plot_file, "a") as f:
