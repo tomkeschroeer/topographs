@@ -152,7 +152,7 @@ def get_predictions_and_labels(model, dataset, full_model=True):
     return preds_e, preds_v, labels_e, labels_v, masks
 
 class Plotter:
-    def __init__(self, config, cut_val=None):
+    def __init__(self, config, cut_val=None, vars=None):
         self.config = config
         self.cut_val = cut_val
         if cut_val is not None:
@@ -162,7 +162,17 @@ class Plotter:
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
         datafilename = "plotting_data_tr.h5" if (self.cut_val is None) else f"plotting_data_tr_cutval={self.cut_val}.h5"
-        self.plot_file = f"{self.config.output_training}/{datafilename}"
+
+        str_vars = ""
+        if vars is not None:
+            for var in vars:
+                str_vars += f"_{var}"
+
+        training_output_folder = config.output_training
+        training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
+        training_output_folder += str_vars
+
+        self.plot_file = f"{training_output_folder}/{datafilename}"
         self.add_activation = self.config.edge_weight_network.get(
             "add_activation", None
         )
@@ -216,10 +226,10 @@ class Plotter:
             "recalculate", True
         )
 
-        self.plot_dir = f"{self.config.output_training}/plots"
+        self.plot_dir = f"{training_output_folder}/plots"
         makedirs(self.plot_dir, exist_ok=True)
 
-        self.model_pred_folder = f"{self.config.output_training}/model_predictions"
+        self.model_pred_folder = f"{training_output_folder}/model_predictions"
 
         self.metadata_dict = {}
         with File(self.test_file, "r") as f:
@@ -241,6 +251,7 @@ class Plotter:
 
         nbins_scatter = 100
         endpoint_scatter = 1.0
+        startpoint_scatter = 0.0
 
         if self.recalculate_effs is False and self.plot_effs:
             try:
@@ -282,6 +293,7 @@ class Plotter:
                 with File(self.plot_file, "r+") as f:
                     preds_scatter = f["preds_scatter"][:]
                     endpoint_scatter = f["endpoint_scatter"][()]
+                    startpoint_scatter = f["startpoint_scatter"][()]
             except (KeyError, FileNotFoundError) as er:
                 logger.warn("No loss found in file or file not found. Recalculate instead")
                 self.recalculate_loss = True
@@ -310,7 +322,7 @@ class Plotter:
                 if self.plot_preds_scatter and self.recalculate_preds_scatter:
                     logger.info(f"getting predictions for a scatter plot for model model_epoch{i:03d}")
                     preds_s = preds.shape
-                    hist, _ =  np.histogram(preds, bins = nbins_scatter, range=(0.999, endpoint_scatter))
+                    hist, _ =  np.histogram(preds, bins = nbins_scatter, range=(startpoint_scatter, endpoint_scatter))
                     preds_scatter.append(hist)
                     epochs_scatter.append(np.full((preds_s[0]*preds_s[1]), i))
                 if self.plot_effs and self.recalculate_effs:
@@ -462,13 +474,14 @@ class Plotter:
                 xlabel="epoch",
                 plot_name="predictions",
                 xvals=list(range(0,len(preds_scatter))),
-                yvals=np.linspace(0.999, endpoint_scatter, num=len(preds_scatter[0]), endpoint=True),
+                yvals=np.linspace(startpoint_scatter, endpoint_scatter, num=len(preds_scatter[0]), endpoint=True),
                 zvals=preds_scatter,
                 title="predictions"
             )
             if self.recalculate_preds_scatter:
                 self.save_vals(dataset_name="preds_scatter", data=preds_scatter)
                 self.save_vals(dataset_name="endpoint_scatter", data=endpoint_scatter)
+                self.save_vals(dataset_name="startpoint_scatter", data=startpoint_scatter)
 
     def get_efficiency(
         self,
@@ -677,7 +690,7 @@ class Plotter:
 
 
 class GetEpochPrediction:
-    def __init__(self, config, epoch):
+    def __init__(self, config, epoch, vars=None):
         self.config = config
         self.epoch = epoch
         self.test_file = (
@@ -692,7 +705,8 @@ class GetEpochPrediction:
             batch_size = 1024,
             drop_last = True,
             buffer_size = 10_000,
-            njets = njets_test
+            njets = njets_test,
+            vars=vars
         )
         self.dataset_loader = DataLoader(
             self.dataset,
@@ -701,17 +715,33 @@ class GetEpochPrediction:
             shuffle=False,
             num_workers=0,
         )
+        
+        str_vars = ""
+        if vars is not None:
+            for var in vars:
+                str_vars += f"_{var}"
+                
+        training_output_folder = config.output_training
+        training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
+        training_output_folder += str_vars
+        
+        edge_feat_nodes = self.config.edge_feature_network["nodes"]
+        edge_weight_nodes = self.config.edge_weight_network["nodes"]
+        if vars is not None:
+            edge_feat_nodes[0] = len(vars)
+            edge_weight_nodes[0] = len(vars)
+        
         # layer, model_sub, model 
         topomodel = load_topomodel(
-            modelfile=f"{self.config.output_training}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
-            nodes_feat=self.config.edge_feature_network["nodes"],
-            nodes_weight=self.config.edge_weight_network["nodes"],
+            modelfile=f"{training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
+            nodes_feat=edge_feat_nodes,
+            nodes_weight=edge_weight_nodes,
             nodes_vertex=self.config.vertex_network["nodes"],
             activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
 
         # loss = load_loss(
-        #     modelfile=f"{self.config.output_training}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
+        #     modelfile=f"{training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
         #     nodes_feat=self.config.edge_feature_network["nodes"],
         #     nodes_weight=self.config.edge_weight_network["nodes"],
         #     nodes_vertex=self.config.vertex_network["nodes"],
@@ -739,7 +769,7 @@ class GetEpochPrediction:
             c2 = pars[f"add_activation.c1"]
         preds_e, preds_v, labels_e, labels_v, mask = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
 
-        self.output_folder = f"{self.config.output_training}/model_predictions".replace(
+        self.output_folder = f"{training_output_folder}/model_predictions".replace(
             "//", "/"
         )
         makedirs(self.output_folder, exist_ok=True)

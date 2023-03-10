@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Union
 import wandb
 
-
+from h5py import File
 
 class TopographModel(pl.LightningModule):
     """
@@ -44,7 +44,8 @@ class TopographModel(pl.LightningModule):
         save_dir: str = None,
         name: str = None,
         device: str = "gpu",
-        lr: float = 1e-3
+        lr: float = 1e-3,
+        save: bool = False
     ):
         """
         Init of TopographModel class
@@ -100,7 +101,12 @@ class TopographModel(pl.LightningModule):
         
         # Define the loss funcitons
         self.loss_fn_vertex = MSELoss()
-        
+
+        if save:
+            with File("/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5", "w") as inputs_file:
+                inputs_file.create_dataset(name="inputs",shape=(0,40,20),chunks=True, maxshape=(None,40,20))
+                inputs_file.create_dataset(name="labels",shape=(0,40,1), chunks=True, maxshape=(None,40,1))
+            
     def on_fit_start(self):
         if wandb.run:
             wandb.define_metric("train/total", summary="min")
@@ -139,8 +145,18 @@ class TopographModel(pl.LightningModule):
         # else:
         #     return dense_vertex_out, add_activation
 
-    def basis_step(self, sample, _batch_idx):
+    def basis_step(self, sample, _batch_idx, save=False):
         inputs, labels_edge, labels_vertex, sample_weights, mask = sample
+        if save:
+            inputs_save = inputs.reshape((1024, 40, 20))
+            labels_save = labels_edge.reshape((1024, 40, 1))
+            with File("/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5", "a") as inputs_file:
+                len_inp = len(inputs_save)
+                inputs_file["inputs"].resize((inputs_file["inputs"].shape[0]+len_inp), axis=0)
+                inputs_file["inputs"][-len_inp:] = inputs_save
+                inputs_file["labels"].resize((inputs_file["labels"].shape[0]+len_inp), axis=0)
+                inputs_file["labels"][-len_inp:] = labels_save
+                
         vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
         loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
         loss_vertex_cal = self.loss_fn_vertex(
@@ -158,7 +174,7 @@ class TopographModel(pl.LightningModule):
         return total
 
     def validation_step(self, sample: tuple, _batch_idx: int):
-        loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+        loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx, save=False)
         self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
         self.log("valid/edge", loss_edge_cal)

@@ -49,7 +49,6 @@ class Softplus_norm(Module):
         x with normalised Softmax activation applied.
         """
         out = log(1+exp(x))/self.norm
-        print(f"out = {out}")
         return log(1+exp(x))/self.norm
         
 class Sigmoid_tr(Module):

@@ -14,11 +14,6 @@ import torch as T
 from torch.utils.data import Dataset, IterableDataset, get_worker_info
 from topograph.modules import get_sample_weights
 
-PRECALCULATED_TRACK_CLASS_COUNTS = T.tensor(
-    # [35152385, 2092672, 150184761, 12259160, 16684474, 16794798, 68244, 6607904]
-    [178940592, 10768444, 776300092, 63450932, 86420643, 86460209, 311699, 31662295]
-)
-
 
 def scary_shuffle(*arrays):
     """?!Should?! shuffle a collection of arrays inplace in the exact same way"""
@@ -52,6 +47,7 @@ class FlavourTaggingCommon:
         drop_last: bool = True,
         start: Union[int, float] = 0,
         end: Union[int, float] = 0,
+        vars: list = [],
         dtype: np.dtype = np.float32,
         buffer_size: int = 100_000,
         buffer_shuffle: bool = False,
@@ -92,6 +88,7 @@ class FlavourTaggingCommon:
         self.Y_edge_name = Y_edge_name
         self.Y_vertex_name = Y_vertex_name
         self.njets = njets
+        self.vars = vars
 
         ## Get the data from the file and save the number of samples
         print(f"Loading file: {str(self.file_name)}")
@@ -137,16 +134,6 @@ class FlavourTaggingCommon:
         """Close the HDF file at the end on epoch to free up the cache"""
         self.file.close()
 
-    def get_track_weights(self):
-        """Return the track weights based on how frequent the classes occur
-        and then normalise to one
-        """
-        # class_counts = T.from_numpy(
-        #     np.unique(self.track_labels[..., 0], return_counts=True)[1]
-        # )[1:]
-        class_counts = PRECALCULATED_TRACK_CLASS_COUNTS
-        return T.sum(class_counts) / class_counts / len(class_counts)
-
 class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
     """Uses a distributed streaming method
     - Slower but allows for buffer shuffling
@@ -191,7 +178,10 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
             buf_end = min(buf_start + self.buffer_size, worker_end)
 
             ## Load the seperate buffer for each of the data fields
-            buf_tracks = self.tracks[buf_start:buf_end, :, :21].astype(self.dtype)
+            if self.vars is None:
+                buf_tracks = self.tracks[buf_start:buf_end, :, :].astype(self.dtype)
+            else:
+                buf_tracks = self.tracks[buf_start:buf_end, :, self.vars].astype(self.dtype)
             buf_edge_labels = self.edge_label[buf_start:buf_end].astype("f")
             buf_vertex_labels = self.vertex_labels[buf_start:buf_end].astype("f")
             buf_sample_weights = self.sample_weights[buf_start:buf_end].astype("f")
