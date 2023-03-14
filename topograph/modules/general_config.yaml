@@ -26,4 +26,7 @@ edge_features:
   - truthParentBarcode
 
 vertex_features:
-  - pt
+  pt:
+    log: True
+  eta:
+    log: False

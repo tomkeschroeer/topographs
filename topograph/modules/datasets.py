@@ -9,6 +9,7 @@ from typing import Union
 
 import h5py
 import numpy as np
+from math import isnan
 
 import torch as T
 from torch.utils.data import Dataset, IterableDataset, get_worker_info
@@ -192,6 +193,7 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
 
             ## Load the seperate buffer for each of the data fields
             buf_tracks = self.tracks[buf_start:buf_end, :, :21].astype(self.dtype)
+            # print(buf_tracks)
             buf_edge_labels = self.edge_label[buf_start:buf_end].astype("f")
             buf_vertex_labels = self.vertex_labels[buf_start:buf_end].astype("f")
             buf_sample_weights = self.sample_weights[buf_start:buf_end].astype("f")
@@ -224,7 +226,8 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
                 mask = ~np.all(tracks[..., :3] == 0, axis=-1)
                 # tracks[mask] = -T.inf
                 # tracks = T.Tensor(tracks).masked_fill(mask, T.inf)
-                yield tracks, edge_labels, vertex_labels, sample_weights, mask
+                mask_vertex_labels = np.all(~np.isnan(vertex_labels), axis = -1)
+                yield tracks, edge_labels, vertex_labels, sample_weights, mask, mask_vertex_labels
 
     def __getitem__(self, *_args) -> None:
         """Implemented just to quiet the pylance error even though you shouldnt need

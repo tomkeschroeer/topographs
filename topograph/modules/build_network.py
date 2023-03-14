@@ -8,7 +8,8 @@ from topograph.modules.layers import (
     FeatLayers,
     ShiftRelu,
     Sigmoid,
-    Softplus_norm
+    Softplus_norm,
+    MultipleMSELoss
 )
 from torch.nn import (
     Module,
@@ -99,7 +100,7 @@ class TopographModel(pl.LightningModule):
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
         
         # Define the loss funcitons
-        self.loss_fn_vertex = MSELoss()
+        self.loss_fn_vertex = MultipleMSELoss()
         
     def on_fit_start(self):
         if wandb.run:
@@ -134,17 +135,18 @@ class TopographModel(pl.LightningModule):
         else:
             dt_product = self.dot_product(edge_feat_out, edge_wt_out, mask)
         dense_vertex_out = self.vertex_network(dt_product)
+        # print(dense_vertex_out)
         # if self.activation_name is None:
         return dense_vertex_out, edge_wt_out
         # else:
         #     return dense_vertex_out, add_activation
 
     def basis_step(self, sample, _batch_idx):
-        inputs, labels_edge, labels_vertex, sample_weights, mask = sample
+        inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
         vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
         loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
         loss_vertex_cal = self.loss_fn_vertex(
-            vertex_out, labels_vertex
+            vertex_out[mask_vertex], labels_vertex[mask_vertex]
         )
         total = 100 * loss_edge_cal + loss_vertex_cal
         # total = loss_edge_cal

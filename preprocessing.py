@@ -3,7 +3,7 @@ import argparse as pars
 from topograph.modules import GetConfiguration
 from topograph.preprocessing_tools import (
     Apply_Scaler,
-    H5toTfrecordsConverter,
+    # H5toTfrecordsConverter,
     Merge,
     OneFileMaker,
     Prepare,

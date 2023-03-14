@@ -8,6 +8,7 @@ from topograph.modules.layers import (
     FeatLayers,
     ShiftRelu,
     Sigmoid,
+    MultipleMSELoss
 )
 from topograph.modules.load_tfrecord import load_tfrecords_train_dataset
 from topograph.modules.tools import (

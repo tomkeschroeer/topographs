@@ -7,7 +7,8 @@ from torch.nn import (
     ModuleList,
     parameter,
     Softplus,
-    Sigmoid
+    Sigmoid,
+    MSELoss
 )
 
 from torch import(
@@ -160,9 +161,12 @@ class EdgeLayers(Module):
             output layer of EdgeLayer.
         """
         # Set the track input
+        # print(input_layer)
         tdd = self.layers[0](input_layer)
+        # print(f"FIRST = {tdd}")
         for layer in self.layers[1:]:
             tdd = layer(tdd)
+            # print(f"tdd esge in loop = {tdd}")
         return tdd
 
     # def get_config(self):
@@ -225,6 +229,7 @@ class FeatLayers(Module):
         tdd : object
             output layer of FeatLayer.
         """
+        # print(input_layer.shape)
         tdd = self.layers[0](input_layer)
         for layer in self.layers[1:]:
             tdd = layer(tdd)
@@ -342,6 +347,19 @@ class DotProduct(Module):
         pool = pool.sum(-2)
         pool = squeeze(pool,0)
         return pool
+    
+class MultipleMSELoss(Module):
+    def __init__(self):
+        super().__init__()
+        self.mse_per_var = MSELoss()
+        
+    def forward(self, output, target):
+        length = len(target[0])
+        loss = 0
+        for num in range(length):
+            invaverage = (length/sum(target[:,num]))
+            loss += invaverage * self.mse_per_var(target[:,num],output[:,num])
+        return loss
 
 # class TopographModel(Module):
 #     """

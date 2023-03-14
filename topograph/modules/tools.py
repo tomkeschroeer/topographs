@@ -334,6 +334,7 @@ class DatasetCreater:
         self.stepsize = stepsize
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
+        self.vertex_features = np.array(list(self.global_conf.vertex_features.keys()))
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -396,11 +397,13 @@ class DatasetCreater:
                 list(vertex_feat[hf == 5][0])
                 for hf, vertex_feat in zip(
                     self.truth["flavour"],
-                    self.truth[self.global_conf.vertex_features],
+                    self.truth[self.vertex_features],
                 )
             ]
         )
-        vertex_feat = np.log(vertex_feat)
+        print(vertex_feat)
+        for i in range(len(self.vertex_features)):
+            vertex_feat[i] = np.log(vertex_feat[i])
         return vertex_feat
 
     def get_track_input(self):

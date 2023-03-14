@@ -21,6 +21,7 @@ class OneFileMaker:
         metadata = {}
         continue_loading = True
         global_conf = GlobalConfig()
+        vertex_features = list(global_conf.vertex_features.keys())
         os.makedirs(self.config.output, exist_ok=True)
         for dataset_type, dataset_feat in self.dataset_types.items():
             logger.info(f"producing file for {dataset_type}")
@@ -41,7 +42,7 @@ class OneFileMaker:
                         if step == 0 and input_file_ind == 0:
                             with File(f"{output_file}{dataset_type}.h5", "w") as out_file:
                                 out_file.create_dataset(self.config.input_tracks_name, data = f[f"/{self.config.input_tracks_name}"].fields(global_conf.track_inputs)[step*stepsize:(step+1)*stepsize], chunks=True, maxshape=(None, metadata["ntracks"]))
-                                out_file.create_dataset(self.config.input_truth_name, data = f[f"/{self.config.input_truth_name}"].fields(global_conf.vertex_features + ["flavour"])[step*stepsize:(step+1)*stepsize], chunks=True, maxshape=(None ,metadata["ntracks"] ))
+                                out_file.create_dataset(self.config.input_truth_name, data = f[f"/{self.config.input_truth_name}"].fields(vertex_features + ["flavour"])[step*stepsize:(step+1)*stepsize], chunks=True, maxshape=(None ,metadata["ntracks"] ))
                                 out_file.create_dataset(self.config.input_jet_name, data = f[f"/{self.config.input_jet_name}"].fields(["HadronConeExclExtendedTruthLabelID"])[step*stepsize:(step+1)*stepsize], chunks=True, maxshape=(None,))
                                 out_file.create_dataset("edge_features", data=f[f"/{self.config.input_tracks_name}"].fields(["truthOriginLabel"])[step*stepsize:(step+1)*stepsize], chunks=True, maxshape=(None, metadata["ntracks"]))
                         else:
@@ -51,7 +52,7 @@ class OneFileMaker:
                                     out_file[self.config.input_tracks_name].resize((out_file[self.config.input_tracks_name].shape[0] + n_entries), axis=0)
                                     out_file[self.config.input_tracks_name][-n_entries:] = f[f"/{self.config.input_tracks_name}"].fields(global_conf.track_inputs)[step*stepsize:(step+1)*stepsize]
                                     out_file[self.config.input_truth_name].resize((out_file[self.config.input_truth_name].shape[0] + n_entries), axis=0)
-                                    out_file[self.config.input_truth_name][-n_entries:] = f[f"/{self.config.input_truth_name}"].fields(global_conf.vertex_features + ["flavour"])[step*stepsize:(step+1)*stepsize]
+                                    out_file[self.config.input_truth_name][-n_entries:] = f[f"/{self.config.input_truth_name}"].fields(vertex_features + ["flavour"])[step*stepsize:(step+1)*stepsize]
                                     out_file[self.config.input_jet_name].resize((out_file[self.config.input_jet_name].shape[0] + n_entries), axis=0)
                                     out_file[self.config.input_jet_name][-n_entries:] = f[f"/{self.config.input_jet_name}"].fields(["HadronConeExclExtendedTruthLabelID"])[step*stepsize:(step+1)*stepsize]
                                     out_file["edge_features"].resize((out_file["edge_features"].shape[0] + n_entries), axis=0)
