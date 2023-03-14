@@ -6,7 +6,7 @@ import numpy as np
 from h5py import File
 from mlxtend.evaluate import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
-from puma import PlotBase
+from puma import PlotBase, Histogram, HistogramPlot
 
 import torch.optim as optim
 from torch import load, device, tensor
@@ -32,6 +32,14 @@ def create_figure(plot):
     plot.fig.tight_layout()
     plot.plotting_done = True
     return plot
+
+def get_var_names(var):
+    vardict = {
+        "pT": "log($p_T$)",
+        "eta": "log($\eta$)"
+    }
+    
+    return vardict[var], list(vardict.keys()).index(var)
 
 def get_point_styles(N):
     point_styles = [
@@ -64,6 +72,23 @@ def get_point_styles(N):
     ]
     return point_styles[:N]
 
+def get_colours(N):
+    colours = [
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#7c5295",
+        "#1f77b4",
+        "#012F51",
+        "#ff7f0e",
+        "#1f77b4",
+        "#B45F06",
+        "#A300A3",
+        "#38761D",
+        "#9ed670"
+    ]
+    return colours[:N]
+    
 def load_topomodel(
         modelfile=None, 
         nodes_feat=[20, 70, 70, 70, 30],
@@ -112,7 +137,7 @@ def get_predictions_and_labels(model, dataset, full_model=True):
     labels_e, labels_v = ([], [])
     masks = []
     for sample in dataset:
-        inputs, labels_edge, labels_vertex, _, mask = sample
+        inputs, labels_edge, labels_vertex, _, mask, mask_vertex = sample
         output = model(inputs, mask)
         output_v = output[0].detach().numpy()
         output_e = output[1].detach().numpy()
@@ -150,48 +175,53 @@ class Plotter:
         )
         self.model_file_numbers = self.config.evaluation.get("model_file_numbers", [1])
 
-        self.plot_effs = self.config.evaluation["plot_efficiency"].get("plot", False)
-        self.plot_effs_zeros = self.config.evaluation["plot_efficiency_zeros_only"].get(
+        self.plot_effs = self.config.evaluation.get("plot_efficiency", {}).get("plot", False)
+        self.plot_effs_zeros = self.config.evaluation.get("plot_efficiency_zeros_only", {}).get(
             "plot", False
         )
-        self.plot_effs_ones = self.config.evaluation["plot_efficiency_ones_only"].get(
+        self.plot_effs_ones = self.config.evaluation.get("plot_efficiency_ones_only", {}).get(
             "plot", False
         )
-        self.plot_parameters = self.config.evaluation["plot_parameters"].get(
+        self.plot_parameters = self.config.evaluation.get("plot_parameters", {}).get(
             "plot", False
         )
-        self.plot_parameters_split = self.config.evaluation["plot_parameters"].get(
+        self.plot_parameters_split = self.config.evaluation.get("plot_parameters", {}).get(
             "split", True
         )
-        self.plot_parameters_one = self.config.evaluation["plot_parameters"].get(
+        self.plot_parameters_one = self.config.evaluation.get("plot_parameters", {}).get(
             "in_one", False
         )
-        self.plot_pt = self.config.evaluation["plot_pt"].get("plot", False)
-        self.plot_loss = self.config.evaluation["plot_loss"].get("plot", False)
+        self.plot_pt = self.config.evaluation.get("plot_pt", {}).get("plot", False)
+        self.plot_eta = self.config.evaluation.get("plot_eta", {}).get("plot", False)
+        self.plot_loss = self.config.evaluation.get("plot_loss", {}).get("plot", False)
         
-        self.plot_conf_matrix = self.config.evaluation["plot_conf_matrix"].get(
+        self.plot_conf_matrix = self.config.evaluation.get("plot_conf_matrix", {}).get(
             "plot", False
         )
-        self.plot_preds_scatter = self.config.evaluation["plot_preds_scatter"].get(
+        self.plot_preds_per_epoch = self.config.evaluation.get("plot_preds_per_epoch", {}).get(
             "plot", False
         )
-        self.recalculate_effs = self.config.evaluation["plot_efficiency"].get(
+        self.plot_preds_scatter = self.config.evaluation.get("plot_preds_scatter", {}).get(
+            "plot", False
+        )
+        self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "recalculate", True
         )
-        self.recalculate_effs_zeros = self.config.evaluation[
-            "plot_efficiency_zeros_only"
-        ].get("recalculate", True)
-        self.recalculate_effs_ones = self.config.evaluation[
-            "plot_efficiency_ones_only"
-        ].get("recalculate", True)
-        self.recalculate_parameters = self.config.evaluation["plot_parameters"].get(
+        self.recalculate_effs_zeros = self.config.evaluation.get(
+            "plot_efficiency_zeros_only", {}
+        ).get("recalculate", True)
+        self.recalculate_effs_ones = self.config.evaluation.get(
+            "plot_efficiency_ones_only", {}
+        ).get("recalculate", True)
+        self.recalculate_parameters = self.config.evaluation.get("plot_parameters", {}).get(
             "recalculate", True
         )
-        self.recalculate_pt = self.config.evaluation["plot_pt"].get("recalculate", True)
-        self.recalculate_loss = self.config.evaluation["plot_loss"].get(
+        self.recalculate_pt = self.config.evaluation.get("plot_pt", {}).get("recalculate", True)
+        self.recalculate_eta = self.config.evaluation.get("plot_eta", {}).get("recalculate", True)
+        self.recalculate_loss = self.config.evaluation.get("plot_loss", {}).get(
             "recalculate", True
         )
-        self.recalculate_preds_scatter = self.config.evaluation["plot_preds_scatter"].get(
+        self.recalculate_preds_scatter = self.config.evaluation.get("plot_preds_scatter", {}).get(
             "recalculate", True
         )
 
@@ -289,7 +319,7 @@ class Plotter:
                 if self.plot_preds_scatter and self.recalculate_preds_scatter:
                     logger.info(f"getting predictions for a scatter plot for model model_epoch{i:03d}")
                     preds_s = preds.shape
-                    hist, _ =  np.histogram(preds, bins = nbins_scatter, range=(0.999, endpoint_scatter))
+                    hist, _ =  np.histogram(preds, bins = nbins_scatter, range=(0, endpoint_scatter))
                     preds_scatter.append(hist)
                     epochs_scatter.append(np.full((preds_s[0]*preds_s[1]), i))
                 if self.plot_effs and self.recalculate_effs:
@@ -415,18 +445,34 @@ class Plotter:
 
         if self.plot_pt:
             logger.info(f"plotting pT...")
-            self.plotting_pT_regression(
+            self.plotting_regression(
                 logger=logger,
                 model_file_numbers=self.model_file_numbers,
+                var="pT"
             )
 
+        if self.plot_eta:
+            logger.info(f"plotting eta...")
+            self.plotting_regression(
+                logger=logger,
+                model_file_numbers=self.model_file_numbers,
+                var="eta"
+            )
+        
         if self.plot_conf_matrix:
             logger.info("plotting confusion matrix...")
             self.plotting_confusion_matrix(
                 logger=logger,
                 model_file_numbers=self.model_file_numbers,
             )
-        
+
+        if self.plot_preds_per_epoch:
+            logger.info("plotting predictions per epoch...")
+            self.plotting_preds_per_epoch(
+                logger=logger,
+                model_file_numbers=self.model_file_numbers
+            )
+
         if self.plot_preds_scatter:
             logger.info(f"plotting predictions in scatter plot...")
             self.plot_scatter_vals(
@@ -434,7 +480,7 @@ class Plotter:
                 xlabel="epoch",
                 plot_name="predictions",
                 xvals=list(range(0,len(preds_scatter))),
-                yvals=np.linspace(0.999, endpoint_scatter, num=len(preds_scatter[0]), endpoint=True),
+                yvals=np.linspace(0, endpoint_scatter, num=len(preds_scatter[0]), endpoint=True),
                 zvals=preds_scatter,
                 title="predictions"
             )
@@ -471,43 +517,46 @@ class Plotter:
         effs.append(eff)
         return effs
 
-    def plotting_pT_regression(self, logger, model_file_numbers):
+    def plotting_regression(self, logger, model_file_numbers, var):
         for model_file_number in model_file_numbers:
             logger.info(f"plotting pT regression for model {model_file_number}")
+            var_str, var_numb = get_var_names(var)
             with File(
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
-                preds = f["pred_vertex_features"][:]
-                labels = f["labels_vertex_features"][:]
+                preds = f["pred_vertex_features"][:, var_numb]
+                labels = f["labels_vertex_features"][:, var_numb]
+                
             min = np.min(labels)
             max = np.max(labels)
-            plot_pT = PlotBase(
-                ylabel="predicted log($p_T$)",
-                xlabel="true log($p_T$)",
+            plot_var = PlotBase(
+                ylabel=f"predicted {var_str}",
+                xlabel=f"true {var_str}",
                 n_ratio_panels=0,
                 logy=False,
             )
-            plot_pT.initialise_figure()
-            plot_pT.axis_top.plot(labels, preds, "b.")
-            plot_pT.axis_top.plot([min, max], [min, max], "r-")
-            plot_pT = create_figure(plot=plot_pT)
-            plot_pT.savefig(
-                f"{self.plot_dir}/pT_regression_model_{model_file_number}.pdf"
+            plot_var.initialise_figure()
+            plot_var.axis_top.plot(labels, preds, "b.")
+            plot_var.axis_top.plot([min, max], [min, max], "r-")
+            plot_var = create_figure(plot=plot_var)
+            plot_var.savefig(
+                f"{self.plot_dir}/{var}_regression_model_{model_file_number}.pdf"
             )
 
-            plot_pT_diff = PlotBase(
-                ylabel="Delta log($p_T$)",
-                xlabel="predicted log($p_T$)",
+            plot_var_diff = PlotBase(
+                ylabel=f"Delta {var_str}",
+                xlabel=f"predicted {var_str}",
                 n_ratio_panels=0,
                 logy=False,
             )
+
             regs = calculate_pT_diff(pred=preds, label=labels)()
-            plot_pT_diff.initialise_figure()
-            plot_pT_diff.axis_top.plot(labels, regs, "b.")
-            plot_pT_diff.axis_top.plot([min, max], [0, 0], "r-")
-            plot_pT_diff = create_figure(plot=plot_pT_diff)
-            plot_pT_diff.savefig(
-                f"{self.plot_dir}/Delta_pT_model_{model_file_number}.pdf"
+            plot_var_diff.initialise_figure()
+            plot_var_diff.axis_top.plot(labels, regs, "b.")
+            plot_var_diff.axis_top.plot([min, max], [0, 0], "r-")
+            plot_var_diff = create_figure(plot=plot_var_diff)
+            plot_var_diff.savefig(
+                f"{self.plot_dir}/Delta_{var}_model_{model_file_number}.pdf"
             )
 
     def plotting_confusion_matrix(self, logger, model_file_numbers):
@@ -530,7 +579,7 @@ class Plotter:
                 except KeyError:
                     c1 = None
                     c2 = None
-                    
+
             preds = calculate_binary_preds(preds=preds, slope=slope, shift=shift, c1=c1, c2=c2)()
             conf_mat = confusion_matrix(labels, preds, binary=True)
             plot_confusion_matrix(
@@ -544,7 +593,32 @@ class Plotter:
             plt.tight_layout()
             plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}.pdf")
             plt.close()
-    
+
+    def plotting_preds_per_epoch(self, logger, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            logger.info(f"plotting predictions per epoch for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                preds = f["pred_edge"][:].flatten()
+                labels = f["labels_edge"][:].flatten()
+            nbins = 50
+            binrange = (0,1)
+            legend_labels = ["$b$ tracks", "non-$b$ tracks"]
+            preds_one = preds[labels == 1]
+            preds_zeros = preds[labels == 0]
+            self.plot_hist(
+                ylabel="normalised number of tracks",
+                xlabel="prediction", 
+                vals=[preds_one, preds_zeros], 
+                labels=legend_labels, 
+                colours=get_colours(len(legend_labels)),
+                title=f"predictions for epoch {model_file_number}",
+                nbins=nbins,
+                binrange=binrange,
+                plot_name=f"predicitions_split_epoch_{model_file_number}"
+            )
+
     def plot_scatter_vals(
         self, ylabel, xlabel, plot_name, xvals, yvals, zvals, title=None
     ):
@@ -565,7 +639,7 @@ class Plotter:
         fig.tight_layout()
         plt.savefig(f"{self.plot_dir}/{plot_name}.pdf")
         fig.clear()
-        
+
     def plot_vals(
         self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
     ):  
@@ -577,14 +651,11 @@ class Plotter:
                 ymin_tmp = min(val)
                 ymax = ymax_tmp if ymax < ymax_tmp else ymax
                 ymin = ymin_tmp if ymin > ymin_tmp else ymin
-                
+
         band = (ymax-ymin)/30
-        # print(ymax + band)
-        # print(ymin - band)
         plot = PlotBase(
             ylabel=ylabel, xlabel=xlabel, n_ratio_panels=0, logy=False, title=title, ymax = ymax + band, ymin = ymin - band
         )
-        print("plot vals")
         plot.initialise_figure()
         plot.initialise_plot()
         for val, label, point_style in zip(vals, labels, point_styles):
@@ -593,12 +664,37 @@ class Plotter:
         plot = create_figure(plot=plot)
         plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
 
+    def plot_hist(
+        self, ylabel, xlabel, plot_name, vals, labels, nbins, binrange, colours, title=None
+    ):
+        plot_histo = HistogramPlot(
+            n_ratio_panels=0,
+            ylabel=ylabel,
+            xlabel=xlabel,
+            logy=True,
+            leg_ncol=1,
+            figsize=(5.5, 4.5),
+            bins=np.linspace(*binrange, nbins, endpoint=True),
+            y_scale=1.5,
+            norm=True
+        )
+
+        for val, label, col in zip(vals, labels, colours):
+            plot_histo.add(
+                Histogram(
+                    val,
+                    label=label,
+                    colour=col
+                )
+            )
+        plot_histo.draw()
+        plot_histo.savefig(f"{self.plot_dir}/{plot_name}.pdf")
+
     def save_vals(self, dataset_name, data):
         with File(self.plot_file, "a") as f:
             if dataset_name in f.keys():
                 del f[dataset_name]
             f.create_dataset(dataset_name, data=data)
-
 
 class GetEpochPrediction:
     def __init__(self, config, epoch):
@@ -652,7 +748,7 @@ class GetEpochPrediction:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
-            
+
         pars = topomodel.state_dict()
         activation = config.edge_weight_network["add_activation"]
         if activation == "shifted_relu":
