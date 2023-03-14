@@ -42,6 +42,14 @@ def get_parser():
         required=True,
         help="config file giving the network parameters",
     )
+    parser.add_argument(
+        "--vars",
+        "-v",
+        type=str,
+        required=False,
+        default=None,
+        help="index of vars used for training",
+    )
 
     args = parser.parse_args()
     return args
@@ -50,6 +58,9 @@ def get_parser():
 if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
+    vars = args.vars
+    if vars is not None:
+        vars = np.array(vars.split(",")).astype(int)
     n_epochs = config.epochs
     stepsize = config.stepsize
     lr = config.lr
@@ -76,24 +87,39 @@ if __name__ == "__main__":
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
         _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
+    edge_feat_nodes = config.edge_feature_network["nodes"]
+    edge_weight_nodes = config.edge_weight_network["nodes"]
+    if vars is not None:
+        edge_feat_nodes[0] = len(vars)
+        edge_weight_nodes[0] = len(vars)
+
+    str_vars = ""
+    if vars is not None:
+        for var in vars:
+            str_vars += f"_{var}" 
+
+    training_output_folder = config.output_training
+    training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
+    training_output_folder += str_vars
+
     topomodel = TopographModel(
-        nodes_feat=config.edge_feature_network["nodes"],
-        nodes_weight=config.edge_weight_network["nodes"],
+        nodes_feat=edge_feat_nodes,
+        nodes_weight=edge_weight_nodes,
         nodes_vertex=config.vertex_network["nodes"],
         save_dir=config.output_training,
         name=config.model_name,
         activation_name=config.edge_weight_network["add_activation"],
         lr=config.lr
     )
-    
-    makedirs(f"{config.output_training}/modelfiles", exist_ok=True)
+
+    makedirs(f"{training_output_folder}/modelfiles", exist_ok=True)
     training_file = f"{config.output}/{config.training_file_name}".replace("//","/")
     val_file = f"{config.output}/{config.validation_file_name}".replace("//","/")
 
     topomodel.train()
     topograph_loss_edges = nn.BCELoss()
     topograph_loss_vertex = nn.MSELoss()
-    
+
     njets = getattr(config, "njets", -1)
     njets = -1 if njets is None else njets
     tracks_dataset = IterableFlavourTaggingDataset(
@@ -102,11 +128,12 @@ if __name__ == "__main__":
         file_name = training_file,
         batch_size = 1024,
         drop_last = True,
-        buffer_size = 10_000,
-        njets = getattr(config, "njets", -1)
+        buffer_size = 100_000,
+        njets = getattr(config, "njets", -1),
+        vars=vars
     )
     tracks_loader = DataLoader(tracks_dataset)
-    
+
     njets_val = getattr(config, "njets_val", -1)
     njets_val = -1 if njets_val is None else njets_val
     valid_dataset = IterableFlavourTaggingDataset(
@@ -116,20 +143,21 @@ if __name__ == "__main__":
         batch_size = 1024,
         drop_last = True,
         buffer_size = 100_000,
-        njets = njets_val
+        njets = njets_val,
+        vars=vars
     )
     valid_loader = DataLoader(valid_dataset)
 
-    makedirs(f"{config.output_training}/checkpoints".replace("//","/"), exist_ok=True)
+    makedirs(f"{training_output_folder}/checkpoints", exist_ok=True)
     checkpoint = ModelCheckpoint(
         monitor="valid/total",
         filename="checkpoint_train_{epoch}",
-        dirpath=f"{config.output_training}/checkpoints",
+        dirpath=f"{training_output_folder}/checkpoints",
         save_top_k=-1
     )
     logger = WandbLogger(
         name = config.model_name,
-        save_dir=config.output_training,
+        save_dir=training_output_folder,
         project="pytorch_runs",
     )
     try:
