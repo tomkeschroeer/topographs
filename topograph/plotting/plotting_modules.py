@@ -1,5 +1,5 @@
 from glob import glob
-from os import makedirs
+from os import makedirs, remove, rmdir
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -152,12 +152,12 @@ def get_predictions_and_labels(model, dataset, full_model=True):
     return preds_e, preds_v, labels_e, labels_v, masks
 
 class Plotter:
-    def __init__(self, config, cut_val=None, vars=None):
+    def __init__(self, config, cut_val=None, vars=None, epochsrange=None):
         self.config = config
         self.cut_val = cut_val
         if cut_val is not None:
             self.cut_val = cut_val if cut_val <= 1 else cut_val/100
-        logger = get_logger()
+        self.logger = get_logger()
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
@@ -168,11 +168,13 @@ class Plotter:
             for var in vars:
                 str_vars += f"_{var}"
 
-        training_output_folder = config.output_training
-        training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
-        training_output_folder += str_vars
+        self.training_output_folder = config.output_training
+        self.training_output_folder = self.training_output_folder [:-1] if self.training_output_folder[-1] == "/" else self.training_output_folder
+        self.training_output_folder += str_vars
+        
+        self.epochsrange = epochsrange
 
-        self.plot_file = f"{training_output_folder}/{datafilename}"
+        self.plot_file = f"{self.training_output_folder}/{datafilename}"
         self.add_activation = self.config.edge_weight_network.get(
             "add_activation", None
         )
@@ -207,29 +209,29 @@ class Plotter:
             "plot", False
         )
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
-            "recalculate", True
+            "recalculate", False
         )
         self.recalculate_effs_zeros = self.config.evaluation.get(
             "plot_efficiency_zeros_only", {}
-        ).get("recalculate", True)
+        ).get("recalculate", False)
         self.recalculate_effs_ones = self.config.evaluation.get(
             "plot_efficiency_ones_only", {}
-        ).get("recalculate", True)
+        ).get("recalculate", False)
         self.recalculate_parameters = self.config.evaluation.get("plot_parameters", {}).get(
-            "recalculate", True
+            "recalculate", False
         )
-        self.recalculate_pt = self.config.evaluation.get("plot_pt", {}).get("recalculate", True)
+        self.recalculate_pt = self.config.evaluation.get("plot_pt", {}).get("recalculate", False)
         self.recalculate_loss = self.config.evaluation.get("plot_loss", {}).get(
-            "recalculate", True
+            "recalculate", False
         )
         self.recalculate_preds_scatter = self.config.evaluation.get("plot_preds_scatter", {}).get(
-            "recalculate", True
+            "recalculate", False
         )
 
-        self.plot_dir = f"{training_output_folder}/plots"
+        self.plot_dir = f"{self.training_output_folder}/plots"
+        self.temporary_files = f"{self.training_output_folder}/temporary_files"
+        self.model_pred_folder = f"{self.training_output_folder}/model_predictions"
         makedirs(self.plot_dir, exist_ok=True)
-
-        self.model_pred_folder = f"{training_output_folder}/model_predictions"
 
         self.metadata_dict = {}
         with File(self.test_file, "r") as f:
@@ -241,10 +243,12 @@ class Plotter:
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
+            
+        self.full_effs, self.full_effs_ones, self.full_effs_zeros = [],[],[]
+        self.params, self.endpoint_scatter, self.startpoint_scatter = [],[],[]
+        self.n_modelfiles = 0
 
-        effs = []
-        effs_ones = []
-        effs_zeros = []
+    def Run(self):
         preds_scatter = []
         epochs_scatter = []
         params = []
@@ -252,61 +256,30 @@ class Plotter:
         nbins_scatter = 100
         endpoint_scatter = 1.0
         startpoint_scatter = 0.0
+        
+        self.get_all_values()
+        self.n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
+        
+        if self.check_if_recalculate():
+            epochsrange = range(self.n_modelfiles) if self.epochsrange is None else self.epochsrange
+            makedirs(self.temporary_files, exist_ok=True)
 
-        if self.recalculate_effs is False and self.plot_effs:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    effs = f["efficiency"][:]
-            except (KeyError, FileNotFoundError) as er:
-                logger.warn("No efficiencies found in file or file not found. Recalculate instead")
-                self.recalculate_effs = True
-        if self.recalculate_effs_ones is False and self.plot_effs_ones:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    effs_ones = f["efficiency_ones_only"][:]
-            except (KeyError, FileNotFoundError) as er:
-                logger.warn("No efficiencies (ones only) found in file or file not found. Recalculate instead")
-                self.recalculate_effs_ones = True
-        if self.recalculate_effs_zeros is False and self.plot_effs_zeros:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    effs_zeros = f["efficiency_zeros_only"][:]
-            except (KeyError, FileNotFoundError) as er:
-                logger.warn("No efficiencies (zeros only) found in file or file not found. Recalculate instead")
-                self.recalculate_effs_zeros = True
-        if self.recalculate_parameters is False and self.plot_parameters:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    params = f["parameters"][:]
-            except (KeyError, FileNotFoundError) as er:
-                logger.warn("No parameters found in file or file not found. Recalculate instead")
-                self.recalculate_parameters = True
-        if self.recalculate_loss is False and self.plot_loss:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    loss = f["loss"][:]
-            except (KeyError, FileNotFoundError) as er:
-                logger.warn("No loss found in file or file not found. Recalculate instead")
-                self.recalculate_loss = True
-        if self.recalculate_preds_scatter is False and self.plot_preds_scatter:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    preds_scatter = f["preds_scatter"][:]
-                    endpoint_scatter = f["endpoint_scatter"][()]
-                    startpoint_scatter = f["startpoint_scatter"][()]
-            except (KeyError, FileNotFoundError) as er:
-                logger.warn("No loss found in file or file not found. Recalculate instead")
-                self.recalculate_loss = True
-        if (
-            (self.plot_effs and self.recalculate_effs)
-            or (self.plot_effs_ones and self.recalculate_effs_zeros)
-            or (self.plot_effs_zeros and self.recalculate_effs_ones)
-            or (self.plot_parameters and self.recalculate_parameters)
-            or (self.plot_loss and self.recalculate_loss)
-            or (self.plot_preds_scatter and self.recalculate_preds_scatter)
-        ):
-            n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
-            for i in range(0,n_modelfiles):
+            if self.recalculate_effs and self.epochsrange is not None:
+                effs = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
+                with File(f"{self.temporary_files}/temporary_efficiencies_{self.epochsrange[0]}_{self.epochsrange[1]}.h5", "w") as f:
+                    f.create_dataset("efficiency", data=effs)
+
+            if self.recalculate_effs_ones and self.epochsrange is not None:
+                effs_ones = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
+                with File(f"{self.temporary_files}/temporary_effs_ones_{self.epochsrange[0]}_{self.epochsrange[1]}.h5", "w") as f:
+                    f.create_dataset("efficiency_ones", data=effs)
+                    
+            if self.recalculate_effs_zeros and self.epochsrange is not None:
+                effs_zeros = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
+                with File(f"{self.temporary_files}/temporary_effs_zeros_{self.epochsrange[0]}_{self.epochsrange[1]}.h5", "w") as f:
+                    f.create_dataset("efficiency_zeros", data=effs)
+
+            for i in epochsrange:
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{i:03d}.h5", "r"
                 ) as model_data:
@@ -320,13 +293,14 @@ class Plotter:
                         c1 = model_data["c1"][()]
                         c2 = model_data["c2"][()]
                 if self.plot_preds_scatter and self.recalculate_preds_scatter:
-                    logger.info(f"getting predictions for a scatter plot for model model_epoch{i:03d}")
+                    self.logger.info(f"getting predictions for a scatter plot for model model_epoch{i:03d}")
                     preds_s = preds.shape
                     hist, _ =  np.histogram(preds, bins = nbins_scatter, range=(startpoint_scatter, endpoint_scatter))
                     preds_scatter.append(hist)
                     epochs_scatter.append(np.full((preds_s[0]*preds_s[1]), i))
-                if self.plot_effs and self.recalculate_effs:
-                    logger.info(f"getting efficiency for model model_epoch{i:03d}")
+
+                if self.recalculate_effs:
+                    self.logger.info(f"getting efficiency for model model_epoch{i:03d}")
                     effs = self.get_efficiency(
                         preds=preds,
                         labels=labels,
@@ -335,9 +309,11 @@ class Plotter:
                         shift=shift,
                         c1=c1,
                         c2=c2,
+                        pos=i
                     )
-                if self.plot_effs_ones and self.recalculate_effs_ones:
-                    logger.info(
+
+                if self.recalculate_effs_ones:
+                    self.logger.info(
                         f"getting efficiency, ones only, for model model_epoch{i:03d}"
                     )
                     effs_ones = self.get_efficiency(
@@ -348,10 +324,11 @@ class Plotter:
                         shift=shift,
                         c1=c1,
                         c2=c2,
+                        pos=i,
                         ones_only=True,
                     )
-                if self.plot_effs_zeros and self.recalculate_effs_zeros:
-                    logger.info(
+                if self.recalculate_effs_zeros:
+                    self.logger.info(
                         f"getting efficiency, zeros only, for model model_epoch{i:03d}"
                     )
                     effs_zeros = self.get_efficiency(
@@ -362,56 +339,69 @@ class Plotter:
                         shift=shift,
                         c1=c1,
                         c2=c2,
+                        pos=i,
                         zeros_only=True,
                     )
                 if self.plot_parameters and self.recalculate_parameters:
-                    logger.info(f"getting parameters for model model_epoch{i:03d}")
+                    self.logger.info(f"getting parameters for model model_epoch{i:03d}")
                     params.append([slope, shift])
                 if self.plot_loss and self.recalculate_loss:
-                    logger.info(f"getting loss for model model_epoch{i:03d}")
+                    self.logger.info(f"getting loss for model model_epoch{i:03d}")
                     # loss = self.load_loss()
 
+        if self.recalculate_effs and self.epochsrange is not None:
+            with File(f"{self.temporary_files}/temporary_efficiencies_{epochsrange[0]}_{epochsrange[-1]}.h5", "w") as f:
+                f.create_dataset("efficiency", data=effs)
+
+        if self.recalculate_effs_ones and self.epochsrange is not None:
+            with File(f"{self.temporary_files}/temporary_effs_ones_{epochsrange[0]}_{epochsrange[-1]}.h5", "w") as f:
+                f.create_dataset("efficiency_ones", data=effs_ones)
+
+        if self.recalculate_effs_zeros and self.epochsrange is not None:
+            with File(f"{self.temporary_files}/temporary_effs_zeros_{epochsrange[0]}_{epochsrange[-1]}.h5", "w") as f:
+                f.create_dataset("efficiency_zeros", data=effs_zeros)
+            
         if self.plot_effs:
-            logger.info(f"plotting efficiencies...")
-            self.plot_vals(
-                ylabel="efficiency",
-                xlabel="epoch",
-                plot_name="eff_per_epoch" if self.cut_val is None else f"eff_per_epoch_cutval={self.cut_val}",
-                vals=[effs],
-                labels=[""],
-                point_styles=get_point_styles(1),
-            )
-            if self.recalculate_effs:
-                self.save_vals(dataset_name="efficiency", data=effs)
+            self.logger.info(f"plotting efficiencies...")
+            effs_full = self.get_data(data_name="efficiency", file_name="temporary_efficiencies")
+            if effs_full is not None:
+                self.plot_vals(
+                    ylabel="efficiency",
+                    xlabel="epoch",
+                    plot_name="eff_per_epoch" if self.cut_val is None else f"eff_per_epoch_cutval={self.cut_val}",
+                    vals=[effs_full],
+                    labels=[""],
+                    point_styles=get_point_styles(1),
+                )
 
         if self.plot_effs_ones:
-            logger.info(f"plotting efficiencies, ones only...")
-            self.plot_vals(
-                ylabel="efficiency",
-                xlabel="epoch",
-                plot_name="eff_per_epoch_ones" if self.cut_val is None else f"eff_per_epoch_ones_cutval={self.cut_val}",
-                vals=[effs_ones],
-                labels=[""],
-                point_styles=get_point_styles(1),
-            )
-            if self.recalculate_effs_ones:
-                self.save_vals(dataset_name="efficiency_ones_only", data=effs_ones)
+            self.logger.info(f"plotting efficiencies, ones only...")
+            effs_full_ones = self.get_data(data_name="efficiency_ones", file_name="temporary_effs_ones")
+            if effs_full_ones is not None:
+                self.plot_vals(
+                    ylabel="efficiency",
+                    xlabel="epoch",
+                    plot_name="eff_per_epoch_ones" if self.cut_val is None else f"eff_per_epoch_ones_cutval={self.cut_val}",
+                    vals=[effs_full_ones],
+                    labels=[""],
+                    point_styles=get_point_styles(1),
+                )
 
         if self.plot_effs_zeros:
-            logger.info(f"plotting efficiencies, zeros only...")
-            self.plot_vals(
-                ylabel="efficiency",
-                xlabel="epoch",
-                plot_name="eff_per_epoch_zeros" if self.cut_val is None else f"eff_per_epoch_zeros_cutval={self.cut_val}",
-                vals=[effs_zeros],
-                labels=[""],
-                point_styles=get_point_styles(1),
-            )
-            if self.recalculate_effs_zeros:
-                self.save_vals(dataset_name="efficiency_zeros_only", data=effs_zeros)
+            self.logger.info(f"plotting efficiencies, zeros only...")
+            effs_full_zeros = self.get_data(data_name="efficiency_zeros", file_name="temporary_effs_zeros")
+            if effs_full_zeros is not None:
+                self.plot_vals(
+                    ylabel="efficiency",
+                    xlabel="epoch",
+                    plot_name="eff_per_epoch_zeros" if self.cut_val is None else f"eff_per_epoch_zeros_cutval={self.cut_val}",
+                    vals=[effs_full_zeros],
+                    labels=[""],
+                    point_styles=get_point_styles(1),
+                )
 
         if self.plot_parameters:
-            logger.info(f"plotting parameters...")
+            self.logger.info(f"plotting parameters...")
             if config.edge_weight_network["add_activation"] == "shifted_relu":
                 labels = ["slope", "shift"]
             elif config.edge_weight_network["add_activation"] == "sigmoid":
@@ -430,7 +420,7 @@ class Plotter:
                         point_styles=get_point_styles(len(labels)),
                     )
                 if self.plot_parameters_split:
-                    logger.info(f"plotting parameters in split plots...")
+                    self.logger.info(f"plotting parameters in split plots...")
                     for param, label, point_style in zip(
                         params, labels, get_point_styles(len(labels))
                     ):
@@ -447,28 +437,25 @@ class Plotter:
                     self.save_vals(dataset_name="parameters", data=params)
 
         if self.plot_pt:
-            logger.info(f"plotting pT...")
+            self.logger.info(f"plotting pT...")
             self.plotting_pT_regression(
-                logger=logger,
                 model_file_numbers=self.model_file_numbers,
             )
 
         if self.plot_conf_matrix:
-            logger.info("plotting confusion matrix...")
+            self.logger.info("plotting confusion matrix...")
             self.plotting_confusion_matrix(
-                logger=logger,
                 model_file_numbers=self.model_file_numbers,
             )
 
         if self.plot_preds_per_epoch:
-            logger.info("plotting predictions per epoch...")
+            self.logger.info("plotting predictions per epoch...")
             self.plotting_preds_per_epoch(
-                logger=logger,
                 model_file_numbers=self.model_file_numbers
             )
 
         if self.plot_preds_scatter:
-            logger.info(f"plotting predictions in scatter plot...")
+            self.logger.info(f"plotting predictions in scatter plot...")
             self.plot_scatter_vals(
                 ylabel="predicition", 
                 xlabel="epoch",
@@ -482,12 +469,96 @@ class Plotter:
                 self.save_vals(dataset_name="preds_scatter", data=preds_scatter)
                 self.save_vals(dataset_name="endpoint_scatter", data=endpoint_scatter)
                 self.save_vals(dataset_name="startpoint_scatter", data=startpoint_scatter)
+                
+    def get_all_values(self):
+        if self.recalculate_effs is False and self.plot_effs:
+            try:
+                with File(self.plot_file, "r+") as f:
+                    self.full_effs = f["efficiency"][:]
+            except (KeyError, FileNotFoundError) as er:
+                self.logger.warn("No efficiencies found in file or file not found. Recalculate instead")
+                # self.recalculate_effs = True
+        if self.recalculate_effs_ones is False and self.plot_effs_ones:
+            try:
+                with File(self.plot_file, "r+") as f:
+                    self.full_effs_ones = f["efficiency_ones_only"][:]
+            except (KeyError, FileNotFoundError) as er:
+                self.logger.warn("No efficiencies (ones only) found in file or file not found. Recalculate instead")
+                #  self.recalculate_effs_ones = True
+        if self.recalculate_effs_zeros is False and self.plot_effs_zeros:
+            try:
+                with File(self.plot_file, "r+") as f:
+                    self.full_effs_zeros = f["efficiency_zeros_only"][:]
+            except (KeyError, FileNotFoundError) as er:
+                self.logger.warn("No efficiencies (zeros only) found in file or file not found. Recalculate instead")
+                # self.recalculate_effs_zeros = True
+        if self.recalculate_parameters is False and self.plot_parameters:
+            try:
+                with File(self.plot_file, "r+") as f:
+                    self.params = f["parameters"][:]
+            except (KeyError, FileNotFoundError) as er:
+                self.logger.warn("No parameters found in file or file not found. Recalculate instead")
+                self.recalculate_parameters = True
+        if self.recalculate_loss is False and self.plot_loss:
+            try:
+                with File(self.plot_file, "r+") as f:
+                    self.loss = f["loss"][:]
+            except (KeyError, FileNotFoundError) as er:
+                self.logger.warn("No loss found in file or file not found. Recalculate instead")
+                self.recalculate_loss = True
+        if self.recalculate_preds_scatter is False and self.plot_preds_scatter:
+            try:
+                with File(self.plot_file, "r+") as f:
+                    self.preds_scatter = f["preds_scatter"][:]
+                    self.endpoint_scatter = f["endpoint_scatter"][()]
+                    self.startpoint_scatter = f["startpoint_scatter"][()]
+            except (KeyError, FileNotFoundError) as er:
+                self.logger.warn("No loss found in file or file not found. Recalculate instead")
+                self.recalculate_loss = True
+                
+    def check_if_recalculate(self):
+        return (
+            (self.recalculate_effs and self.epochsrange is not None)
+            or (self.recalculate_effs_zeros and self.epochsrange is not None)
+            or (self.recalculate_effs_ones and self.epochsrange is not None)
+            or (self.recalculate_parameters)
+            or (self.recalculate_loss)
+            or ( self.recalculate_preds_scatter)
+        )
+    
+    def get_data(self, data_name, file_name):
+        # try:
+        temporary_file_names = glob(f"{self.temporary_files}/{file_name}*.h5")
+        if len(temporary_file_names) != 0:
+            full_effs = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
+            for file in temporary_file_names:
+                with File(file, "a") as f:
+                    effs = f[data_name][:]
+                    ind = (effs != -1)
+                    full_effs[ind] = f[data_name][:][ind]
+            if -1 not in full_effs:
+                print(full_effs)
+                for file in temporary_file_names:
+                    print(file)
+                    remove(file)
+                # rmdir(self.temporary_files)
+                self.save_vals(dataset_name=data_name, data=full_effs)
+            else:
+                full_effs = None
+                self.logger.warning("No data found, no plotting")
+        else:
+            self.logger.warning("No temporary files found, reusing plotting file.")
+            with File(self.plot_file, "r+") as f:
+                full_effs = f[data_name][:]
+        print(full_effs)
+        return full_effs
 
     def get_efficiency(
         self,
         preds,
         labels,
         effs,
+        pos,
         slope=None,
         shift=None,
         c1=None,
@@ -509,12 +580,12 @@ class Plotter:
             ones_only=ones_only,
             cut_val=self.cut_val
         )()
-        effs.append(eff)
+        effs[pos] = eff
         return effs
 
-    def plotting_pT_regression(self, logger, model_file_numbers):
+    def plotting_pT_regression(self, model_file_numbers):
         for model_file_number in model_file_numbers:
-            logger.info(f"plotting pT regression for model {model_file_number}")
+            self.logger.info(f"plotting pT regression for model {model_file_number}")
             with File(
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
@@ -551,9 +622,9 @@ class Plotter:
                 f"{self.plot_dir}/Delta_pT_model_{model_file_number}.pdf"
             )
 
-    def plotting_confusion_matrix(self, logger, model_file_numbers):
+    def plotting_confusion_matrix(self, model_file_numbers):
         for model_file_number in model_file_numbers:
-            logger.info(f"plotting confusion matrix for model {model_file_number}")
+            self.logger.info(f"plotting confusion matrix for model {model_file_number}")
             with File(
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
@@ -586,9 +657,9 @@ class Plotter:
             plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}.pdf")
             plt.close()
             
-    def plotting_preds_per_epoch(self, logger, model_file_numbers):
+    def plotting_preds_per_epoch(self, model_file_numbers):
         for model_file_number in model_file_numbers:
-            logger.info(f"plotting predictions per epoch for model {model_file_number}")
+            self.logger.info(f"plotting predictions per epoch for model {model_file_number}")
             with File(
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
@@ -721,9 +792,9 @@ class GetEpochPrediction:
             for var in vars:
                 str_vars += f"_{var}"
                 
-        training_output_folder = config.output_training
-        training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
-        training_output_folder += str_vars
+        self.training_output_folder = config.output_training
+        self.training_output_folder = self.training_output_folder [:-1] if self.training_output_folder[-1] == "/" else self.training_output_folder
+        self.training_output_folder += str_vars
         
         edge_feat_nodes = self.config.edge_feature_network["nodes"]
         edge_weight_nodes = self.config.edge_weight_network["nodes"]
@@ -733,7 +804,7 @@ class GetEpochPrediction:
         
         # layer, model_sub, model 
         topomodel = load_topomodel(
-            modelfile=f"{training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
+            modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
             nodes_feat=edge_feat_nodes,
             nodes_weight=edge_weight_nodes,
             nodes_vertex=self.config.vertex_network["nodes"],
@@ -741,7 +812,7 @@ class GetEpochPrediction:
         )
 
         # loss = load_loss(
-        #     modelfile=f"{training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
+        #     modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
         #     nodes_feat=self.config.edge_feature_network["nodes"],
         #     nodes_weight=self.config.edge_weight_network["nodes"],
         #     nodes_vertex=self.config.vertex_network["nodes"],
@@ -769,7 +840,7 @@ class GetEpochPrediction:
             c2 = pars[f"add_activation.c1"]
         preds_e, preds_v, labels_e, labels_v, mask = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
 
-        self.output_folder = f"{training_output_folder}/model_predictions".replace(
+        self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
             "//", "/"
         )
         makedirs(self.output_folder, exist_ok=True)
