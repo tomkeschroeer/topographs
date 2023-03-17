@@ -1,5 +1,6 @@
 from glob import glob
 from os import makedirs, remove, rmdir
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -296,12 +297,12 @@ class Plotter:
             if self.recalculate_effs_ones and self.epochsrange is not None:
                 effs_ones = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
                 with File(f"{self.temporary_files}/temporary_effs_ones_{self.epochsrange[0]}_{self.epochsrange[-1]}.h5", "w") as f:
-                    f.create_dataset("efficiency_ones", data=effs)
+                    f.create_dataset("efficiency_ones", data=effs_ones)
                     
             if self.recalculate_effs_zeros and self.epochsrange is not None:
                 effs_zeros = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
                 with File(f"{self.temporary_files}/temporary_effs_zeros_{self.epochsrange[0]}_{self.epochsrange[-1]}.h5", "w") as f:
-                    f.create_dataset("efficiency_zeros", data=effs)
+                    f.create_dataset("efficiency_zeros", data=effs_zeros)
 
             for i in epochsrange:
                 with File(
@@ -365,7 +366,7 @@ class Plotter:
                         c2=c2,
                         pos=i,
                         zeros_only=True,
-                    )
+                     )
                 if self.plot_parameters and self.recalculate_parameters:
                     self.logger.info(f"getting parameters for model model_epoch{i:03d}")
                     params.append([slope, shift])
