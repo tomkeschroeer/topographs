@@ -256,6 +256,21 @@ class Plotter:
         self.full_effs, self.full_effs_ones, self.full_effs_zeros = [],[],[]
         self.params, self.endpoint_scatter, self.startpoint_scatter = [],[],[]
         self.n_modelfiles = 0
+        
+        if self.epochsrange is not None:
+            self.plot_pt = False
+            self.plot_eta = False
+            self.plot_loss = False
+            self.plot_conf_matrix = False
+            self.plot_preds_per_epoch = False
+            self.plot_parameters_one = False
+            self.plot_parameters_split = False
+            self.logger.warning("setting all plotting to False expept for efficiency plots.")
+        else:
+            self.recalculate_effs = False
+            self.recalculate_effs_zeros = False
+            self.recalculate_effs_ones = False
+            self.logger.warning("No epoch range given, too time consuming calculating efficiencies. Set recalulation of efficiencies to False.")
 
     def Run(self):
         preds_scatter = []
@@ -354,6 +369,7 @@ class Plotter:
                 if self.plot_parameters and self.recalculate_parameters:
                     self.logger.info(f"getting parameters for model model_epoch{i:03d}")
                     params.append([slope, shift])
+
                 if self.plot_loss and self.recalculate_loss:
                     self.logger.info(f"getting loss for model model_epoch{i:03d}")
                     # loss = self.load_loss()
@@ -500,14 +516,12 @@ class Plotter:
                     self.full_effs_ones = f["efficiency_ones_only"][:]
             except (KeyError, FileNotFoundError) as er:
                 self.logger.warn("No efficiencies (ones only) found in file or file not found. Check in temporary file")
-                #  self.recalculate_effs_ones = True
         if self.recalculate_effs_zeros is False and self.plot_effs_zeros:
             try:
                 with File(self.plot_file, "r+") as f:
                     self.full_effs_zeros = f["efficiency_zeros_only"][:]
             except (KeyError, FileNotFoundError) as er:
                 self.logger.warn("No efficiencies (zeros only) found in file or file not found. Check in temporary file")
-                # self.recalculate_effs_zeros = True
         if self.recalculate_parameters is False and self.plot_parameters:
             try:
                 with File(self.plot_file, "r+") as f:
@@ -534,9 +548,9 @@ class Plotter:
                 
     def check_if_recalculate(self):
         return (
-            (self.recalculate_effs and self.epochsrange is not None)
-            or (self.recalculate_effs_zeros and self.epochsrange is not None)
-            or (self.recalculate_effs_ones and self.epochsrange is not None)
+            (self.recalculate_effs)
+            or (self.recalculate_effs_zeros)
+            or (self.recalculate_effs_ones)
             or (self.recalculate_parameters)
             or (self.recalculate_loss)
             or ( self.recalculate_preds_scatter)
