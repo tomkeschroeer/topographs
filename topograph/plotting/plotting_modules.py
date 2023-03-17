@@ -36,7 +36,7 @@ def create_figure(plot):
 def get_var_names(var):
     vardict = {
         "pT": "log($p_T$)",
-        "eta": "log($\eta$)"
+        "eta": "$\eta$"
     }
     
     return vardict[var], list(vardict.keys()).index(var)
@@ -141,7 +141,7 @@ def get_predictions_and_labels(model, dataset, full_model=True):
         output = model(inputs, mask)
         output_v = output[0].detach().numpy()
         output_e = output[1].detach().numpy()
-        preds_v.append(*output_v)
+        preds_v.append(output_v)
         preds_e.append(output_e)
         labels_e.append(labels_edge.detach().numpy())
         labels_v.append(labels_vertex.detach().numpy())
@@ -151,10 +151,10 @@ def get_predictions_and_labels(model, dataset, full_model=True):
     shape_preds_e = np.array(preds_e).shape
     shape_preds_v = np.array(preds_v).shape
     shape_masks = np.array(masks).shape
-    preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1],*shape_preds_e[2:])
-    preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1],*shape_preds_v[2:])
-    labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1],*shape_labels_e[2:])
-    labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1],*shape_labels_v[2:])
+    preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1]*shape_preds_e[2],*shape_preds_e[3:])
+    preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1]*shape_preds_v[2],*shape_preds_v[3:])
+    labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1]*shape_labels_e[2],*shape_labels_e[3:])
+    labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1]*shape_labels_v[2],*shape_labels_v[3:])
     masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
     return preds_e, preds_v, labels_e, labels_v, masks
 
@@ -275,17 +275,17 @@ class Plotter:
 
             if self.recalculate_effs and self.epochsrange is not None:
                 effs = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
-                with File(f"{self.temporary_files}/temporary_efficiencies_{self.epochsrange[0]}_{self.epochsrange[1]}.h5", "w") as f:
+                with File(f"{self.temporary_files}/temporary_efficiencies_{self.epochsrange[0]}_{self.epochsrange[-1]}.h5", "w") as f:
                     f.create_dataset("efficiency", data=effs)
 
             if self.recalculate_effs_ones and self.epochsrange is not None:
                 effs_ones = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
-                with File(f"{self.temporary_files}/temporary_effs_ones_{self.epochsrange[0]}_{self.epochsrange[1]}.h5", "w") as f:
+                with File(f"{self.temporary_files}/temporary_effs_ones_{self.epochsrange[0]}_{self.epochsrange[-1]}.h5", "w") as f:
                     f.create_dataset("efficiency_ones", data=effs)
                     
             if self.recalculate_effs_zeros and self.epochsrange is not None:
                 effs_zeros = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
-                with File(f"{self.temporary_files}/temporary_effs_zeros_{self.epochsrange[0]}_{self.epochsrange[1]}.h5", "w") as f:
+                with File(f"{self.temporary_files}/temporary_effs_zeros_{self.epochsrange[0]}_{self.epochsrange[-1]}.h5", "w") as f:
                     f.create_dataset("efficiency_zeros", data=effs)
 
             for i in epochsrange:
@@ -411,11 +411,11 @@ class Plotter:
 
         if self.plot_parameters:
             self.logger.info(f"plotting parameters...")
-            if config.edge_weight_network["add_activation"] == "shifted_relu":
+            if self.config.edge_weight_network["add_activation"] == "shifted_relu":
                 labels = ["slope", "shift"]
-            elif config.edge_weight_network["add_activation"] == "sigmoid":
+            elif self.config.edge_weight_network["add_activation"] == "sigmoid":
                 labels = ["c1", "c2"]
-            elif config.edge_weight_network["add_activation"] == "softplus":
+            elif self.config.edge_weight_network["add_activation"] == "softplus":
                 labels = None
             if labels is not None:
                 params = np.array(params).T
@@ -447,15 +447,14 @@ class Plotter:
 
         if self.plot_pt:
             self.logger.info(f"plotting pT...")
-            self.plotting_pT_regression(
+            self.plotting_regression(
                 model_file_numbers=self.model_file_numbers,
                 var="pT"
             )
 
         if self.plot_eta:
-            logger.info(f"plotting eta...")
+            self.logger.info(f"plotting eta...")
             self.plotting_regression(
-                logger=logger,
                 model_file_numbers=self.model_file_numbers,
                 var="eta"
             )
@@ -494,21 +493,20 @@ class Plotter:
                 with File(self.plot_file, "r+") as f:
                     self.full_effs = f["efficiency"][:]
             except (KeyError, FileNotFoundError) as er:
-                self.logger.warn("No efficiencies found in file or file not found. Recalculate instead")
-                # self.recalculate_effs = True
+                self.logger.warn("No efficiencies found in file or file not found. Check in temporary file")
         if self.recalculate_effs_ones is False and self.plot_effs_ones:
             try:
                 with File(self.plot_file, "r+") as f:
                     self.full_effs_ones = f["efficiency_ones_only"][:]
             except (KeyError, FileNotFoundError) as er:
-                self.logger.warn("No efficiencies (ones only) found in file or file not found. Recalculate instead")
+                self.logger.warn("No efficiencies (ones only) found in file or file not found. Check in temporary file")
                 #  self.recalculate_effs_ones = True
         if self.recalculate_effs_zeros is False and self.plot_effs_zeros:
             try:
                 with File(self.plot_file, "r+") as f:
                     self.full_effs_zeros = f["efficiency_zeros_only"][:]
             except (KeyError, FileNotFoundError) as er:
-                self.logger.warn("No efficiencies (zeros only) found in file or file not found. Recalculate instead")
+                self.logger.warn("No efficiencies (zeros only) found in file or file not found. Check in temporary file")
                 # self.recalculate_effs_zeros = True
         if self.recalculate_parameters is False and self.plot_parameters:
             try:
@@ -545,19 +543,19 @@ class Plotter:
         )
     
     def get_data(self, data_name, file_name):
-        # try:
         temporary_file_names = glob(f"{self.temporary_files}/{file_name}*.h5")
         if len(temporary_file_names) != 0:
             full_effs = np.full(shape=(self.n_modelfiles),fill_value=-1.0, dtype=float)
             for file in temporary_file_names:
                 with File(file, "a") as f:
-                    effs = f[data_name][:]
+                    try:
+                        effs = f[data_name][:]
+                    except KeyError:
+                        break
                     ind = (effs != -1)
-                    full_effs[ind] = f[data_name][:][ind]
+                    full_effs[ind] = f[data_name][ind]
             if -1 not in full_effs:
-                print(full_effs)
                 for file in temporary_file_names:
-                    print(file)
                     remove(file)
                 # rmdir(self.temporary_files)
                 self.save_vals(dataset_name=data_name, data=full_effs)
@@ -568,7 +566,6 @@ class Plotter:
             self.logger.warning("No temporary files found, reusing plotting file.")
             with File(self.plot_file, "r+") as f:
                 full_effs = f[data_name][:]
-        print(full_effs)
         return full_effs
 
     def get_efficiency(
@@ -601,17 +598,19 @@ class Plotter:
         effs[pos] = eff
         return effs
 
-    def plotting_pT_regression(self, model_file_numbers):
+    def plotting_regression(self, model_file_numbers, var):
         for model_file_number in model_file_numbers:
             self.logger.info(f"plotting pT regression for model {model_file_number}")
+            var_str, var_numb = get_var_names(var)
             with File(
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
                 preds = f["pred_vertex_features"][:, var_numb]
                 labels = f["labels_vertex_features"][:, var_numb]
-                
-            min = np.min(labels)
-            max = np.max(labels)
+            print(labels)
+            var_min = np.min(labels[~np.isnan(labels)])
+            var_max = np.max(labels[~np.isnan(labels)])
+            print(var_min, var_max)
             plot_var = PlotBase(
                 ylabel=f"predicted {var_str}",
                 xlabel=f"true {var_str}",
@@ -620,7 +619,7 @@ class Plotter:
             )
             plot_var.initialise_figure()
             plot_var.axis_top.plot(labels, preds, "b.")
-            plot_var.axis_top.plot([min, max], [min, max], "r-")
+            plot_var.axis_top.plot([var_min, var_max], [var_min, var_max], "r-")
             plot_var = create_figure(plot=plot_var)
             plot_var.savefig(
                 f"{self.plot_dir}/{var}_regression_model_{model_file_number}.pdf"
@@ -636,7 +635,7 @@ class Plotter:
             regs = calculate_pT_diff(pred=preds, label=labels)()
             plot_var_diff.initialise_figure()
             plot_var_diff.axis_top.plot(labels, regs, "b.")
-            plot_var_diff.axis_top.plot([min, max], [0, 0], "r-")
+            plot_var_diff.axis_top.plot([var_min, var_max], [0, 0], "r-")
             plot_var_diff = create_figure(plot=plot_var_diff)
             plot_var_diff.savefig(
                 f"{self.plot_dir}/Delta_{var}_model_{model_file_number}.pdf"
@@ -800,10 +799,10 @@ class GetEpochPrediction:
         )
         self.dataset_loader = DataLoader(
             self.dataset,
-            batch_size=None,
-            drop_last=False,
-            shuffle=False,
-            num_workers=0,
+            # batch_size=None,
+            # drop_last=False,
+            # shuffle=False,
+            # num_workers=0,
         )
         
         str_vars = ""

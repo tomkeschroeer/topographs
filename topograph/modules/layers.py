@@ -20,9 +20,13 @@ from torch import(
     reshape,
     tensor,
     Tensor,
-    log
+    log,
+    stack,
+    from_numpy,
+    sum,
 )
 
+import numpy as np
 
 class Softplus_norm(Module):
     """
@@ -295,7 +299,7 @@ class VertexNetwork(Module):
         dense_ntw : object
             output layer of FeatLayer.
         """
-        dense_ntw = self.layers[0](input_layer)
+        dense_ntw = self.layers[0](tensor(input_layer))
         for layer in self.layers[1:]:
             dense_ntw = layer(dense_ntw)
         shape = dense_ntw.size()
@@ -347,19 +351,28 @@ class DotProduct(Module):
         pool = pool.sum(-2)
         pool = squeeze(pool,0)
         return pool
-    
+
 class MultipleMSELoss(Module):
     def __init__(self):
         super().__init__()
         self.mse_per_var = MSELoss()
         
     def forward(self, output, target):
-        length = len(target[0])
-        loss = 0
-        for num in range(length):
-            invaverage = (length/sum(target[:,num]))
-            loss += invaverage * self.mse_per_var(target[:,num],output[:,num])
+        target_size = target.size()
+        loss = tensor(0)
+        for i in range(target_size[-1]):
+            average = tensor(target_size[0]/sum(target[:,i]))
+            loss = loss + average*average*self.mse_per_var(target[:,i], output[:,i])
         return loss
+
+    # def calc_inv_average(self, target):
+    #     return len(target)/sum(target)
+
+    # def calc_loss_per_obs(self, data):
+    #     target, output = data[0], data[1]
+    #     return self.mse_per_var(Tensor(target), Tensor(output))
+
+
 
 # class TopographModel(Module):
 #     """

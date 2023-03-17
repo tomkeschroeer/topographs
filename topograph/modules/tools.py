@@ -401,9 +401,9 @@ class DatasetCreater:
                 )
             ]
         )
-        print(vertex_feat)
-        for i in range(len(self.vertex_features)):
-            vertex_feat[i] = np.log(vertex_feat[i])
+        for i, key in enumerate(self.vertex_features):
+            if self.global_conf.vertex_features[key]["log"]:
+                vertex_feat[:,i] = np.log(vertex_feat[:,i])
         return vertex_feat
 
     def get_track_input(self):
