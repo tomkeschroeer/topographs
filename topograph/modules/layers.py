@@ -167,10 +167,8 @@ class EdgeLayers(Module):
         # Set the track input
         # print(input_layer)
         tdd = self.layers[0](input_layer)
-        # print(f"FIRST = {tdd}")
         for layer in self.layers[1:]:
             tdd = layer(tdd)
-            # print(f"tdd esge in loop = {tdd}")
         return tdd
 
     # def get_config(self):
@@ -355,14 +353,12 @@ class DotProduct(Module):
 class MultipleMSELoss(Module):
     def __init__(self):
         super().__init__()
-        self.mse_per_var = MSELoss()
+        self.mse_per_var = MSELoss(reduction="none")
         
     def forward(self, output, target):
-        target_size = target.size()
-        loss = tensor(0)
-        for i in range(target_size[-1]):
-            average = tensor(target_size[0]/sum(target[:,i]))
-            loss = loss + average*average*self.mse_per_var(target[:,i], output[:,i])
+        average = target.abs().mean(dim=0)+1e-8
+        loss = (self.mse_per_var(target, output)/average)
+        loss = loss.mean()
         return loss
 
     # def calc_inv_average(self, target):

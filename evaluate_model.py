@@ -24,7 +24,6 @@ def get_parser():
     parser.add_argument("--epoch", "-e", type=int, default=None, help="epoch number to evaluate")
     parser.add_argument("--cutval", "-v", type=float, default=None, help="cut value used for efficiency")
     parser.add_argument("--vars", "-o", type=str, default=None, help="numbers of variable")
-    parser.add_argument("--epochrange", "-r", type=int, nargs=2, default=None, help="range of epochs to evaluate")
 
     args = parser.parse_args()
     return args
@@ -34,12 +33,10 @@ if __name__ == "__main__":
     args = get_parser()
     config = GetConfiguration(args.config)
     vars = args.vars
-    epochs = args.epochrange
-    epochsrange = None if epochs is None else range(epochs[0],epochs[1])
     if vars is not None:
         vars = np.array(vars.split(",")).astype(int)
     if args.epoch is not None:
         GetEpochs = GetEpochPrediction(config, args.epoch, vars=vars)
     else:
-        Plotting = Plotter(config, args.cutval, vars, epochsrange)
+        Plotting = Plotter(config, args.cutval, vars)
         Plotting.Run()

@@ -96,7 +96,7 @@ if __name__ == "__main__":
     str_vars = ""
     if vars is not None:
         for var in vars:
-            str_vars += f"_{var}" 
+            str_vars += f"_{var}"
 
     training_output_folder = config.output_training
     training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
@@ -160,21 +160,13 @@ if __name__ == "__main__":
         save_dir=training_output_folder,
         project="pytorch_runs",
     )
-    try:
-        trainer = pl.Trainer(
-            max_epochs=config.epochs,
-            callbacks=[checkpoint],
-            logger=logger,
-            accelerator="auto",
-            log_every_n_steps=10
-        )
-    except MisconfigurationException:
-        print("No gpu found!")
-        trainer = pl.Trainer(
-            max_epochs=config.epochs,
-            callbacks=[checkpoint],
-            logger=logger
-        )
+    trainer = pl.Trainer(
+        max_epochs=config.epochs,
+        callbacks=[checkpoint],
+        logger=logger,
+        accelerator="auto",
+        log_every_n_steps=10
+    )
 
     trainer.fit(
         model=topomodel,
