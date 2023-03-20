@@ -99,9 +99,8 @@ class TopographModel(pl.LightningModule):
             )
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
-        
         # Define the loss funcitons
-        self.loss_fn_vertex = MSELoss()
+        self.loss_fn_vertex = MultipleMSELoss()
 
         if save:
             with File("/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5", "w") as inputs_file:
@@ -141,14 +140,10 @@ class TopographModel(pl.LightningModule):
         else:
             dt_product = self.dot_product(edge_feat_out, edge_wt_out, mask)
         dense_vertex_out = self.vertex_network(dt_product)
-        # print(dense_vertex_out)
-        # if self.activation_name is None:
         return dense_vertex_out, edge_wt_out
-        # else:
-        #     return dense_vertex_out, add_activation
 
     def basis_step(self, sample, _batch_idx, save=False):
-        inputs, labels_edge, labels_vertex, sample_weights, mask = sample
+        inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
         if save:
             inputs_save = inputs.reshape((1024, 40, 20))
             labels_save = labels_edge.reshape((1024, 40, 1))
@@ -164,7 +159,7 @@ class TopographModel(pl.LightningModule):
         loss_vertex_cal = self.loss_fn_vertex(
             vertex_out[mask_vertex], labels_vertex[mask_vertex]
         )
-        total = 100 * loss_edge_cal + loss_vertex_cal
+        total = loss_edge_cal + loss_vertex_cal
         # total = loss_edge_cal
         return loss_edge_cal, loss_vertex_cal, total
 
