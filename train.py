@@ -69,6 +69,8 @@ if __name__ == "__main__":
     loss_fac_vert = getattr(config, loss_fac_edge, 1)
     if loss_fac_edge is None: loss_fac_edge = 100
     if loss_fac_vert is None: loss_fac_vert = 1
+    
+    used_vertex_properties = getattr(config,"used_vertex_properties",None)
 
     config_file_name = args.config
     input_file_name = config_file_name.split("/")[-1].replace(".yaml","")
@@ -107,10 +109,14 @@ if __name__ == "__main__":
     training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
     training_output_folder += str_vars
 
+    nodes_vertex=config.vertex_network["nodes"]
+    if isinstance(used_vertex_properties, int): nodes_vertex[-1] = 1 
+    elif isinstance(used_vertex_properties, (list,np.ndarray)): nodes_vertex[-1] = len(used_vertex_properties)
+    
     topomodel = TopographModel(
         nodes_feat=edge_feat_nodes,
         nodes_weight=edge_weight_nodes,
-        nodes_vertex=config.vertex_network["nodes"],
+        nodes_vertex=nodes_vertex,
         save_dir=config.output_training,
         name=config.model_name,
         activation_name=config.edge_weight_network["add_activation"],
@@ -138,7 +144,7 @@ if __name__ == "__main__":
         buffer_size = 100_000,
         njets = getattr(config, "njets", -1),
         vars=vars,
-        used_vertex_properties=getattr(config,"n_used_vertex_properties",None),
+        used_vertex_properties=used_vertex_properties,
     )
     tracks_loader = DataLoader(tracks_dataset)
 

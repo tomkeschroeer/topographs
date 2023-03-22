@@ -48,7 +48,7 @@ class TopographModel(pl.LightningModule):
         lr: float = 1e-3,
         save: bool = False,
         loss_fac_edge: float = 100,
-        loss_fac_vert: float = 1
+        loss_fac_vert: float = 1,
     ):
         """
         Init of TopographModel class
