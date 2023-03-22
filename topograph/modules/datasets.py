@@ -55,7 +55,8 @@ class FlavourTaggingCommon:
         track_name = "X_train_tracks",
         Y_edge_name = "Y_edge",
         Y_vertex_name = "Y_vertex_features",
-        njets = -1
+        njets = -1,
+        used_vertex_properties = None,
     ):
         """
         kwargs:
@@ -90,6 +91,7 @@ class FlavourTaggingCommon:
         self.Y_vertex_name = Y_vertex_name
         self.njets = njets
         self.vars = vars
+        self.used_vertex_properties = used_vertex_properties
 
         ## Get the data from the file and save the number of samples
         print(f"Loading file: {str(self.file_name)}")
@@ -184,7 +186,10 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
             else:
                 buf_tracks = self.tracks[buf_start:buf_end, :, self.vars].astype(self.dtype)
             buf_edge_labels = self.edge_label[buf_start:buf_end].astype("f")
-            buf_vertex_labels = self.vertex_labels[buf_start:buf_end].astype("f")
+            if self.n_used_vertex_properties is not None:
+                buf_vertex_labels = self.vertex_labels[buf_start:buf_end,self.used_vertex_properties].astype("f")
+            else:
+                buf_vertex_labels = self.vertex_labels[buf_start:buf_end]
             buf_sample_weights = self.sample_weights[buf_start:buf_end].astype("f")
 
             ## Shuffle all buffers

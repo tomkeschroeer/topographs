@@ -46,7 +46,9 @@ class TopographModel(pl.LightningModule):
         name: str = None,
         device: str = "gpu",
         lr: float = 1e-3,
-        save: bool = False
+        save: bool = False,
+        loss_fac_edge: float = 100,
+        loss_fac_vert: float = 1
     ):
         """
         Init of TopographModel class
@@ -75,6 +77,8 @@ class TopographModel(pl.LightningModule):
         self.loss_names = ["total", "edge_loss", "vertex_loss"]
         self.lr = lr
         self.full_name = Path(save_dir, name)
+        self.loss_fac_edge = loss_fac_edge
+        self.loss_fac_vert = loss_fac_vert
 
         self.nodes_feat = nodes_feat
         self.nodes_weight = nodes_weight
@@ -159,7 +163,7 @@ class TopographModel(pl.LightningModule):
         loss_vertex_cal = self.loss_fn_vertex(
             vertex_out[mask_vertex], labels_vertex[mask_vertex]
         )
-        total = loss_edge_cal + loss_vertex_cal
+        total = self.loss_fac_edge*loss_edge_cal + self.loss_fac_vert*loss_vertex_cal
         # total = loss_edge_cal
         return loss_edge_cal, loss_vertex_cal, total
 

@@ -171,19 +171,6 @@ class EdgeLayers(Module):
             tdd = layer(tdd)
         return tdd
 
-    # def get_config(self):
-    #     """
-    #     function to add parameters to class config.
-
-    #     Returns
-    #     -------
-    #     config : dict
-    #         modified config.
-    #     """
-    #     config = super().get_config()
-    #     config.update({"nodes": self.nodes, "net_name": self.net_name})
-    #     return config
-
 
 class FeatLayers(Module):
     """
@@ -237,21 +224,6 @@ class FeatLayers(Module):
             tdd = layer(tdd)
         return tdd
 
-    # def get_config(self):
-    #     """
-    #     function to add parameters to class config.
-
-    #     Returns
-    #     -------
-    #     config : dict
-    #         modified config.
-    #     """
-    #     config = super().get_config()
-    #     config.update(
-    #         {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
-    #     )
-    #     return config
-
 
 class VertexNetwork(Module):
     """
@@ -304,21 +276,6 @@ class VertexNetwork(Module):
         dense_ntw = reshape(dense_ntw, (1, shape[0], shape[1]))
         return dense_ntw
 
-    # def get_config(self):
-    #     """
-    #     function to add parameters to class config.
-
-    #     Returns
-    #     -------
-    #     config : dict
-    #         modified config.
-    #     """
-    #     config = super().get_config()
-    #     config.update(
-    #         {"nodes": self.nodes, "net_name": self.net_name, "name": self.net_name}
-    #     )
-    #     return config
-
 
 class DotProduct(Module):
     """
@@ -350,80 +307,16 @@ class DotProduct(Module):
         pool = squeeze(pool,0)
         return pool
 
+
 class MultipleMSELoss(Module):
     def __init__(self):
         super().__init__()
         self.mse_per_var = MSELoss(reduction="none")
         
     def forward(self, output, target):
+        if target.size()[-1] == 1: return self.mse_per_var(target,output).mean()
         average = target.abs().mean(dim=0)+1e-8
         loss = (self.mse_per_var(target, output)/average)
         loss = loss.mean()
         return loss
-
-    # def calc_inv_average(self, target):
-    #     return len(target)/sum(target)
-
-    # def calc_loss_per_obs(self, data):
-    #     target, output = data[0], data[1]
-    #     return self.mse_per_var(Tensor(target), Tensor(output))
-
-
-
-# class TopographModel(Module):
-#     """
-#     class building the topograph model
-#     """
-
-#     def __init__(
-#         self,
-#         nodes_feat: list = [128, 30, 30, 30],
-#         nodes_weight : list = [128, 30, 30, 1],
-#         nodes_vertex : list = [30, 50, 50, 50, 1],
-#         activation_name: str = None,
-#     ):
-#         """
-#         Init of TopographModel class
-
-#         Parameters
-#         ----------
-#         config : object
-#             GetConfiguration object including information about the model
-#             architecture, train parameter etc.
-#         metadata_dict: dict
-#             dictionary giving the number of jets, tracks, features, etc.
-#         edge_weight_layer_name : str
-#             name of the layer predicting the edge weights.
-#         edge_feat_layer_name : str
-#             name of the layer predicting the edge features.
-#         vertex_network_layer_name : str
-#             name of the layer predicting the vertex features.
-#         input_weight_layer_name : str
-#             name of the input layer for the edge weight layer
-#         input_feat_layer_name : str
-#             name of the input layer for the edge feature layer
-#         """
-#         super().__init__()
-#         self.activation_name = activation_name
-
-#         self.nodes_feat = nodes_feat
-#         self.nodes_weight = nodes_weight
-#         self.nodes_vertex = nodes_vertex
-
-#         self.feat_layer = FeatLayers(nodes=self.nodes_feat)
-#         self.edge_layer = EdgeLayers(nodes=self.nodes_weight)
-
-#         if self.activation_name == "shifted_relu":
-#             self.add_activation = ShiftRelu()
-#         elif self.activation_name == "sigmoid":
-#             self.add_activation = Sigmoid()
-#         elif self.activation_name is None:
-#             self.add_activation = False
-#         else:
-#             raise KeyError(
-#                 f"Undefined additional actrivation: {self.activation_name}. Please select one"
-#                 ' of the following: ["shifted_relu", "sigmoid"] or leave empty/remove'
-#                 " option."
-#             )
-#         self.dot_product = DotProduct()
-#         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
+    

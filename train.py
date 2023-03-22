@@ -63,7 +63,12 @@ if __name__ == "__main__":
         vars = np.array(vars.split(",")).astype(int)
     n_epochs = config.epochs
     stepsize = config.stepsize
-    lr = config.lr
+    lr = getattr(config, lr, 1e-3)
+    
+    loss_fac_edge = getattr(config, loss_fac_edge, 100)
+    loss_fac_vert = getattr(config, loss_fac_edge, 1)
+    if loss_fac_edge is None: loss_fac_edge = 100
+    if loss_fac_vert is None: loss_fac_vert = 1
 
     config_file_name = args.config
     input_file_name = config_file_name.split("/")[-1].replace(".yaml","")
@@ -109,7 +114,9 @@ if __name__ == "__main__":
         save_dir=config.output_training,
         name=config.model_name,
         activation_name=config.edge_weight_network["add_activation"],
-        lr=config.lr
+        lr=lr,
+        loss_fac_edge=loss_fac_edge,
+        loss_fac_vert=loss_fac_vert,
     )
 
     makedirs(f"{training_output_folder}/modelfiles", exist_ok=True)
@@ -130,7 +137,8 @@ if __name__ == "__main__":
         drop_last = True,
         buffer_size = 100_000,
         njets = getattr(config, "njets", -1),
-        vars=vars
+        vars=vars,
+        used_vertex_properties=getattr(config,"n_used_vertex_properties",None),
     )
     tracks_loader = DataLoader(tracks_dataset)
 
@@ -144,7 +152,8 @@ if __name__ == "__main__":
         drop_last = True,
         buffer_size = 100_000,
         njets = njets_val,
-        vars=vars
+        vars=vars,
+        n_used_vertex_properties=getattr(config,"n_used_vertex_properties",None),
     )
     valid_loader = DataLoader(valid_dataset)
 

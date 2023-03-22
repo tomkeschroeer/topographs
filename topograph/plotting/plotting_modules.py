@@ -742,7 +742,8 @@ class GetEpochPrediction:
             drop_last = True,
             buffer_size = 10_000,
             njets = njets_test,
-            vars=vars
+            vars=vars,
+            n_used_vertex_properties=getattr(self.config,"n_used_vertex_properties",None),
         )
         self.dataset_loader = DataLoader(
             self.dataset,
