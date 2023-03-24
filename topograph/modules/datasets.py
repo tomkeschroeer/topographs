@@ -186,7 +186,7 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
             else:
                 buf_tracks = self.tracks[buf_start:buf_end, :, self.vars].astype(self.dtype)
             buf_edge_labels = self.edge_label[buf_start:buf_end].astype("f")
-            if self.n_used_vertex_properties is not None:
+            if self.used_vertex_properties is not None:
                 buf_vertex_labels = self.vertex_labels[buf_start:buf_end,self.used_vertex_properties].astype("f")
             else:
                 buf_vertex_labels = self.vertex_labels[buf_start:buf_end]
