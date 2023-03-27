@@ -40,12 +40,13 @@ class Scaler:
             # Loop over all tracks selections
             scale_dict_trk_selection = {}
             # Load generator
-            trks_scaling_generator = self.get_scaling_tracks_generator(
+            scaling_generator = self.get_scaling_generator(
                 input_file=file_name,
                 nJets=file_length,
                 tracks_name=self.config.input_tracks_name,
                 chunk_size=chunk_size,
             )
+
 
             # Loop over chunks
             for chunk_counter in range(n_chunks):
@@ -53,16 +54,17 @@ class Scaler:
                 # Check if this is the first time loading from the generator
                 if chunk_counter == 0:
                     # Get the first chunk of scales from the generator
-                    scale_dict_trk_selection, nTrks_loaded = next(
-                        trks_scaling_generator
+                    scale_dict_trk_selection, scale_dict_vert_prop, nTrks_loaded = next(
+                        scaling_generator
                     )
                 else:
                     # Get the next chunk of scales from the generator
-                    tmp_dict_trk, tmp_nTrks_loaded = next(trks_scaling_generator)
+                    tmp_dict_trk, tmp_dict_vert_prop, tmp_nTrks_loaded = next(scaling_generator)
 
                     # Combine the scale dicts coming from the generator
                     (
                         scale_dict_trk_selection,
+                        scale_dict_vert_prop,
                         nTrks_loaded,
                     ) = self.join_scale_dicts_trks(
                         first_scale_dict=scale_dict_trk_selection,
@@ -81,11 +83,12 @@ class Scaler:
                 json.dump(scale_dict_trk, outfile, indent=4)
             logger.info(f"Saved scale dictionary as {self.scale_dict_path}")
 
-    def get_scaling_tracks_generator(
+    def get_scaling_generator(
         self,
         input_file: str,
         nJets: int,
         tracks_name: str,
+        vert_prop_name: str,
         chunk_size: int = int(10000),
     ):
         """
@@ -129,30 +132,48 @@ class Scaler:
 
             for index_tuple in tupled_indices:
 
-                trks = np.asarray(
+                tracks_chunk = np.asarray(
                     infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
                 )
-
-                track_mask = get_track_mask(trks)
-
-                X_trk_train = np.stack(
-                    [np.nan_to_num(trks[v]) for v in self.var_list], axis=-1
+                
+                vert_prop_chunk = np.asarray(
+                    infile_all[f"/{vert_prop_name}"][index_tuple[0] : index_tuple[1]]
                 )
 
-                scale_dict_trk, nTrks = self.get_scaling_tracks(
-                    data=X_trk_train[:, :, :],
+                track_mask = get_track_mask(tracks_chunk)
+
+                X_train_tracks = np.stack(
+                    [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
+                )
+                
+                X_train_vert_prop = np.stack(
+                    [np.nan_to_num(vert_prop_chunk[v]) for v in self.var_list], axis=-1
+                )
+
+                scale_dict_trk, nTrks = self.get_scaling(
+                    data=X_train_tracks[:],
                     var_names=self.var_list,
                     track_mask=track_mask,
+                    scale_track=True
                 )
 
+                scale_dict_vert_prop, nJets = self.get_scaling(
+                    data=X_train_vert_prop[:],
+                    var_names=self.var_list,
+                    track_mask=track_mask,
+                    scale_track=False
+                )
+                
                 # Yield the scale dict and the number jets
-                yield scale_dict_trk, nTrks
+                yield scale_dict_trk, scale_dict_vert_prop, nTrks
 
-    def get_scaling_tracks(
+
+    def get_scaling(
         self,
         data: np.ndarray,
         var_names: list,
         track_mask: np.ndarray,
+        scale_track: bool = True
     ):
         """
         Calculate the scale dict for the tracks and return the dict.
@@ -181,17 +202,23 @@ class Scaler:
 
         # For each track variable
         for v, name in enumerate(var_names):
-            f = data[:, :, v]
+            
+            if scale_track:
+                f = data[:, :, v]
+            elif len(var_names) > 1:
+                f = data[:, v]
+            else:
+                f = data[:]
 
             # Get tracks
             slc = f[track_mask]
-            nTrks = len(slc)
+            nEntries= len(slc)
 
             # Caculate normalisation parameters
             m, s = slc.mean(), slc.std()
             scale_dict[name] = {"shift": float(m), "scale": float(s)}
 
-        return scale_dict, nTrks
+        return scale_dict, nEntries
 
     def join_scale_dicts_trks(
         self,
