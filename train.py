@@ -63,10 +63,10 @@ if __name__ == "__main__":
         vars = np.array(vars.split(",")).astype(int)
     n_epochs = config.epochs
     stepsize = config.stepsize
-    lr = getattr(config, lr, 1e-3)
+    lr = getattr(config, "lr", 1e-3)
     
-    loss_fac_edge = getattr(config, loss_fac_edge, 100)
-    loss_fac_vert = getattr(config, loss_fac_edge, 1)
+    loss_fac_edge = getattr(config, "loss_fac_edge", 100)
+    loss_fac_vert = getattr(config, "loss_fac_edge", 1)
     if loss_fac_edge is None: loss_fac_edge = 100
     if loss_fac_vert is None: loss_fac_vert = 1
     
@@ -159,7 +159,7 @@ if __name__ == "__main__":
         buffer_size = 100_000,
         njets = njets_val,
         vars=vars,
-        n_used_vertex_properties=getattr(config,"n_used_vertex_properties",None),
+        used_vertex_properties=used_vertex_properties,
     )
     valid_loader = DataLoader(valid_dataset)
 
