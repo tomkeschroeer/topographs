@@ -157,7 +157,8 @@ class TopographModel(pl.LightningModule):
                 inputs_file["inputs"][-len_inp:] = inputs_save
                 inputs_file["labels"].resize((inputs_file["labels"].shape[0]+len_inp), axis=0)
                 inputs_file["labels"][-len_inp:] = labels_save
-                
+        labels_shape = labels_edge.size()
+        labels_edge = labels_edge.reshape(labels_shape[0],labels_shape[1], labels_shape[2], 1)
         vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
         loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
         loss_vertex_cal = self.loss_fn_vertex(

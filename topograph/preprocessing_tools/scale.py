@@ -6,15 +6,15 @@ import json
 from topograph.modules.tools import (
     get_logger,
     GlobalConfig,
-    get_track_mask
+    get_mask
 )
 
 class Scaler:
-    def __init__(self, config, dataset_types):
+    def __init__(self, config):
         self.config = config
-        self.dataset_types = dataset_types
         self.global_conf = GlobalConfig()
         self.var_list = self.global_conf.track_inputs
+        self.var_list_vert = self.global_conf.vertex_features
 
     def Run(self):
         logger = get_logger()
@@ -23,65 +23,67 @@ class Scaler:
         # Extract the correct variables
         chunk_size = 1e5
 
-        for dataset_type in self.dataset_types.keys():
-            file_name = f"{self.config.output}/{self.config.one_file_name}".replace(".h5","") + f"{dataset_type}.h5"
-            self.scale_dict_path = f"{self.config.output}/{self.config.scale_dict}".replace(".json","") + f"{dataset_type}.json"
-            # Get the file_length
-            file_length = len(File(file_name, "r")[f"/{self.config.input_tracks_name}"].fields(self.var_list[0])[:])
+        file_name = f"{self.config.output}/{self.config.preprocessing_file_name}".replace(".h5","") + ".h5"
+        self.scale_dict_path = f"{self.config.output}/{self.config.scale_dict}".replace(".json","") + ".json"
+        # Get the file_length
+        file_length = len(File(file_name, "r")[f"/{self.config.tracks_name}"])
 
-            # Get the number of chunks we need to load
-            n_chunks = int(np.ceil(file_length / chunk_size))
+        # Get the number of chunks we need to load
+        n_chunks = int(np.ceil(file_length / chunk_size))
+        if n_chunks == 0:
+            n_chunks = 1
+            chunk_size = file_length
 
-            logger.info("Calculating scaling and shifting values for the track variables")
+        logger.info("Calculating scaling and shifting values for the track variables")
 
-            # Init a empty scale dict for the tracks
-            scale_dict_trk = {}
+        # Init a empty scale dict for the tracks
+        scale_dict_trk = {}
 
-            # Loop over all tracks selections
-            scale_dict_trk_selection = {}
-            # Load generator
-            scaling_generator = self.get_scaling_generator(
-                input_file=file_name,
-                nJets=file_length,
-                tracks_name=self.config.input_tracks_name,
-                chunk_size=chunk_size,
-            )
+        # Loop over all tracks selections
+        scale_dict_trk_selection = {}
+        # Load generator
+        scaling_generator = self.get_scaling_generator(
+            input_file=file_name,
+            nJets=file_length,
+            tracks_name=self.config.tracks_name,
+            vert_prop_name=self.config.vertex_feat_name,
+            chunk_size=chunk_size,
+        )
 
 
-            # Loop over chunks
-            for chunk_counter in range(n_chunks):
-                logger.info(f"Using chunk {chunk_counter+1} from {n_chunks}")
-                # Check if this is the first time loading from the generator
-                if chunk_counter == 0:
-                    # Get the first chunk of scales from the generator
-                    scale_dict_trk_selection, scale_dict_vert_prop, nTrks_loaded = next(
-                        scaling_generator
-                    )
-                else:
-                    # Get the next chunk of scales from the generator
-                    tmp_dict_trk, tmp_dict_vert_prop, tmp_nTrks_loaded = next(scaling_generator)
+        # Loop over chunks
+        for chunk_counter in range(n_chunks):
+            logger.info(f"Using chunk {chunk_counter+1} from {n_chunks}")
+            # Check if this is the first time loading from the generator
+            if chunk_counter == 0:
+                # Get the first chunk of scales from the generator
+                scale_dict_selection, nEntries_loaded = next(
+                    scaling_generator
+                )
+            else:
+                # Get the next chunk of scales from the generator
+                tmp_dict, tmp_nEntries_loaded = next(scaling_generator)
 
-                    # Combine the scale dicts coming from the generator
-                    (
-                        scale_dict_trk_selection,
-                        scale_dict_vert_prop,
-                        nTrks_loaded,
-                    ) = self.join_scale_dicts_trks(
-                        first_scale_dict=scale_dict_trk_selection,
-                        second_scale_dict=tmp_dict_trk,
-                        first_nTrks=nTrks_loaded,
-                        second_nTrks=tmp_nTrks_loaded,
-                    )
+                # Combine the scale dicts coming from the generator
+                (
+                    scale_dict_selection,
+                    nEntries_loaded,
+                ) = self.join_scale_dicts_trks(
+                    first_scale_dict=scale_dict_selection,
+                    second_scale_dict=tmp_dict,
+                    first_ns=nEntries_loaded,
+                    second_ns=tmp_nEntries_loaded,
+                )
 
-            scale_dict_trk.update({self.config.input_tracks_name: scale_dict_trk_selection})
+        scale_dict_trk.update({self.config.input_tracks_name: scale_dict_selection})
 
-                # Add scale dict for given tracks selection to the more general one
-            # TODO: change in python 3.9
-            # save scale/shift dictionary to json file
-            os.makedirs(os.path.dirname(self.scale_dict_path), exist_ok=True)
-            with open(self.scale_dict_path, "w") as outfile:
-                json.dump(scale_dict_trk, outfile, indent=4)
-            logger.info(f"Saved scale dictionary as {self.scale_dict_path}")
+            # Add scale dict for given tracks selection to the more general one
+        # TODO: change in python 3.9
+        # save scale/shift dictionary to json file
+        os.makedirs(os.path.dirname(self.scale_dict_path), exist_ok=True)
+        with open(self.scale_dict_path, "w") as outfile:
+            json.dump(scale_dict_selection, outfile, indent=4)
+        logger.info(f"Saved scale dictionary as {self.scale_dict_path}")
 
     def get_scaling_generator(
         self,
@@ -134,38 +136,41 @@ class Scaler:
 
                 tracks_chunk = np.asarray(
                     infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
-                )
+                )[:]
                 
                 vert_prop_chunk = np.asarray(
                     infile_all[f"/{vert_prop_name}"][index_tuple[0] : index_tuple[1]]
                 )
 
-                track_mask = get_track_mask(tracks_chunk)
+                track_mask = get_mask(tracks_chunk)
+                vert_mask = get_mask(vert_prop_chunk)
 
                 X_train_tracks = np.stack(
                     [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
                 )
                 
                 X_train_vert_prop = np.stack(
-                    [np.nan_to_num(vert_prop_chunk[v]) for v in self.var_list], axis=-1
+                    [np.nan_to_num(vert_prop_chunk[v]) for v in self.var_list_vert], axis=-1 #len(self.var_list_vert)
                 )
 
                 scale_dict_trk, nTrks = self.get_scaling(
                     data=X_train_tracks[:],
                     var_names=self.var_list,
                     track_mask=track_mask,
-                    scale_track=True
+                    scale_tracks=True
                 )
 
                 scale_dict_vert_prop, nJets = self.get_scaling(
                     data=X_train_vert_prop[:],
-                    var_names=self.var_list,
-                    track_mask=track_mask,
-                    scale_track=False
+                    var_names=self.var_list_vert,
+                    track_mask=vert_mask,
+                    scale_tracks=False
                 )
                 
+                scale_dict = {tracks_name: scale_dict_trk, vert_prop_name: scale_dict_vert_prop}
+                nEntries = {tracks_name: nTrks, vert_prop_name: nJets}
                 # Yield the scale dict and the number jets
-                yield scale_dict_trk, scale_dict_vert_prop, nTrks
+                yield scale_dict, nEntries
 
 
     def get_scaling(
@@ -173,7 +178,7 @@ class Scaler:
         data: np.ndarray,
         var_names: list,
         track_mask: np.ndarray,
-        scale_track: bool = True
+        scale_tracks = False
     ):
         """
         Calculate the scale dict for the tracks and return the dict.
@@ -203,16 +208,18 @@ class Scaler:
         # For each track variable
         for v, name in enumerate(var_names):
             
-            if scale_track:
-                f = data[:, :, v]
-            elif len(var_names) > 1:
-                f = data[:, v]
+            if scale_tracks:
+                f = data[:,:,v]
             else:
-                f = data[:]
+                if len(var_names) != 1:
+                    f = data[:,v]
+                else:
+                    f = data[v]
+            
+            slc = f[track_mask]
 
             # Get tracks
-            slc = f[track_mask]
-            nEntries= len(slc)
+            nEntries= len(slc)            
 
             # Caculate normalisation parameters
             m, s = slc.mean(), slc.std()
@@ -224,8 +231,8 @@ class Scaler:
         self,
         first_scale_dict: dict,
         second_scale_dict: dict,
-        first_nTrks: int,
-        second_nTrks: int,
+        first_ns: int,
+        second_ns: int,
     ):
         """
         Combining the scale dicts of two track chunks.
@@ -252,26 +259,32 @@ class Scaler:
         # Init a new combined scale dict
         combined_scale_dict = {}
 
-        for var in first_scale_dict:
-            # Add var to combined dict
-            combined_scale_dict[var] = {}
+        for dict_name in [self.config.tracks_name, self.config.vertex_feat_name]:
+            combined_scale_dict_tmp = {}
+            for var in first_scale_dict[dict_name]:
+                # Add var to combined dict
+                combined_scale_dict_tmp[var] = {}
 
-            # Combine the means
-            (
-                combined_scale_dict[var]["shift"],
-                combined_scale_dict[var]["scale"],
-            ) = self.join_mean_scale(
-                first_scale_dict=first_scale_dict,
-                second_scale_dict=second_scale_dict,
-                variable=var,
-                first_N=first_nTrks,
-                second_N=second_nTrks,
-            )
+                # Combine the means
+                (
+                    combined_scale_dict_tmp[var]["shift"],
+                    combined_scale_dict_tmp[var]["scale"],
+                ) = self.join_mean_scale(
+                    first_scale_dict=first_scale_dict[dict_name],
+                    second_scale_dict=second_scale_dict[dict_name],
+                    variable=var,
+                    first_N=first_ns[dict_name],
+                    second_N=second_ns[dict_name],
+                )
+            combined_scale_dict[dict_name] = combined_scale_dict_tmp
 
         # Sum of nTrks corresponding to combined scale dict
-        combined_nTrks = first_nTrks + second_nTrks
+        combined_ns = {
+            self.config.tracks_name: first_ns[self.config.tracks_name] + second_ns[self.config.tracks_name],
+            self.config.vertex_feat_name: first_ns[self.config.vertex_feat_name] + second_ns[self.config.vertex_feat_name],
+        }
 
-        return combined_scale_dict, combined_nTrks
+        return combined_scale_dict, combined_ns
 
     def join_mean_scale(
         self,
@@ -317,6 +330,7 @@ class Scaler:
         combined_mean = (mean * first_N + tmp_mean * second_N) / (first_N + second_N)
 
         # Combine the std
+        ### CHECK CALC OF STDDEV
         combined_std = np.sqrt(
             (
                 (

@@ -19,7 +19,7 @@ from topograph.modules.tools import (
     GlobalConfig,
     get_logger,
     get_sample_weights,
-    get_track_mask,
+    get_mask,
     get_types_shapes,
     shifted_relu_activation,
     shifted_relu_activation_train,

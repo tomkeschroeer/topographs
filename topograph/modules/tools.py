@@ -71,11 +71,11 @@ def get_logger():
     return topo_logger
 
 
-def get_track_mask(trks):
+def get_mask(trks):
     for var, dtype in trks.dtype.fields.items():
         if "f" in dtype[0].str:
-            track_mask = ~np.isnan(trks[var])
-            return track_mask
+            mask = ~np.isnan(trks[var])
+            return mask
 
 
 def get_types_shapes(
@@ -275,7 +275,8 @@ class GlobalConfig:
             global_conf = yaml.load(global_conf_file, Loader=yaml.FullLoader)
             self.track_inputs = global_conf.get("track_inputs")
             self.edge_features = global_conf.get("edge_features")
-            self.vertex_features = global_conf.get("vertex_features")
+            self.vertex_features = list(global_conf.get("vertex_features",{}).keys())
+            self.vertex_feat_dict = global_conf.get("vertex_features",{})
 
 
 class GetConfiguration:
@@ -334,25 +335,36 @@ class DatasetCreater:
         self.stepsize = stepsize
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
-        self.vertex_features = np.array(list(self.global_conf.vertex_features.keys()))
+        self.vertex_features = self.global_conf.vertex_features
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
+            # dt = self.truth.dtype
+            self.vertex_feat_dtypes = np.array(self.truth[self.global_conf.vertex_features].dtype)
+            self.vertex_feat_dtypes = np.dtype(list(self.truth[self.global_conf.vertex_features].dtype.fields.items()))
+            # self.vertex_feat_dtypes = np.stack(self.vertex_feat_dtypes)
+            # self.vertex_feat_dtypes = np.dtype(list(zip(self.vertex_feat_dtypes.names, self.vertex_feat_dtypes["formats"])))
+            # self.vertex_feat_dtypes = zip(self.vertex_feat_dtypes["names"], self.vertex_feat_dtypes["formats"])
             self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][
                 "HadronConeExclExtendedTruthLabelID"
-            ][self.step * self.stepsize : (self.step + 1) * self.stepsize][:]
-            self.reco = f[f"/{self.config.input_tracks_name}"][
+            ][self.step * self.stepsize : (self.step + 1) * self.stepsize]
+            self.reco = f[f"/{self.config.input_tracks_name}"].fields(self.global_conf.track_inputs)[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             ]
-            self.edge_features = f["/edge_features"][
-                self.step * self.stepsize : (self.step + 1) * self.stepsize, :
+            self.reco_dtypes = self.reco.dtype
+            self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
+            # self.edge_features = f["/edge_features"][
+            #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
+            # ]
 
         self.ind_truthflav = self.get_b_indeces()
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
-        self.edge_features = self.edge_features[self.ind_truthflav]
+        self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
+        # self.edge_features = self.edge_features[self.ind_truthflav]
 
     def get_b_indeces(self):
         hadronflavour = self.truth["flavour"]
@@ -364,22 +376,23 @@ class DatasetCreater:
         return sum(self.ind_truthflav)
 
     def get_edge_y(self):
-        truthOriginLabel = self.edge_features["truthOriginLabel"]
-        tOL_fromB = [
-            [OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel
-        ]
-        tOL_fromBC = [
-            [OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel
-        ]
-        tOL = np.array(
-            [
-                [
-                    np.array([edge_y]).astype(int)
-                    for edge_y in (np.logical_or(fromB, fromBC))
-                ]
-                for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)
-            ]
-        )
+        truthOriginLabel = self.truthOriginLabel
+        # tOL_fromB = [
+        #     [OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel
+        # ]
+        # tOL_fromBC = [
+        #     [OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel
+        # ]
+        # tOL = np.array(
+        #     [
+        #         [
+        #             np.array([edge_y]).astype(int)
+        #             for edge_y in (np.logical_or(fromB, fromBC))
+        #         ]
+        #         for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)
+        #     ]
+        # )
+        tOL = np.logical_or(truthOriginLabel == 3, truthOriginLabel ==4).astype(int)
         return tOL
 
     def get_edge_feat_y(self):
@@ -392,26 +405,15 @@ class DatasetCreater:
         return edge_feat_y
 
     def get_vertex_feat_y(self):
-        vertex_feat = np.array(
-            [
-                list(vertex_feat[hf == 5][0])
-                for hf, vertex_feat in zip(
-                    self.truth["flavour"],
-                    self.truth[self.vertex_features],
-                )
-            ]
-        )
-        for i, key in enumerate(self.vertex_features):
-            if self.global_conf.vertex_features[key]["log"]:
-                vertex_feat[:,i] = np.log(vertex_feat[:,i])
+        flavour = self.truth["flavour"]
+        vertex_feat = self.truth[self.vertex_features][flavour == 5]
+        for key in self.vertex_features:
+            if self.global_conf.vertex_feat_dict[key]["log"]:
+                vertex_feat[key] = np.log(vertex_feat[key])
         return vertex_feat
 
     def get_track_input(self):
-        track_input = [
-            [list(inputs_track) for inputs_track in input_jet]
-            for input_jet in self.reco
-        ]
-        return track_input
+        return self.reco
 
 
 class DataGenerator(IterableDataset):

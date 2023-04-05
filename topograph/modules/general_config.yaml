@@ -1,4 +1,5 @@
-track_inputs: 
+track_inputs:
+  - d0
   - z0SinTheta
   - dphi
   - deta
@@ -20,6 +21,7 @@ track_inputs:
   - numberOfPixelHoles
   - numberOfSCTHoles
 
+
 edge_features:
   - truthOriginLabel
   - truthVertexIndex
@@ -30,3 +32,6 @@ vertex_features:
     log: True
   eta:
     log: False
+
+
+    

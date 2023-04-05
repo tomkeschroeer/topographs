@@ -64,7 +64,7 @@ if __name__ == "__main__":
         onefile = OneFileMaker(config, dataset_types)
         onefile.Run()
     if args.scale:
-        scale = Scaler(config, dataset_types)
+        scale = Scaler(config)
         scale.Run()
     if args.apply_scales:
         apply_scales = Apply_Scaler(config, dataset_types)

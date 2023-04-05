@@ -92,7 +92,7 @@ if __name__ == "__main__":
             metadata_dict["n_trk_features"],
         ) = f[f"{config.tracks_name}"].shape
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
-        _, _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
+        _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
     edge_feat_nodes = config.edge_feature_network["nodes"]
     edge_weight_nodes = config.edge_weight_network["nodes"]
