@@ -558,15 +558,20 @@ class Plotter:
                 labels = f["labels_vertex_features"][:, var_numb]
             var_min = np.min(labels[~np.isnan(labels)])
             var_max = np.max(labels[~np.isnan(labels)])
+            var_min_pred = np.min(preds[~np.isnan(preds)])
+            var_max_pred = np.max(preds[~np.isnan(preds)])
             plot_var = PlotBase(
                 ylabel=f"predicted {var_str}",
                 xlabel=f"true {var_str}",
                 n_ratio_panels=0,
                 logy=False,
+                ymin=var_min_pred,
+                ymax=var_max_pred
             )
             plot_var.initialise_figure()
             plot_var.axis_top.plot(labels, preds, "b.")
             plot_var.axis_top.plot([var_min, var_max], [var_min, var_max], "r-")
+            plot_var.set_y_lim()
             plot_var = create_figure(plot=plot_var)
             plot_var.savefig(
                 f"{self.plot_dir}/{var}_regression_model_{model_file_number}.pdf"
@@ -738,7 +743,7 @@ class GetEpochPrediction:
             dset="test",
             buffer_shuffle=False,
             file_name = self.test_file,
-            batch_size = 1024,
+            batch_size = min(njets_test, 1024),
             drop_last = True,
             buffer_size = 10_000,
             njets = njets_test,

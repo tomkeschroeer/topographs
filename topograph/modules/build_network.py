@@ -21,6 +21,8 @@ from torch.nn import (
 
 from torch.nn.functional import binary_cross_entropy_with_logits
 
+from torch.autograd import grad
+
 import torch.optim as optim
 import pytorch_lightning as pl
 import torch as T
@@ -104,7 +106,7 @@ class TopographModel(pl.LightningModule):
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
         # Define the loss funcitons
-        self.loss_fn_vertex = MultipleMSELoss()
+        self.loss_fn_vertex = MSELoss() #MultipleMSELoss()
 
         if save:
             with File("/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5", "w") as inputs_file:

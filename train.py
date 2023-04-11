@@ -66,7 +66,7 @@ if __name__ == "__main__":
     lr = getattr(config, "lr", 1e-3)
     
     loss_fac_edge = getattr(config, "loss_fac_edge", 100)
-    loss_fac_vert = getattr(config, "loss_fac_edge", 1)
+    loss_fac_vert = getattr(config, "loss_fac_vert", 1)
     if loss_fac_edge is None: loss_fac_edge = 100
     if loss_fac_vert is None: loss_fac_vert = 1
     
@@ -170,11 +170,13 @@ if __name__ == "__main__":
         dirpath=f"{training_output_folder}/checkpoints",
         save_top_k=-1
     )
+
     logger = WandbLogger(
         name = config.model_name,
         save_dir=training_output_folder,
         project="pytorch_runs",
     )
+
     trainer = pl.Trainer(
         max_epochs=config.epochs,
         callbacks=[checkpoint],
