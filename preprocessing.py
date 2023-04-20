@@ -5,7 +5,6 @@ from topograph.preprocessing_tools import (
     Apply_Scaler,
     # H5toTfrecordsConverter,
     Merge,
-    OneFileMaker,
     Prepare,
     Scaler,
 )
@@ -60,21 +59,12 @@ if __name__ == "__main__":
             "final_filename": f"{output_dir}/{config.testing_file_name}",
         },
     }
-    if args.onefile:
-        onefile = OneFileMaker(config, dataset_types)
-        onefile.Run()
+    if args.prepare:
+        prepare = Prepare(config, dataset_types)
+        prepare.Run()
     if args.scale:
         scale = Scaler(config)
         scale.Run()
     if args.apply_scales:
         apply_scales = Apply_Scaler(config, dataset_types)
         apply_scales.Run()
-    if args.prepare:
-        prepare = Prepare(config, dataset_types)
-        prepare.Run()
-    if args.merge:
-        merge = Merge(config)
-        merge.Run()
-    if args.to_records:
-        records = H5toTfrecordsConverter(config)
-        records.Run()
