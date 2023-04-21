@@ -8,11 +8,13 @@ from h5py import File
 from mlxtend.evaluate import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
 from puma import PlotBase, Histogram, HistogramPlot
+from torch.nn import Module
 
 import torch.optim as optim
-from torch import load, device, tensor
+from torch import load, device, tensor, Tensor, autograd, ones_like, gradient
 from pytorch_lightning.callbacks import ModelSummary
 from torch.utils.data import DataLoader
+from torch.nn.functional import binary_cross_entropy_with_logits
 
 from topograph.modules import (
     TopographModel,
@@ -137,27 +139,33 @@ def get_predictions_and_labels(model, dataset):
     preds_v, preds_e = ([],[])
     labels_e, labels_v = ([], [])
     masks = []
+    grads = []
+    model.eval()
     for sample in dataset:
-        inputs, labels_edge, labels_vertex, _, mask, mask_vertex = sample
-        output = model(inputs, mask)
-        output_v = output[0].detach().numpy()
-        output_e = output[1].detach().numpy()
-        preds_v.append(output_v)
-        preds_e.append(output_e)
+        inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
+        inputs.requires_grad_()
+        output_v, output_e = model(inputs, mask)
+        output_e.backward(gradient=ones_like(output_e))
+        preds_v.append(output_v.detach().numpy())
+        preds_e.append(output_e.detach().numpy())
         labels_e.append(labels_edge.detach().numpy())
         labels_v.append(labels_vertex.detach().numpy())
         masks.append(mask.detach().numpy())
+        grad = inputs.grad.data.mean(dim=-2)
+        grads.append(grad.detach().numpy())    
     shape_labels_e = np.array(labels_e).shape
     shape_labels_v = np.array(labels_v).shape
     shape_preds_e = np.array(preds_e).shape
     shape_preds_v = np.array(preds_v).shape
     shape_masks = np.array(masks).shape
+    shape_grads = np.array(grads).shape
     preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1]*shape_preds_e[2],*shape_preds_e[3:])
     preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1]*shape_preds_v[2],*shape_preds_v[3:])
     labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1]*shape_labels_e[2],*shape_labels_e[3:])
     labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1]*shape_labels_v[2],*shape_labels_v[3:])
     masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
-    return preds_e, preds_v, labels_e, labels_v, masks
+    grads = np.array(grads).reshape(shape_grads[0]*shape_grads[1]*shape_grads[2],*shape_grads[3:])
+    return preds_e, preds_v, labels_e, labels_v, masks, grads
 
 class Plotter:
     def __init__(self, config, cut_val=None, vars=None):
@@ -558,15 +566,20 @@ class Plotter:
                 labels = f["labels_vertex_features"][:, var_numb]
             var_min = np.min(labels[~np.isnan(labels)])
             var_max = np.max(labels[~np.isnan(labels)])
+            var_min_pred = np.min(preds[~np.isnan(preds)])
+            var_max_pred = np.max(preds[~np.isnan(preds)])
             plot_var = PlotBase(
                 ylabel=f"predicted {var_str}",
                 xlabel=f"true {var_str}",
                 n_ratio_panels=0,
                 logy=False,
+                ymin=var_min_pred,
+                ymax=var_max_pred
             )
             plot_var.initialise_figure()
             plot_var.axis_top.plot(labels, preds, "b.")
             plot_var.axis_top.plot([var_min, var_max], [var_min, var_max], "r-")
+            plot_var.set_y_lim()
             plot_var = create_figure(plot=plot_var)
             plot_var.savefig(
                 f"{self.plot_dir}/{var}_regression_model_{model_file_number}.pdf"
@@ -738,7 +751,7 @@ class GetEpochPrediction:
             dset="test",
             buffer_shuffle=False,
             file_name = self.test_file,
-            batch_size = 1024,
+            batch_size = 100, # min(njets_test, 1024),
             drop_last = True,
             buffer_size = 10_000,
             njets = njets_test,
@@ -776,6 +789,14 @@ class GetEpochPrediction:
             nodes_vertex=self.config.vertex_network["nodes"],
             activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
+        # grads = grad(
+        #         outputs=total,
+        #         inputs=topomodel.parameters(),
+        #         grad_outputs=T.ones_like(total),  # pylint: disable=E1101
+        #         create_graph=True,
+        #         retain_graph=True,
+        #         allow_unused=True
+        #     )
 
         # loss = load_loss(
         #     modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
@@ -804,7 +825,7 @@ class GetEpochPrediction:
         elif activation == "sigmoid":
             c1 = pars[f"add_activation.c1"]
             c2 = pars[f"add_activation.c1"]
-        preds_e, preds_v, labels_e, labels_v, mask = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
+        preds_e, preds_v, labels_e, labels_v, mask, grads = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
 
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
             "//", "/"
@@ -816,7 +837,7 @@ class GetEpochPrediction:
             f.create_dataset(name="labels_edge", data=labels_e)
             f.create_dataset(name="labels_vertex_features", data=labels_v)
             f.create_dataset(name="mask", data=mask)
-            # f.create_dataset(name="loss", data=loss)
+            f.create_dataset(name="gradients", data=grads)
             if activation == "shifted_relu":
                 f.create_dataset(name="slope", data=slope)
                 f.create_dataset(name="shift", data=shift)
