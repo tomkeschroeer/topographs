@@ -145,36 +145,37 @@ def get_predictions_and_labels(model, dataset):
     labels_e, labels_v = ([], [])
     masks = []
     grads = []
-    start = len(model.feat_layer.layers) + 1
-    end = start + len(model.edge_layer.layers)
     model.eval()
     for sample in dataset:
         inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
+        inputs.requires_grad_()
         output_v, output_e = model(inputs, mask)
+        output_e.backward(gradient=ones_like(output_e))
         preds_v.append(output_v.detach().numpy())
         preds_e.append(output_e.detach().numpy())
         labels_e.append(labels_edge.detach().numpy())
         labels_v.append(labels_vertex.detach().numpy())
         masks.append(mask.detach().numpy())
+        grad = inputs.grad.data.mean(dim=-2)
+        grads.append(grad.detach().numpy())    
     shape_labels_e = np.array(labels_e).shape
     shape_labels_v = np.array(labels_v).shape
     shape_preds_e = np.array(preds_e).shape
     shape_preds_v = np.array(preds_v).shape
     shape_masks = np.array(masks).shape
+    shape_grads = np.array(grads).shape
     preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1]*shape_preds_e[2],*shape_preds_e[3:])
     preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1]*shape_preds_v[2],*shape_preds_v[3:])
     labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1]*shape_labels_e[2],*shape_labels_e[3:])
     labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1]*shape_labels_v[2],*shape_labels_v[3:])
     masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
+    grads = np.array(grads).reshape(shape_grads[0]*shape_grads[1]*shape_grads[2],*shape_grads[3:])
     return preds_e, preds_v, labels_e, labels_v, masks, grads
 
 class Plotter:
     def __init__(self, config, cut_val=None, vars=None):
         self.config = config
-        self.cut_val = cut_val
-        if cut_val is not None:
             self.cut_val = cut_val if cut_val <= 1 else cut_val/100
-        self.logger = get_logger()
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
