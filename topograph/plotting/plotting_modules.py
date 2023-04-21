@@ -8,11 +8,13 @@ from h5py import File
 from mlxtend.evaluate import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
 from puma import PlotBase, Histogram, HistogramPlot
+from torch.nn import Module
 
 import torch.optim as optim
-from torch import load, device, tensor
+from torch import load, device, tensor, Tensor, autograd, ones_like, gradient
 from pytorch_lightning.callbacks import ModelSummary
 from torch.utils.data import DataLoader
+from torch.nn.functional import binary_cross_entropy_with_logits
 
 from topograph.modules import (
     TopographModel,
@@ -34,13 +36,18 @@ def create_figure(plot):
     plot.plotting_done = True
     return plot
 
-def get_var_names(var):
+def get_var_names(var, used_vertex_properties):
     vardict = {
         "pT": "log($p_T$)",
-        "eta": "$\eta$"
+        "eta": "$\eta$",
     }
-    
-    return vardict[var], list(vardict.keys()).index(var)
+    varlist = np.array(list(vardict.keys()))[used_vertex_properties]
+    varlist = list([varlist]) if isinstance(varlist, str) else list(varlist)
+    try:
+        ind = varlist.index(var)
+    except ValueError:
+        ind = -1
+    return vardict[var], ind
 
 def get_point_styles(N):
     point_styles = [
@@ -137,13 +144,15 @@ def get_predictions_and_labels(model, dataset):
     preds_v, preds_e = ([],[])
     labels_e, labels_v = ([], [])
     masks = []
+    grads = []
+    start = len(model.feat_layer.layers) + 1
+    end = start + len(model.edge_layer.layers)
+    model.eval()
     for sample in dataset:
-        inputs, labels_edge, labels_vertex, _, mask, mask_vertex = sample
-        output = model(inputs, mask)
-        output_v = output[0].detach().numpy()
-        output_e = output[1].detach().numpy()
-        preds_v.append(output_v)
-        preds_e.append(output_e)
+        inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
+        output_v, output_e = model(inputs, mask)
+        preds_v.append(output_v.detach().numpy())
+        preds_e.append(output_e.detach().numpy())
         labels_e.append(labels_edge.detach().numpy())
         labels_v.append(labels_vertex.detach().numpy())
         masks.append(mask.detach().numpy())
@@ -157,7 +166,7 @@ def get_predictions_and_labels(model, dataset):
     labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1]*shape_labels_e[2],*shape_labels_e[3:])
     labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1]*shape_labels_v[2],*shape_labels_v[3:])
     masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
-    return preds_e, preds_v, labels_e, labels_v, masks
+    return preds_e, preds_v, labels_e, labels_v, masks, grads
 
 class Plotter:
     def __init__(self, config, cut_val=None, vars=None):
@@ -170,6 +179,7 @@ class Plotter:
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
         datafilename = "plotting_data_tr.h5" if (self.cut_val is None) else f"plotting_data_tr_cutval={self.cut_val}.h5"
+        self.used_vertex_properties = getattr(self.config,"used_vertex_properties",None)
 
         str_vars = ""
         if vars is not None:
@@ -549,13 +559,20 @@ class Plotter:
 
     def plotting_regression(self, model_file_numbers, var):
         for model_file_number in model_file_numbers:
-            self.logger.info(f"plotting pT regression for model {model_file_number}")
-            var_str, var_numb = get_var_names(var)
+            self.logger.info(f"plotting {var} regression for model {model_file_number}")
+            var_str, var_numb = get_var_names(var, self.used_vertex_properties)
+            if var_numb == -1:
+                self.logger.warning(f"Skipping plotting of {var}, not used in training")
+                break
             with File(
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
-                preds = f["pred_vertex_features"][:, var_numb]
-                labels = f["labels_vertex_features"][:, var_numb]
+                try:
+                    preds = f["pred_vertex_features"][:, var_numb]
+                    labels = f["labels_vertex_features"][:, var_numb]
+                except ValueError:
+                    preds = f["pred_vertex_features"][:]
+                    labels = f["labels_vertex_features"][:]
             var_min = np.min(labels[~np.isnan(labels)])
             var_max = np.max(labels[~np.isnan(labels)])
             var_min_pred = np.min(preds[~np.isnan(preds)])
@@ -743,7 +760,7 @@ class GetEpochPrediction:
             dset="test",
             buffer_shuffle=False,
             file_name = self.test_file,
-            batch_size = min(njets_test, 1024),
+            batch_size = 100, # min(njets_test, 1024),
             drop_last = True,
             buffer_size = 10_000,
             njets = njets_test,
@@ -781,6 +798,14 @@ class GetEpochPrediction:
             nodes_vertex=self.config.vertex_network["nodes"],
             activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
+        # grads = grad(
+        #         outputs=total,
+        #         inputs=topomodel.parameters(),
+        #         grad_outputs=T.ones_like(total),  # pylint: disable=E1101
+        #         create_graph=True,
+        #         retain_graph=True,
+        #         allow_unused=True
+        #     )
 
         # loss = load_loss(
         #     modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
@@ -809,7 +834,7 @@ class GetEpochPrediction:
         elif activation == "sigmoid":
             c1 = pars[f"add_activation.c1"]
             c2 = pars[f"add_activation.c1"]
-        preds_e, preds_v, labels_e, labels_v, mask = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
+        preds_e, preds_v, labels_e, labels_v, mask, grads = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
 
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
             "//", "/"
@@ -821,7 +846,7 @@ class GetEpochPrediction:
             f.create_dataset(name="labels_edge", data=labels_e)
             f.create_dataset(name="labels_vertex_features", data=labels_v)
             f.create_dataset(name="mask", data=mask)
-            # f.create_dataset(name="loss", data=loss)
+            f.create_dataset(name="gradients", data=grads)
             if activation == "shifted_relu":
                 f.create_dataset(name="slope", data=slope)
                 f.create_dataset(name="shift", data=shift)
