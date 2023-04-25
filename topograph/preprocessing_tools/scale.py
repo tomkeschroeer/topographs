@@ -50,7 +50,6 @@ class Scaler:
             chunk_size=chunk_size,
         )
 
-
         # Loop over chunks
         for chunk_counter in range(n_chunks):
             logger.info(f"Using chunk {chunk_counter+1} from {n_chunks}")
@@ -214,7 +213,7 @@ class Scaler:
                 if len(var_names) != 1:
                     f = data[:,v]
                 else:
-                    f = data[v]
+                    f = data[:]
             
             slc = f[track_mask]
 

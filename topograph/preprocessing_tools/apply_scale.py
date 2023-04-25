@@ -233,7 +233,7 @@ class Apply_Scaler:
         return scaled_data
 
     def save_remaining_dt(self, logger, input_file, n_entries_total):
-        chunk_size = 1000
+        chunk_size = min(50_000, n_entries_total)
         start_ind = 0
         tupled_indices = []
 

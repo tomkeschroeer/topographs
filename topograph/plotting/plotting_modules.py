@@ -20,6 +20,7 @@ from topograph.modules import (
     TopographModel,
     get_logger,
     IterableFlavourTaggingDataset,
+    GlobalConfig,
 )
 from topograph.plotting.plotting_tools import (
     calculate_binary_preds,
@@ -39,7 +40,7 @@ def create_figure(plot):
 def get_var_names(var, used_vertex_properties):
     vardict = {
         "pT": "log($p_T$)",
-        "eta": "$\eta$",
+        # "eta": "$\eta$",
     }
     varlist = np.array(list(vardict.keys()))[used_vertex_properties]
     varlist = list([varlist]) if isinstance(varlist, str) else list(varlist)
@@ -175,7 +176,11 @@ def get_predictions_and_labels(model, dataset):
 class Plotter:
     def __init__(self, config, cut_val=None, vars=None):
         self.config = config
+        self.cut_val = cut_val
+        self.global_config = GlobalConfig()
+        if cut_val is not None:
             self.cut_val = cut_val if cut_val <= 1 else cut_val/100
+        self.logger = get_logger()
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
@@ -226,6 +231,9 @@ class Plotter:
         self.plot_preds_scatter = self.config.evaluation.get("plot_preds_scatter", {}).get(
             "plot", False
         )
+        self.plot_saliency = self.config.evaluation.get("plot_saliency", {}).get(
+            "plot", False
+        )
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "recalculate", False
         )
@@ -244,6 +252,9 @@ class Plotter:
             "recalculate", False
         )
         self.recalculate_preds_scatter = self.config.evaluation.get("plot_preds_scatter", {}).get(
+            "recalculate", False
+        )
+        self.recalculate_saliency = self.config.evaluation.get("plot_saliency", {}).get(
             "recalculate", False
         )
 
@@ -277,6 +288,7 @@ class Plotter:
                 ) as model_data:
                     preds = model_data["pred_edge"][:]
                     labels = model_data["labels_edge"][:]
+                    # grads = model_data["grads"][:]
                     slope, shift, c1, c2 = None, None, None, None
                     if self.add_activation == "shifted_relu":
                         slope = model_data["slope"][()]
@@ -284,9 +296,9 @@ class Plotter:
                     elif self.add_activation == "sigmoid":
                         c1 = model_data["c1"][()]
                         c2 = model_data["c2"][()]
+
                 if self.plot_preds_scatter and self.recalculate_preds_scatter:
                     self.logger.info(f"getting predictions for a scatter plot for model model_epoch{i:03d}")
-                    preds_s = preds.shape
                     hist, _ =  np.histogram(preds, bins = nbins_scatter, range=(self.startpoint_scatter, self.endpoint_scatter))
                     self.preds_scatter.append(hist)
 
@@ -454,6 +466,9 @@ class Plotter:
             self.save_vals(dataset_name="preds_scatter", data=self.preds_scatter)
             self.save_vals(dataset_name="endpoint_scatter", data=self.endpoint_scatter)
             self.save_vals(dataset_name="startpoint_scatter", data=self.startpoint_scatter)
+        
+        if self.plot_saliency:
+            self.plot_saliency_map(model_file_numbers=self.model_file_numbers)
                 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -670,14 +685,50 @@ class Plotter:
                 binrange=binrange,
                 plot_name=f"predicitions_split_epoch_{model_file_number}"
             )
+    
+    def plot_saliency_map(self, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            self.logger.info(f"plotting saliency map for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                grads = f["gradients"][:]
+                grads_shape = grads.shape
+            track_vars = list(range(len(self.global_config.track_inputs)))
+            if len(track_vars) != grads_shape[-1]:
+                self.logger.warning("Number of track variables is not the same as the one indicated by the saved gradients. Only use the numbers of variables as y-axis")
+                track_vars = list(range(grads_shape[-1]))
+            sal_bins = np.linspace(min(grads.flatten()), max(grads.flatten()), num=25)
+            hists = [np.histogram(grads[:,i], bins=sal_bins)[0]/len(grads[:,i]) for i in track_vars]
+            minimal_perc = np.concatenate(np.array([np.argwhere(hist>0.1).flatten() for hist in hists]))
+            minimum = min(minimal_perc)
+            maximum = max(minimal_perc)
+            
+            grads[grads<sal_bins[minimum]] = sal_bins[minimum]
+            grads[grads>sal_bins[maximum]] = sal_bins[maximum]
+            sal_bins = np.linspace(min(grads.flatten()), max(grads.flatten()), num=25)
+            hists = [np.histogram(grads[:,i], bins=sal_bins)[0]/len(grads[:,i]) for i in track_vars]
+            self.plot_scatter_vals(
+                ylabel="input variable",
+                xlabel="gradient",
+                xvals=sal_bins[1:]-(sal_bins[1:]-sal_bins[0:-1])/2,
+                yvals=track_vars,
+                zvals=np.stack((hists)),
+                plot_name=f"saliency_map_model_{model_file_number:03d}",
+                y_ticklabels=self.global_config.track_inputs,
+                swap_inputs=False
+            )
 
     def plot_scatter_vals(
-        self, ylabel, xlabel, plot_name, xvals, yvals, zvals, title=None
+        self, ylabel, xlabel, plot_name, xvals, yvals, zvals, title=None, y_ticklabels=None, swap_inputs=True
     ):
         width = 5.0
         height = 3.5
         zvals = np.array(zvals)
-        zvals_ref = np.array([zvals[:, i] for i in range(len(zvals[0]))])
+        if swap_inputs:
+            zvals_ref = np.array([zvals[:, i] for i in range(len(zvals[0]))])
+        else:
+            zvals_ref = zvals
         z_min, z_max = (zvals_ref).min(), np.abs(zvals_ref).max()
         figsize = (width, height)
         fig = plt.Figure(figsize=figsize, layout="constrained")
@@ -687,22 +738,35 @@ class Plotter:
         axis.set_title(title)
         c = axis.pcolor(xvals, yvals, zvals_ref, cmap='RdBu',vmin=z_min, vmax=z_max)
         axis.set_title('pcolor')
+        if y_ticklabels is not None:
+            axis.set_yticks(list(range(len(y_ticklabels))))
+            axis.set_yticklabels(y_ticklabels)
         fig.colorbar(c, ax=axis)
         fig.tight_layout()
         plt.savefig(f"{self.plot_dir}/{plot_name}.pdf")
         fig.clear()
 
     def plot_vals(
-        self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None
+        self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None, y_values_given=False, y_ticklabels=None
     ):  
-        ymax = max(vals[0])
-        ymin = min(vals[0])
-        if len(vals) > 1:
-            for val in vals[0:]:
-                ymax_tmp = max(val)
-                ymin_tmp = min(val)
-                ymax = ymax_tmp if ymax < ymax_tmp else ymax
-                ymin = ymin_tmp if ymin > ymin_tmp else ymin
+        if y_values_given:
+            ymax = max(vals[0][1])
+            ymin = min(vals[0][1])
+            if len(vals) > 1:
+                for val in vals[1:][1]:
+                    ymax_tmp = max(val)
+                    ymin_tmp = min(val)
+                    ymax = ymax_tmp if ymax < ymax_tmp else ymax
+                    ymin = ymin_tmp if ymin > ymin_tmp else ymin
+        else:
+            ymax = max(vals[0])
+            ymin = min(vals[0])
+            if len(vals) > 1:
+                for val in vals[1:]:
+                    ymax_tmp = max(val)
+                    ymin_tmp = min(val)
+                    ymax = ymax_tmp if ymax < ymax_tmp else ymax
+                    ymin = ymin_tmp if ymin > ymin_tmp else ymin
 
         band = (ymax-ymin)/30
         plot = PlotBase(
@@ -711,7 +775,13 @@ class Plotter:
         plot.initialise_figure()
         plot.initialise_plot()
         for val, label, point_style in zip(vals, labels, point_styles):
-            plot.axis_top.plot(val, point_style, label=label)
+            if y_values_given:
+                plot.axis_top.plot(val[0], val[1], point_style, label=label)
+            else:
+                plot.axis_top.plot(val, point_style, label=label)
+            if y_ticklabels is not None:
+                plot.axis_top.set_yticks(list(range(len(y_ticklabels))))
+                plot.axis_top.set_yticklabels(y_ticklabels)
         plot.axis_top.legend()
         plot = create_figure(plot=plot)
         plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
@@ -799,22 +869,6 @@ class GetEpochPrediction:
             nodes_vertex=self.config.vertex_network["nodes"],
             activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
-        # grads = grad(
-        #         outputs=total,
-        #         inputs=topomodel.parameters(),
-        #         grad_outputs=T.ones_like(total),  # pylint: disable=E1101
-        #         create_graph=True,
-        #         retain_graph=True,
-        #         allow_unused=True
-        #     )
-
-        # loss = load_loss(
-        #     modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
-        #     nodes_feat=self.config.edge_feature_network["nodes"],
-        #     nodes_weight=self.config.edge_weight_network["nodes"],
-        #     nodes_vertex=self.config.vertex_network["nodes"],
-        #     activation_name=self.config.edge_weight_network.get("add_activation", None)
-        # )
 
         self.metadata_dict = {}
         with File(self.test_file, "r") as f:
@@ -840,6 +894,7 @@ class GetEpochPrediction:
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
             "//", "/"
         )
+
         makedirs(self.output_folder, exist_ok=True)
         with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
             f.create_dataset(name="pred_edge", data=preds_e)
