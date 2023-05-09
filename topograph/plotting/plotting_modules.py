@@ -469,6 +469,9 @@ class Plotter:
         
         if self.plot_saliency:
             self.plot_saliency_map(model_file_numbers=self.model_file_numbers)
+            
+        # self.plotting_vertex_labels_per_epoch(model_file_numbers=self.model_file_numbers)
+        self.plot_model_weights(model_file_numbers=self.model_file_numbers)
                 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -540,7 +543,7 @@ class Plotter:
             or (self.recalculate_effs_ones)
             or (self.recalculate_parameters)
             or (self.recalculate_loss)
-            or ( self.recalculate_preds_scatter)
+            or (self.recalculate_preds_scatter)
         )
 
     def get_efficiency(
@@ -670,7 +673,7 @@ class Plotter:
                 preds = f["pred_edge"][:].flatten()
                 labels = f["labels_edge"][:].flatten()
             nbins = 50
-            binrange = (0,1)
+            binrange = (min(labels),max(labels))
             legend_labels = ["$b$ tracks", "non-$b$ tracks"]
             preds_one = preds[labels == 1]
             preds_zeros = preds[labels == 0]
@@ -685,6 +688,29 @@ class Plotter:
                 binrange=binrange,
                 plot_name=f"predicitions_split_epoch_{model_file_number}"
             )
+    
+    def plotting_vertex_labels_per_epoch(self, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            self.logger.info(f"plotting predictions per epoch for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                labels = f["labels_vertex_features"][:].flatten()
+            print(labels[:10])
+            nbins = 50
+            binrange = (min(labels),max(labels))            
+            self.plot_hist(
+                ylabel="normalised number of tracks",
+                xlabel="prediction", 
+                vals=[labels],
+                labels=[''], 
+                colours=get_colours(1),
+                title=f"labels for epoch {model_file_number}",
+                nbins=nbins,
+                binrange=binrange,
+                plot_name=f"labels_split_epoch_{model_file_number}"
+            )
+        
     
     def plot_saliency_map(self, model_file_numbers):
         for model_file_number in model_file_numbers:
@@ -717,6 +743,67 @@ class Plotter:
                 plot_name=f"saliency_map_model_{model_file_number:03d}",
                 y_ticklabels=self.global_config.track_inputs,
                 swap_inputs=False
+            )
+    
+    def plot_model_weights(self, model_file_numbers):
+        with File(
+                f"{self.model_pred_folder}/epoch_pred_001.h5", "r"
+            ) as f:
+            keys = list(f.keys())
+        keys_bias = [k for k in keys if "bias" in k]
+        keys_layers = [k for k in keys if "layer" in k]
+        for model_file_number in model_file_numbers:
+            self.logger.info(f"plotting weights for model {model_file_number}")
+            model_bias_weights = []
+            model_layer_weights = []
+            minimum_layer = 1000
+            maximum_layer = -1000
+            minimum_bias = 1000
+            maximum_bias = -1000
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                for name in keys_bias:
+                    shape = f[name][:].shape
+                    model_bias_weights.append(f[name][:])
+                    minimum_bias_tmp = min(model_bias_weights[-1])
+                    minimum_bias = min(minimum_bias,minimum_bias_tmp)
+                    maximum_bias_tmp = max(model_bias_weights[-1])
+                    maximum_bias = max(maximum_bias,maximum_bias_tmp)
+                for name in keys_layers:
+                    shape = f[name][:].shape
+                    model_layer_weights.append(f[name][:].reshape(shape[0]*shape[1]))
+                    minimum_layer_tmp = min(model_layer_weights[-1])
+                    minimum_layer = min(minimum_layer,minimum_layer_tmp)
+                    maximum_layer_tmp = max(model_layer_weights[-1])
+                    maximum_layer = max(maximum_layer,maximum_layer_tmp)
+            weight_bins = np.linspace(minimum_layer, maximum_layer, num=50)
+            weight_scatter = [hist for hist, _ in [np.histogram(weight, bins=weight_bins) for weight in model_layer_weights]]
+            weight_scatter = [hist/sum(hist) for hist in weight_scatter]
+            self.plot_scatter_vals(
+                ylabel="weight",
+                xlabel="layer", 
+                plot_name=f"weights_per_layer_{model_file_number}", 
+                yvals=weight_bins[1:]-(weight_bins[1:]-weight_bins[0:-1])/2, 
+                xvals=keys_layers,
+                zvals=weight_scatter,
+                title="weight per layer",
+                y_ticklabels=None,
+                swap_inputs=True
+            )
+            bias_bins = np.linspace(minimum_bias, maximum_bias, num=50)
+            bias_scatter = [hist for hist, _ in [np.histogram(bias, bins=bias_bins) for bias in model_bias_weights]]
+            bias_scatter = [hist/sum(hist) for hist in bias_scatter]
+            self.plot_scatter_vals(
+                ylabel="bias",
+                xlabel="layer", 
+                plot_name=f"biases_per_layer_{model_file_number}", 
+                yvals=bias_bins[1:]-(bias_bins[1:]-bias_bins[0:-1])/2, 
+                xvals=keys_bias,
+                zvals=bias_scatter,
+                title="bias per layer",
+                y_ticklabels=None,
+                swap_inputs=True
             )
 
     def plot_scatter_vals(
@@ -891,10 +978,22 @@ class GetEpochPrediction:
             c2 = pars[f"add_activation.c1"]
         preds_e, preds_v, labels_e, labels_v, mask, grads = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
 
+        model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
             "//", "/"
         )
-
+        
+        model_weight_dict = {}
+        bias_weight_counter = 0
+        layer_weight_counter = 0
+        for i, m in enumerate(model_weights):
+            if len(m.shape) == 1:
+                model_weight_dict[i] = f"bias_{bias_weight_counter}"
+                bias_weight_counter += 1
+            else:
+                model_weight_dict[i] = f"layer_{layer_weight_counter}"
+                layer_weight_counter += 1
+        
         makedirs(self.output_folder, exist_ok=True)
         with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
             f.create_dataset(name="pred_edge", data=preds_e)
@@ -903,6 +1002,8 @@ class GetEpochPrediction:
             f.create_dataset(name="labels_vertex_features", data=labels_v)
             f.create_dataset(name="mask", data=mask)
             f.create_dataset(name="gradients", data=grads)
+            for i in range(len(model_weights)):
+                f.create_dataset(name=model_weight_dict[i], data=model_weights[i])
             if activation == "shifted_relu":
                 f.create_dataset(name="slope", data=slope)
                 f.create_dataset(name="shift", data=shift)
