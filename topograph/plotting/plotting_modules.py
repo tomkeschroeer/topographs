@@ -40,9 +40,12 @@ def create_figure(plot):
 def get_var_names(var, used_vertex_properties):
     vardict = {
         "pT": "log($p_T$)",
-        # "eta": "$\eta$",
+        "eta": "$\eta$",
     }
-    varlist = np.array(list(vardict.keys()))[used_vertex_properties]
+    if used_vertex_properties is None:
+        varlist = np.array(list(vardict.keys()))[:]
+    else:
+        varlist = np.array(list(vardict.keys()))[used_vertex_properties]
     varlist = list([varlist]) if isinstance(varlist, str) else list(varlist)
     try:
         ind = varlist.index(var)
@@ -97,7 +100,7 @@ def get_colours(N):
         "#9ed670"
     ]
     return colours[:N]
-    
+
 def load_topomodel(
         modelfile=None, 
         nodes_feat=[20, 70, 70, 70, 30],
@@ -221,7 +224,7 @@ class Plotter:
         self.plot_pt = self.config.evaluation.get("plot_pt", {}).get("plot", False)
         self.plot_eta = self.config.evaluation.get("plot_eta", {}).get("plot", False)
         self.plot_loss = self.config.evaluation.get("plot_loss", {}).get("plot", False)
-        
+
         self.plot_conf_matrix = self.config.evaluation.get("plot_conf_matrix", {}).get(
             "plot", False
         )
@@ -232,6 +235,12 @@ class Plotter:
             "plot", False
         )
         self.plot_saliency = self.config.evaluation.get("plot_saliency", {}).get(
+            "plot", False
+        )
+        self.plot_vertex_labels = self.config.evaluation.get("vertex_labels", {}).get(
+            "plot", False
+        )
+        self.plot_weights = self.config.evaluation.get("weights", {}).get(
             "plot", False
         )
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
@@ -470,8 +479,11 @@ class Plotter:
         if self.plot_saliency:
             self.plot_saliency_map(model_file_numbers=self.model_file_numbers)
             
-        # self.plotting_vertex_labels_per_epoch(model_file_numbers=self.model_file_numbers)
-        self.plot_model_weights(model_file_numbers=self.model_file_numbers)
+        if self.plot_vertex_labels:
+            self.plotting_vertex_labels_per_epoch(model_file_numbers=self.model_file_numbers)
+        
+        if self.plot_weights:
+            self.plot_model_weights(model_file_numbers=self.model_file_numbers)
                 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -912,6 +924,7 @@ class GetEpochPrediction:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
+        self.used_vertex_properties = getattr(self.config,"used_vertex_properties",None)
         njets_test = getattr(config, "njets_test", -1)
         njets_test = -1 if njets_test is None else njets_test
         self.dataset = IterableFlavourTaggingDataset(
@@ -947,13 +960,16 @@ class GetEpochPrediction:
         if vars is not None:
             edge_feat_nodes[0] = len(vars)
             edge_weight_nodes[0] = len(vars)
-        
+
+        vertex_network_nodes = self.config.vertex_network["nodes"]
+        if self.used_vertex_properties is not None:
+            vertex_network_nodes[-1] = 1 if isinstance(self.used_vertex_properties, int) else len(self.used_vertex_properties)
         # layer, model_sub, model 
         topomodel = load_topomodel(
             modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
             nodes_feat=edge_feat_nodes,
             nodes_weight=edge_weight_nodes,
-            nodes_vertex=self.config.vertex_network["nodes"],
+            nodes_vertex=vertex_network_nodes,
             activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
 
