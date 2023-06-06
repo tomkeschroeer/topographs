@@ -961,6 +961,7 @@ class GetEpochPrediction:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
+        self.used_vertex_properties = getattr(self.config,"used_vertex_properties",None)
         njets_test = getattr(config, "njets_test", -1)
         njets_test = -1 if njets_test is None else njets_test
         self.dataset = IterableFlavourTaggingDataset(
@@ -996,13 +997,16 @@ class GetEpochPrediction:
         if vars is not None:
             edge_feat_nodes[0] = len(vars)
             edge_weight_nodes[0] = len(vars)
-        
+
+        vertex_network_nodes = self.config.vertex_network["nodes"]
+        if self.used_vertex_properties is not None:
+            vertex_network_nodes[-1] = 1 if isinstance(self.used_vertex_properties, int) else len(self.used_vertex_properties)
         # layer, model_sub, model 
         topomodel = load_topomodel(
             modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace("//","/"),
             nodes_feat=edge_feat_nodes,
             nodes_weight=edge_weight_nodes,
-            nodes_vertex=self.config.vertex_network["nodes"],
+            nodes_vertex=vertex_network_nodes,
             activation_name=self.config.edge_weight_network.get("add_activation", None)
         )
 
