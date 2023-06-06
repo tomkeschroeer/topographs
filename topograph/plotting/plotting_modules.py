@@ -846,7 +846,7 @@ class Plotter:
                 bins_input = np.linspace(min(d_input.flatten()), max(d_input.flatten()), 30)
                 hist_dict[target_name][f"{var}_track0"] = np.histogram2d(d_input[:,0], vertex_feat, bins=[bins_input, bins_target])[0]
                 hist_dict[target_name][f"{var}_track1"] = np.histogram2d(d_input[:,1], vertex_feat, bins=[bins_input, bins_target])[0]
-                self.logger.info(f"plotting correlation between {var} and {vertex_feat} for track 1")
+                self.logger.info(f"plotting correlation between {var} and {target_name} for track 1")
                 self.plot_scatter_vals(
                     xlabel=var,
                     ylabel=target_name,
@@ -856,7 +856,7 @@ class Plotter:
                     zvals=hist_dict[target_name][f"{var}_track0"],
                     title=f"correlation between input {var} and {target_name}, track 1"
                 )
-                self.logger.info(f"plotting correlation between {var} and {vertex_feat} for track 2")
+                self.logger.info(f"plotting correlation between {var} and {target_name} for track 2")
                 self.plot_scatter_vals(
                     xlabel=var,
                     ylabel=target_name,
