@@ -143,7 +143,7 @@ def load_loss(
     checkpoint = load(modelfile, map_location=device('cpu'))
     loss = checkpoint["train/total"]
     return loss
-    
+
 def get_predictions_and_labels(model, dataset):
     preds_v, preds_e = ([],[])
     labels_e, labels_v = ([], [])
@@ -187,6 +187,7 @@ class Plotter:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
+        self.njet_test = self.config.njets_test
         datafilename = "plotting_data_tr.h5" if (self.cut_val is None) else f"plotting_data_tr_cutval={self.cut_val}.h5"
         self.used_vertex_properties = getattr(self.config,"used_vertex_properties",None)
 
@@ -243,6 +244,9 @@ class Plotter:
         self.plot_weights = self.config.evaluation.get("weights", {}).get(
             "plot", False
         )
+        self.plot_target_input_corr = self.config.evaluation.get("plot_target_input_corr", {}).get(
+            "plot", False
+        )
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "recalculate", False
         )
@@ -264,6 +268,9 @@ class Plotter:
             "recalculate", False
         )
         self.recalculate_saliency = self.config.evaluation.get("plot_saliency", {}).get(
+            "recalculate", False
+        )
+        self.recalculate_target_input_corr = self.config.evaluation.get("plot_target_input_corr", {}).get(
             "recalculate", False
         )
 
@@ -339,6 +346,7 @@ class Plotter:
                         pos=i,
                         ones_only=True,
                     )
+
                 if self.recalculate_effs_zeros:
                     self.logger.info(
                         f"getting efficiency, zeros only, for model model_epoch{i:03d}"
@@ -353,7 +361,7 @@ class Plotter:
                         c2=c2,
                         pos=i,
                         zeros_only=True,
-                     )
+                    )
                 if self.plot_parameters and self.recalculate_parameters:
                     self.logger.info(f"getting parameters for model model_epoch{i:03d}")
                     params.append([slope, shift])
@@ -471,6 +479,7 @@ class Plotter:
                 zvals=self.preds_scatter,
                 title="predictions"
             )
+        
         if self.recalculate_preds_scatter:
             self.save_vals(dataset_name="preds_scatter", data=self.preds_scatter)
             self.save_vals(dataset_name="endpoint_scatter", data=self.endpoint_scatter)
@@ -484,6 +493,9 @@ class Plotter:
         
         if self.plot_weights:
             self.plot_model_weights(model_file_numbers=self.model_file_numbers)
+        
+        if self.plot_target_input_corr:
+            self.plot_target_input_correlation()
                 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -794,7 +806,7 @@ class Plotter:
             weight_scatter = [hist/sum(hist) for hist in weight_scatter]
             self.plot_scatter_vals(
                 ylabel="weight",
-                xlabel="layer", 
+                xlabel="layer",
                 plot_name=f"weights_per_layer_{model_file_number}", 
                 yvals=weight_bins[1:]-(weight_bins[1:]-weight_bins[0:-1])/2, 
                 xvals=keys_layers,
@@ -817,6 +829,31 @@ class Plotter:
                 y_ticklabels=None,
                 swap_inputs=True
             )
+
+
+    def plot_target_input_correlation(self):
+        hist_dict = {}
+        with File(self.test_file, "r") as f:
+            data_target = f["Y_vertex_features"][:self.njet_test]
+            data_input = f["X_train_tracks"][:self.njet_test]
+        for i, target_name in enumerate(self.global_config.vertex_features):
+            hist_dict[target_name] = {}
+            for var_num, var in enumerate(self.global_config.track_inputs):
+                vertex_feat = data_target[:,i]
+                d_input = data_input[:,:,var_num]
+                bins_target = np.linspace(min(vertex_feat), max(vertex_feat), 30)
+                bins_input = np.linspace(min(d_input.flatten()), max(d_input.flatten()), 30)
+                hist_dict[target_name][f"{var}_track0"] = np.histogram2d(d_input[:,0], vertex_feat, bins=[bins_input, bins_target])[0]
+                hist_dict[target_name][f"{var}_track1"] = np.histogram2d(d_input[:,1], vertex_feat, bins=[bins_input, bins_target])[0]
+                self.plot_scatter_vals(
+                    xlabel=var,
+                    ylabel=target_name,
+                    plot_name=f"{target_name}_{var}_corr_track1",
+                    yvals=bins_target,
+                    xvals=bins_input,
+                    zvals=hist_dict[target_name][f"{var}_track0"],
+                    title=f"correlation between input {var} and {target_name}"
+                )
 
     def plot_scatter_vals(
         self, ylabel, xlabel, plot_name, xvals, yvals, zvals, title=None, y_ticklabels=None, swap_inputs=True
