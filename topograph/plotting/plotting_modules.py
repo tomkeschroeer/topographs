@@ -833,6 +833,7 @@ class Plotter:
 
     def plot_target_input_correlation(self):
         hist_dict = {}
+        self.logger.info(f"plotting correlation between targets and input")
         with File(self.test_file, "r") as f:
             data_target = f["Y_vertex_features"][:self.njet_test]
             data_input = f["X_train_tracks"][:self.njet_test]
@@ -845,6 +846,7 @@ class Plotter:
                 bins_input = np.linspace(min(d_input.flatten()), max(d_input.flatten()), 30)
                 hist_dict[target_name][f"{var}_track0"] = np.histogram2d(d_input[:,0], vertex_feat, bins=[bins_input, bins_target])[0]
                 hist_dict[target_name][f"{var}_track1"] = np.histogram2d(d_input[:,1], vertex_feat, bins=[bins_input, bins_target])[0]
+                self.logger.info(f"plotting correlation between {var} and {vertex_feat} for track 1")
                 self.plot_scatter_vals(
                     xlabel=var,
                     ylabel=target_name,
@@ -852,7 +854,17 @@ class Plotter:
                     yvals=bins_target,
                     xvals=bins_input,
                     zvals=hist_dict[target_name][f"{var}_track0"],
-                    title=f"correlation between input {var} and {target_name}"
+                    title=f"correlation between input {var} and {target_name}, track 1"
+                )
+                self.logger.info(f"plotting correlation between {var} and {vertex_feat} for track 2")
+                self.plot_scatter_vals(
+                    xlabel=var,
+                    ylabel=target_name,
+                    plot_name=f"{target_name}_{var}_corr_track2",
+                    yvals=bins_target,
+                    xvals=bins_input,
+                    zvals=hist_dict[target_name][f"{var}_track1"],
+                    title=f"correlation between input {var} and {target_name}, track 2"
                 )
 
     def plot_scatter_vals(
