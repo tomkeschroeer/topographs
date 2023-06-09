@@ -303,7 +303,7 @@ class DotProduct(Module):
             dot product of the inputs.
         """
         pool = feat_layer * edge_layer  #* mask.unsqueeze(-1)
-        pool = pool.sum(-2)
+        # pool = pool.sum(-2)
         pool = squeeze(pool,0)
         return pool
 

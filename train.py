@@ -88,11 +88,11 @@ if __name__ == "__main__":
     with File(train_file, "r") as f:
         (
             metadata_dict["n_jets"],
-            metadata_dict["n_trks"],
+            # metadata_dict["n_trks"],
             metadata_dict["n_trk_features"],
         ) = f[f"{config.tracks_name}"].shape
         _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
-        _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
+        # _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
 
     edge_feat_nodes = config.edge_feature_network["nodes"]
     edge_weight_nodes = config.edge_weight_network["nodes"]

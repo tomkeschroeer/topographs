@@ -208,7 +208,7 @@ class Scaler:
         for v, name in enumerate(var_names):
             
             if scale_tracks:
-                f = data[:,:,v]
+                f = data[:,v]
             else:
                 if len(var_names) != 1:
                     f = data[:,v]

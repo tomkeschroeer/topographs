@@ -282,13 +282,13 @@ class Plotter:
         with File(self.test_file, "r") as f:
             (
                 self.metadata_dict["n_jets"],
-                self.metadata_dict["n_trks"],
+                # self.metadata_dict["n_trks"],
                 self.metadata_dict["n_trk_features"],
             ) = f[f"{self.config.tracks_name}"].shape
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
-
+        self.metadata_dict["n_trks"] = 1
         self.n_modelfiles = 0
         # self.effs, self.effs_zeros, self.effs_ones = [],[],[]
 
@@ -841,11 +841,11 @@ class Plotter:
             hist_dict[target_name] = {}
             for var_num, var in enumerate(self.global_config.track_inputs):
                 vertex_feat = data_target[:,i]
-                d_input = data_input[:,:,var_num]
+                d_input = data_input[:,var_num]
                 bins_target = np.linspace(min(vertex_feat), max(vertex_feat), 30)
                 bins_input = np.linspace(min(d_input.flatten()), max(d_input.flatten()), 30)
-                hist_dict[target_name][f"{var}_track0"] = np.histogram2d(d_input[:,0], vertex_feat, bins=[bins_input, bins_target])[0]
-                hist_dict[target_name][f"{var}_track1"] = np.histogram2d(d_input[:,1], vertex_feat, bins=[bins_input, bins_target])[0]
+                hist_dict[target_name][f"{var}_track0"] = np.histogram2d(d_input[:], vertex_feat, bins=[bins_input, bins_target])[0]
+                # hist_dict[target_name][f"{var}_track1"] = np.histogram2d(d_input[:,1], vertex_feat, bins=[bins_input, bins_target])[0]
                 self.logger.info(f"plotting correlation between {var} and {vertex_feat} for track 1")
                 self.plot_scatter_vals(
                     xlabel=var,
@@ -856,16 +856,16 @@ class Plotter:
                     zvals=hist_dict[target_name][f"{var}_track0"],
                     title=f"correlation between input {var} and {target_name}, track 1"
                 )
-                self.logger.info(f"plotting correlation between {var} and {vertex_feat} for track 2")
-                self.plot_scatter_vals(
-                    xlabel=var,
-                    ylabel=target_name,
-                    plot_name=f"{target_name}_{var}_corr_track2",
-                    yvals=bins_target,
-                    xvals=bins_input,
-                    zvals=hist_dict[target_name][f"{var}_track1"],
-                    title=f"correlation between input {var} and {target_name}, track 2"
-                )
+                # self.logger.info(f"plotting correlation between {var} and {vertex_feat} for track 2")
+                # self.plot_scatter_vals(
+                #     xlabel=var,
+                #     ylabel=target_name,
+                #     plot_name=f"{target_name}_{var}_corr_track2",
+                #     yvals=bins_target,
+                #     xvals=bins_input,
+                #     zvals=hist_dict[target_name][f"{var}_track1"],
+                #     title=f"correlation between input {var} and {target_name}, track 2"
+                # )
 
     def plot_scatter_vals(
         self, ylabel, xlabel, plot_name, xvals, yvals, zvals, title=None, y_ticklabels=None, swap_inputs=True
@@ -1026,13 +1026,13 @@ class GetEpochPrediction:
         with File(self.test_file, "r") as f:
             (
                 self.metadata_dict["n_jets"],
-                self.metadata_dict["n_trks"],
+                # self.metadata_dict["n_trks"],
                 self.metadata_dict["n_trk_features"],
             ) = f[f"{self.config.tracks_name}"].shape
             _, self.metadata_dict["n_vertex_feat"] = f[
                 f"{self.config.vertex_feat_name}"
             ].shape
-
+        self.metadata_dict["n_trks"] = 1
         pars = topomodel.state_dict()
         activation = config.edge_weight_network["add_activation"]
         if activation == "shifted_relu":

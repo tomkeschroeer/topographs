@@ -58,7 +58,8 @@ class Apply_Scaler:
                         input_file=input_file,
                         nJets = njets_per_file,
                         keyname=keyname,
-                        scale_dict=scale_dict[keyname],
+                        keyname_tr=self.tracks_name,
+                        scale_dict=scale_dict[self.tracks_name],
                         chunk_size=chunk_size,
                     )
                     # Set up chunk counter and start looping
@@ -102,6 +103,7 @@ class Apply_Scaler:
         input_file: str,
         nJets: int,
         keyname: str,
+        keyname_tr: str,
         scale_dict: dict = None,
         chunk_size: int = int(10000),
     ):
@@ -156,8 +158,9 @@ class Apply_Scaler:
             for index_tuple in tupled_indices:
                 scaled_data = []
                 # Load tracks
+                
                 data = np.asarray(
-                    f[keyname][
+                    f[keyname_tr][
                         index_tuple[0] : index_tuple[1]
                     ]
                 )
@@ -209,11 +212,18 @@ class Apply_Scaler:
         mask = get_mask(data)
         # Iterate over variables and scale/shift it
         for var in var_list:
-            x = data[var]
+            if var == "eta" or var == "pt":
+                x = data["d0"]
+            else:
+                x = data[var]
             
         # Stack the results for new dataset
-            shift = np.float32(scale_dict[var]["shift"])
-            scale = np.float32(scale_dict[var]["scale"])
+            if var == "eta" or var == "pt":
+                shift = np.float32(scale_dict["d0"]["shift"])
+                scale = np.float32(scale_dict["d0"]["scale"])
+            else:
+                shift = np.float32(scale_dict[var]["shift"])
+                scale = np.float32(scale_dict[var]["scale"])
             if scale == 0 or np.isinf(scale):
                 raise ValueError(f"Scale parameter for track var {var} is {scale}.")
             x = np.where(
@@ -227,7 +237,7 @@ class Apply_Scaler:
                 x,
             )
             var_arr_list.append(np.nan_to_num(x))
-        scaled_data = np.stack(var_arr_list, axis=-1)
+        scaled_data = np.stack(var_arr_list, axis = -1)
 
         # Return the scaled and tracks and, if defined, the track labels
         return scaled_data
@@ -251,7 +261,7 @@ class Apply_Scaler:
                         if self.config.edge_name in o.keys():
                             del o[self.config.edge_name]
                         edges = f[self.config.edge_name][indices[0] : indices[1]]
-                        o.create_dataset(data=edges, name=self.config.edge_name, chunks=True, maxshape=(None, edges.shape[1]))
+                        o.create_dataset(data=edges, name=self.config.edge_name, chunks=True, maxshape=(None,))
                     else:
                         n_entries = indices[1] - indices[0]
                         o[self.config.edge_name].resize((o[self.config.edge_name].shape[0] + n_entries), axis=0)

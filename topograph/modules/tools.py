@@ -355,14 +355,14 @@ class DatasetCreater:
             self.reco_dtypes = self.reco.dtype
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
-            ]
+            ][:,0]
             # self.edge_features = f["/edge_features"][
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
 
         self.ind_truthflav = self.get_b_indeces()
         self.truth = self.truth[self.ind_truthflav]
-        self.reco = self.reco[self.ind_truthflav]
+        self.reco = self.reco[self.ind_truthflav][:,0]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
         # self.edge_features = self.edge_features[self.ind_truthflav]
 
@@ -404,12 +404,14 @@ class DatasetCreater:
         )
         return edge_feat_y
 
-    def get_vertex_feat_y(self):
+    def get_vertex_feat_y(self, trk_inp):
+        dict_vertex = {
+            "d0":trk_inp['d0'][:],
+        }
         flavour = self.truth["flavour"]
         vertex_feat = self.truth[self.vertex_features][flavour == 5]
         for key in self.vertex_features:
-            if self.global_conf.vertex_feat_dict[key]["log"]:
-                vertex_feat[key] = np.log(vertex_feat[key])
+            vertex_feat[key] = dict_vertex["d0"]
         return vertex_feat
 
     def get_track_input(self):

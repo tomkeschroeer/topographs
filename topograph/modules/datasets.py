@@ -182,9 +182,9 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
 
             ## Load the seperate buffer for each of the data fields
             if self.vars is None:
-                buf_tracks = self.tracks[buf_start:buf_end, :, :].astype(self.dtype)
+                buf_tracks = self.tracks[buf_start:buf_end, :].astype(self.dtype)
             else:
-                buf_tracks = self.tracks[buf_start:buf_end, :, self.vars].astype(self.dtype)
+                buf_tracks = self.tracks[buf_start:buf_end, self.vars].astype(self.dtype)
             buf_edge_labels = self.edge_label[buf_start:buf_end].astype("f")
             if self.used_vertex_properties is not None:
                 buf_vertex_labels = self.vertex_labels[buf_start:buf_end,self.used_vertex_properties].astype("f")
@@ -210,7 +210,7 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
                     return
 
                 ## Yield the batch from each of the buffers
-                tracks = buf_tracks[batch_start:batch_end]
+                tracks = buf_tracks[batch_start:batch_end,:]
                 edge_labels = buf_edge_labels[batch_start:batch_end]
                 # edge_labels[edge_labels==0] = 1
                 vertex_labels = buf_vertex_labels[batch_start:batch_end]

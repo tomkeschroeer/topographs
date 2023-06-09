@@ -36,23 +36,25 @@ class Prepare:
                 datasets = DatasetCreater(config=self.config, input_file=input_file, step=step, stepsize=stepsize, replace_invalid=True)
                 if step == 0 and ninput == 0:
                     with File(output_file, "w") as train_file:
-                        train_file.create_dataset(self.config.vertex_feat_name, data = datasets.get_vertex_feat_y(), chunks=True, maxshape=(None,)) #len(global_conf.vertex_features))) # dtype=datasets.vertex_feat_dtypes
+                        trk_inpt = datasets.get_track_input()
+                        train_file.create_dataset(self.config.vertex_feat_name, data = datasets.get_vertex_feat_y(trk_inpt), chunks=True, maxshape=(None,)) #len(global_conf.vertex_features))) # dtype=datasets.vertex_feat_dtypes
                         #train_file.create_dataset(self.config.edge_feat_name, data = datasets.get_edge_feat_y(), chunks=True, maxshape=(None,40,len(global_conf.edge_features)))
-                        train_file.create_dataset(self.config.edge_name, data = datasets.get_edge_y(), chunks=True, maxshape=(None,40,))
-                        train_file.create_dataset(self.config.tracks_name, data = np.array(datasets.get_track_input() , dtype=datasets.reco_dtypes), chunks=True, maxshape=(None,40)) 
+                        train_file.create_dataset(self.config.edge_name, data = datasets.get_edge_y(), chunks=True, maxshape=(None,))
+                        train_file.create_dataset(self.config.tracks_name, data = np.array(trk_inpt, dtype=datasets.reco_dtypes), chunks=True, maxshape=(None,)) 
                 else:
                     njets_step = datasets.get_n_valid_jets()
                     logger.info(f"loading {njets_step} valid jets")
                     if njets_step >0:
                         with File(output_file, "a") as train_file:
+                            trk_inpt = datasets.get_track_input()
                             train_file[self.config.vertex_feat_name].resize((train_file[self.config.vertex_feat_name].shape[0] + njets_step), axis=0)
-                            train_file[self.config.vertex_feat_name][-njets_step:] = datasets.get_vertex_feat_y()
+                            train_file[self.config.vertex_feat_name][-njets_step:] = datasets.get_vertex_feat_y(trk_inpt)
                             #train_file[self.config.edge_feat_name].resize((train_file[self.config.edge_feat_name].shape[0] + njets_step), axis=0)
                             #train_file[self.config.edge_feat_name][-njets_step:] = datasets.get_edge_feat_y()
                             train_file[self.config.edge_name].resize((train_file[self.config.edge_name].shape[0] + njets_step), axis=0)
                             train_file[self.config.edge_name][-njets_step:] = datasets.get_edge_y()
                             train_file[self.config.tracks_name].resize((train_file[self.config.tracks_name].shape[0] + njets_step), axis=0)
-                            train_file[self.config.tracks_name][-njets_step:] = datasets.get_track_input()
+                            train_file[self.config.tracks_name][-njets_step:] = trk_inpt
                             logger.info("loaded " + str(len(train_file[self.config.vertex_feat_name])) + " jets in total")
                             if len(train_file[self.config.vertex_feat_name]) >= int(njets): continue_loading = False
                 if continue_loading == False: 
