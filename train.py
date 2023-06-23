@@ -10,12 +10,13 @@ sys.path.insert(0, "/home/users/s/schroeer/scratch/PhD/Topograph_repos/flavour_t
 import shutil
 
 import torch.nn as nn
-from torch import tensor, save
+from torch import tensor, save, from_numpy
 import torch.optim as optim
 from pytorch_lightning.loggers.wandb import WandbLogger
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from torch.utils.data import Dataset, DataLoader, TensorDataset, IterableDataset
 from pytorch_lightning.callbacks import ModelCheckpoint
 from lightning_lite.utilities.exceptions import MisconfigurationException
+from topograph.modules import get_sample_weights
 
 from topograph.modules import (
     GetConfiguration,
@@ -23,7 +24,7 @@ from topograph.modules import (
     get_sample_weights,
 )
 
-from topograph.modules import IterableFlavourTaggingDataset
+from topograph.modules import IterableFlavourTaggingDataset, Topographs_dataset
 
 
 def get_parser():
@@ -135,33 +136,78 @@ if __name__ == "__main__":
 
     njets = getattr(config, "njets", -1)
     njets = -1 if njets is None else njets
-    tracks_dataset = IterableFlavourTaggingDataset(
-        dset="train",
-        buffer_shuffle=True,
-        file_name = training_file,
-        batch_size = min(njets,1024),
-        drop_last = True,
-        buffer_size = 100_000,
-        njets = getattr(config, "njets", -1),
-        vars=vars,
-        used_vertex_properties=used_vertex_properties,
+
+    # tracks_dataset = IterableFlavourTaggingDataset(
+    #     dset="train",
+    #     buffer_shuffle=True,
+    #     file_name = training_file,
+    #     batch_size = min(njets,1024),
+    #     drop_last = True,
+    #     buffer_size = 100_000,
+    #     njets = getattr(config, "njets", -1),
+    #     vars=vars,
+    #     used_vertex_properties=used_vertex_properties,
+    # )
+    # with File(training_file, "r") as f:
+    #     tracks = f["X_train_tracks"][:500_000]
+    #     y_edge = f["Y_edge"][:500_000]
+    #     y_vertex = f["Y_vertex_features"][:500_000]
+    #     mask = ~np.all(tracks[..., :3] == 0, axis=-1)
+    #     mask_vertex_labels = np.all(~np.isnan(y_vertex), axis = -1)
+    #     sample_weights = np.array(list(map(get_sample_weights, y_edge)))
+    # tracks_dataset = TensorDataset(
+    #         from_numpy(tracks.astype(np.float32)),
+    #         from_numpy(y_edge.astype(np.float32)),
+    #         from_numpy(y_vertex.astype(np.float32)),
+    #         from_numpy(sample_weights.astype(np.float32)),
+    #         from_numpy(mask.astype(bool)),
+    #         from_numpy(mask_vertex_labels.astype(bool))
+    # )
+    tracks_dataset = Topographs_dataset(
+        filename=training_file,
+        batch_size=min(njets,1024),
+        n_samples=njets,
     )
-    tracks_loader = DataLoader(tracks_dataset)
+
+    tracks_loader = DataLoader(tracks_dataset, batch_size=None)
 
     njets_val = getattr(config, "njets_val", -1)
     njets_val = -1 if njets_val is None else njets_val
-    valid_dataset = IterableFlavourTaggingDataset(
-        dset="valid",
-        buffer_shuffle=False,
-        file_name = val_file,
-        batch_size = min(njets_val, 1024),
-        drop_last = True,
-        buffer_size = 100_000,
-        njets = njets_val,
-        vars=vars,
-        used_vertex_properties=used_vertex_properties,
+    # valid_dataset = IterableFlavourTaggingDataset(
+    #     dset="valid",
+    #     buffer_shuffle=False,
+    #     file_name = val_file,
+    #     batch_size = min(njets_val, 1024),
+    #     drop_last = True,
+    #     buffer_size = 100_000,
+    #     njets = njets_val,
+    #     vars=vars,
+    #     used_vertex_properties=used_vertex_properties,
+    # )
+    # # valid_loader = DataLoader(valid_dataset, batch_size=None)
+    # train_data = training_file()
+    # with File(val_file, "r") as f:
+    #     tracks = f["X_train_tracks"][:]
+    #     y_edge = f["Y_edge"][:]
+    #     y_vertex = f["Y_vertex_features"][:]
+    #     mask = ~np.all(tracks[..., :3] == 0, axis=-1)
+    #     mask_vertex_labels = np.all(~np.isnan(y_vertex), axis = -1)
+    #     sample_weights = np.array(list(map(get_sample_weights, y_edge)))
+
+    # valid_dataset = TensorDataset(
+    #         from_numpy(tracks.astype(np.float32)),
+    #         from_numpy(y_edge.astype(np.float32)),
+    #         from_numpy(y_vertex.astype(np.float32)),
+    #         from_numpy(sample_weights.astype(np.float32)),
+    #         from_numpy(mask.astype(bool)),
+    #         from_numpy(mask_vertex_labels.astype(bool))
+    # )
+    valid_dataset = Topographs_dataset(
+        filename=val_file,
+        batch_size=min(njets_val,1024),
+        n_samples=njets_val
     )
-    valid_loader = DataLoader(valid_dataset)
+    valid_loader = DataLoader(valid_dataset, batch_size=None)
 
     makedirs(f"{training_output_folder}/checkpoints", exist_ok=True)
     checkpoint = ModelCheckpoint(
