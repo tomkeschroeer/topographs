@@ -21,7 +21,7 @@ def get_sample_weights(x):
     weights = np.ones(len(x))
     weights[x == 1] = fac_b
     weights[x == 0] = fac_nonb
-    return weights.reshape((length, 1))
+    return weights.reshape((length))
 
 
 def step_activation(x):
@@ -267,10 +267,15 @@ class CustomFormatter(logging.Formatter):
 
 
 class GlobalConfig:
-    def __init__(self):
-        global_config_path = (
-            f"{pathlib.Path(__file__).parent.absolute()}/general_config.yaml"
-        )
+    def __init__(self, alternative_conf=None):
+        if alternative_conf is None:
+            global_config_path = (
+                f"{pathlib.Path(__file__).parent.absolute()}/general_config.yaml"
+            )
+        else:
+            global_config_path = (
+                f"{pathlib.Path(__file__).parent.absolute()}/{alternative_conf}.yaml"
+            )
         with open(global_config_path) as global_conf_file:
             global_conf = yaml.load(global_conf_file, Loader=yaml.FullLoader)
             self.track_inputs = global_conf.get("track_inputs")

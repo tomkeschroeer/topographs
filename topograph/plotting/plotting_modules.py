@@ -152,8 +152,24 @@ def get_predictions_and_labels(model, dataset):
     model.eval()
     for sample in dataset:
         inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
+        labels_shape = labels_edge.size()
+        print(labels_shape)
+        # labels_edge = labels_edge.reshape(labels_shape[1], labels_shape[2], labels_shape[0])
+        sample_weight_shape = sample_weights.size()
+        print(sample_weight_shape)
+        # sample_weights = sample_weights.reshape(sample_weight_shape[1], sample_weight_shape[2], sample_weight_shape[0])
+        labels_vertex_shape = labels_vertex.size()
+        print(labels_vertex_shape)
+        # labels_vertex = labels_vertex.reshape(labels_vertex_shape[1], labels_vertex_shape[2])
+        inputs_shape = inputs.size()
+        print(inputs_shape)
+        # inputs = inputs.reshape(inputs_shape[1], inputs_shape[2], inputs_shape[3])
+        # mask_shape = mask.size()
+        # mask = mask.reshape(mask_shape[1], mask_shape[2])
+        # mask_vertex_shape = mask_vertex.size()
+        # mask_vertex = mask_vertex.reshape(mask_vertex_shape[1])
         inputs.requires_grad_()
-        output_v, output_e = model(inputs, mask)
+        output_v, output_e = model.forward(inputs, mask)
         output_e.backward(gradient=ones_like(output_e))
         preds_v.append(output_v.detach().numpy())
         preds_e.append(output_e.detach().numpy())
@@ -161,18 +177,22 @@ def get_predictions_and_labels(model, dataset):
         labels_v.append(labels_vertex.detach().numpy())
         masks.append(mask.detach().numpy())
         grad = inputs.grad.data.mean(dim=-2)
-        grads.append(grad.detach().numpy())    
+        grads.append(grad.detach().numpy()) 
     shape_labels_e = np.array(labels_e).shape
     shape_labels_v = np.array(labels_v).shape
     shape_preds_e = np.array(preds_e).shape
     shape_preds_v = np.array(preds_v).shape
     shape_masks = np.array(masks).shape
     shape_grads = np.array(grads).shape
-    preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1]*shape_preds_e[2],*shape_preds_e[3:])
-    preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1]*shape_preds_v[2],*shape_preds_v[3:])
-    labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1]*shape_labels_e[2],*shape_labels_e[3:])
-    labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1]*shape_labels_v[2],*shape_labels_v[3:])
-    masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
+    print(shape_labels_e)
+    print(shape_labels_v)
+    print(shape_preds_e)
+    print(shape_preds_v)
+    preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1],shape_preds_e[2])#,*shape_preds_e[3:])
+    preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1],*shape_preds_v[2:])#,*shape_preds_v[3:])
+    labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1],shape_labels_e[2])
+    labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1],*shape_labels_v[2:])
+    # masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
     grads = np.array(grads).reshape(shape_grads[0]*shape_grads[1]*shape_grads[2],*shape_grads[3:])
     return preds_e, preds_v, labels_e, labels_v, masks, grads
 
@@ -180,7 +200,7 @@ class Plotter:
     def __init__(self, config, cut_val=None, vars=None):
         self.config = config
         self.cut_val = cut_val
-        self.global_config = GlobalConfig()
+        self.global_config = GlobalConfig(alternative_conf="general_config_plot")
         if cut_val is not None:
             self.cut_val = cut_val if cut_val <= 1 else cut_val/100
         self.logger = get_logger()
@@ -444,14 +464,14 @@ class Plotter:
 
         if self.plot_pt:
             self.logger.info(f"plotting pT...")
-            self.plotting_regression(
+            self.plotting_regression_scatter(
                 model_file_numbers=self.model_file_numbers,
                 var="pT"
             )
 
         if self.plot_eta:
             self.logger.info(f"plotting eta...")
-            self.plotting_regression(
+            self.plotting_regression_scatter(
                 model_file_numbers=self.model_file_numbers,
                 var="eta"
             )
@@ -600,6 +620,60 @@ class Plotter:
         effs[pos] = eff
         return effs
 
+    def plotting_regression_scatter(self, model_file_numbers, var):
+        for model_file_number in model_file_numbers:
+            self.logger.info(f"plotting {var} regression for model {model_file_number}")
+            var_str, var_numb = get_var_names(var, self.used_vertex_properties)
+            if var_numb == -1:
+                self.logger.warning(f"Skipping plotting of {var}, not used in training")
+                break
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                try:
+                    preds = f["pred_vertex_features"][:, var_numb]
+                except ValueError:
+                    preds = f["pred_vertex_features"][:]
+                try:
+                    labels = f["labels_vertex_features"][:, var_numb]
+                except ValueError:
+                    labels = f["labels_vertex_features"][:]
+            
+            var_min = np.min(labels[~np.isnan(labels)])
+            var_max = np.max(labels[~np.isnan(labels)])
+            var_min_pred = np.min(preds[~np.isnan(preds)])
+            var_max_pred = np.max(preds[~np.isnan(preds)])
+            bins = np.linspace(min(var_min, var_min_pred), max(var_max, var_max_pred), 20)
+            bins = np.linspace(-2,2,60)
+            hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
+            self.plot_scatter_vals(
+                    ylabel=f"true {var_str}",
+                    xlabel=f"predicted {var_str}", 
+                    plot_name=f"{var}_regression_model_{model_file_number}", 
+                    xvals=bins, 
+                    yvals=bins, 
+                    zvals=hist, 
+                    title=None, 
+                    y_ticklabels=None, 
+                    swap_inputs=True
+                )
+
+            plot_var_diff = PlotBase(
+                ylabel=f"Delta {var_str}",
+                xlabel=f"predicted {var_str}",
+                n_ratio_panels=0,
+                logy=False,
+            )
+
+            regs = calculate_pT_diff(pred=preds, label=labels)()
+            plot_var_diff.initialise_figure()
+            plot_var_diff.axis_top.plot(labels, regs, "b.")
+            plot_var_diff.axis_top.plot([var_min, var_max], [0, 0], "r-")
+            plot_var_diff = create_figure(plot=plot_var_diff)
+            plot_var_diff.savefig(
+                f"{self.plot_dir}/Delta_{var}_model_{model_file_number}.pdf"
+            )
+    
     def plotting_regression(self, model_file_numbers, var):
         for model_file_number in model_file_numbers:
             self.logger.info(f"plotting {var} regression for model {model_file_number}")
@@ -989,7 +1063,7 @@ class GetEpochPrediction:
         )
         self.dataset_loader = DataLoader(
             self.dataset,
-            # batch_size=None,
+            batch_size=None,
             # drop_last=False,
             # shuffle=False,
             # num_workers=0,
@@ -1043,7 +1117,7 @@ class GetEpochPrediction:
             c2 = pars[f"add_activation.c1"]
         preds_e, preds_v, labels_e, labels_v, mask, grads = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
 
-        model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
+        # model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
             "//", "/"
         )
@@ -1051,13 +1125,13 @@ class GetEpochPrediction:
         model_weight_dict = {}
         bias_weight_counter = 0
         layer_weight_counter = 0
-        for i, m in enumerate(model_weights):
-            if len(m.shape) == 1:
-                model_weight_dict[i] = f"bias_{bias_weight_counter}"
-                bias_weight_counter += 1
-            else:
-                model_weight_dict[i] = f"layer_{layer_weight_counter}"
-                layer_weight_counter += 1
+        # for i, m in enumerate(model_weights):
+        #     if len(m.shape) == 1:
+        #         model_weight_dict[i] = f"bias_{bias_weight_counter}"
+        #         bias_weight_counter += 1
+        #     else:
+        #         model_weight_dict[i] = f"layer_{layer_weight_counter}"
+        #         layer_weight_counter += 1
         
         makedirs(self.output_folder, exist_ok=True)
         with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
@@ -1065,10 +1139,10 @@ class GetEpochPrediction:
             f.create_dataset(name="pred_vertex_features", data=preds_v)
             f.create_dataset(name="labels_edge", data=labels_e)
             f.create_dataset(name="labels_vertex_features", data=labels_v)
-            f.create_dataset(name="mask", data=mask)
+            # f.create_dataset(name="mask", data=mask)
             f.create_dataset(name="gradients", data=grads)
-            for i in range(len(model_weights)):
-                f.create_dataset(name=model_weight_dict[i], data=model_weights[i])
+            # for i in range(len(model_weights)):
+            #     f.create_dataset(name=model_weight_dict[i], data=model_weights[i])
             if activation == "shifted_relu":
                 f.create_dataset(name="slope", data=slope)
                 f.create_dataset(name="shift", data=shift)

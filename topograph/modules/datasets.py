@@ -12,7 +12,7 @@ import numpy as np
 from math import isnan
 
 import torch as T
-from torch.utils.data import Dataset, IterableDataset, get_worker_info
+from torch.utils.data import Dataset, IterableDataset, get_worker_info, TensorDataset
 from topograph.modules import get_sample_weights
 
 
@@ -24,6 +24,55 @@ def scary_shuffle(*arrays):
         np.random.shuffle(a)
         np.random.set_state(rng_state)
 
+class Topographs_dataset(IterableDataset):
+    def __init__(
+            self,
+            filename,
+            batch_size,
+            n_samples
+    ):
+        IterableDataset.__init__(self)
+        self.filename = filename
+        self.batch_size = batch_size
+        self.n_samples = n_samples
+
+    def open(self):
+        self.file = h5py.File(self.filename)
+        self.tracks = self.file["X_train_tracks"]
+        self.labels_v = self.file["Y_vertex_features"]
+        self.labels_e = self.file["Y_edge"]
+    
+    def get_indeces(self):
+        if self.n_samples == -1: 
+            self.n_samples = len(self.tracks)
+        self.n_batches = np.ceil(self.n_samples/self.batch_size)
+        starts = np.linspace(0,(self.n_batches-1)*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
+        ends = np.linspace(self.batch_size, self.n_batches*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
+        return zip(starts, ends)
+
+    def __iter__(self):
+        indices = self.get_indeces()
+        self.open()
+        for inds in indices:
+            self.tracks_batch = self.tracks[inds[0]:inds[1]].astype(np.float32)
+            self.labels_v_batch = self.labels_v[inds[0]:inds[1]].astype(np.float32)
+            self.labels_e_batch = self.labels_e[inds[0]:inds[1]].astype(np.float32)
+            self.mask_batch = ~np.all(self.tracks_batch[..., :3] == 0, axis=-1)
+            self.samples_weights_batch = np.array(list(map(get_sample_weights, self.labels_e_batch)), dtype=np.float32)
+            yield self.tracks_batch, self.labels_e_batch, self.labels_v_batch, self.samples_weights_batch, self.mask_batch, None
+
+    def __len__(self) -> int:
+        num_sampels = self.n_samples if self.n_samples != -1 else len(self.tracks)
+        num_batches = num_sampels / self.batch_size
+        return math.ceil(num_batches)
+
+    def on_epoch_start(self):
+        """Reopen HDF file before each epoch to have fresh cache"""
+        self.open()
+
+    def on_epoch_end(self):
+        """Close the HDF file at the end on epoch to free up the cache"""
+        self.file.close()
 
 class FlavourTaggingCommon:
     """Parent class to collect the common attributes and methods for the two types
@@ -191,10 +240,6 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
             else:
                 buf_vertex_labels = self.vertex_labels[buf_start:buf_end]
             buf_sample_weights = self.sample_weights[buf_start:buf_end].astype("f")
-
-            ## Shuffle all buffers
-            if self.buffer_shuffle:
-                scary_shuffle(buf_tracks, buf_edge_labels, buf_vertex_labels, buf_sample_weights)
 
             ## Calculate the number of batches required for the buffer
             this_buff_size = len(buf_tracks)

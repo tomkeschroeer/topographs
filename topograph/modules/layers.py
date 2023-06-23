@@ -272,8 +272,6 @@ class VertexNetwork(Module):
         dense_ntw = self.layers[0](tensor(input_layer))
         for layer in self.layers[1:]:
             dense_ntw = layer(dense_ntw)
-        shape = dense_ntw.size()
-        dense_ntw = reshape(dense_ntw, (1, shape[0], shape[1]))
         return dense_ntw
 
 
@@ -302,9 +300,10 @@ class DotProduct(Module):
         pool : object
             dot product of the inputs.
         """
-        pool = feat_layer * edge_layer  #* mask.unsqueeze(-1)
-        pool = pool.sum(-2)
-        pool = squeeze(pool,0)
+        # sum(features * edges,axis=1)
+        pool = sum(feat_layer * edge_layer, axis=1)  #* mask.unsqueeze(-1)
+        # pool = pool.sum()
+        # pool = squeeze(pool,0)
         return pool
 
 
