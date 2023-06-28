@@ -9,6 +9,7 @@ import yaml
 from h5py import File
 # from tensorflow import TensorShape, Variable, constant, float32
 from torch.utils.data import IterableDataset
+import numpy.lib.recfunctions as rfn
 
 
 def get_sample_weights(x):
@@ -282,7 +283,7 @@ class GlobalConfig:
             self.edge_features = global_conf.get("edge_features")
             self.vertex_features = list(global_conf.get("vertex_features",{}).keys())
             self.vertex_feat_dict = global_conf.get("vertex_features",{})
-
+            self.jet_inputs = global_conf.get("jet_inputs",[])
 
 class GetConfiguration:
     def __init__(self, config_file):
@@ -341,6 +342,9 @@ class DatasetCreater:
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
         self.vertex_features = self.global_conf.vertex_features
+        self.load_jet_inp = False
+        if len(self.global_conf.jet_inputs) != 0:
+            self.load_jet_inp = True
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -354,10 +358,18 @@ class DatasetCreater:
             self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][
                 "HadronConeExclExtendedTruthLabelID"
             ][self.step * self.stepsize : (self.step + 1) * self.stepsize]
+            if self.load_jet_inp:
+                self.jet_inputs = f[f"/{self.config.input_jet_name}"].fields(self.global_conf.jet_inputs)[
+                    self.step * self.stepsize : (self.step + 1) * self.stepsize
+                ]
+                if "pt" in self.global_conf.jet_inputs:
+                    self.jet_inputs["pt"] = np.log(self.jet_inputs["pt"])
+                self.jet_dtype = self.jet_inputs.dtype
             self.reco = f[f"/{self.config.input_tracks_name}"].fields(self.global_conf.track_inputs)[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             ]
-            self.reco_dtypes = self.reco.dtype
+            self.reco_dtype = self.reco.dtype
+            self.inputs_dtype = None
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
@@ -369,6 +381,8 @@ class DatasetCreater:
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
+        if self.load_jet_inp:
+            self.jet_inputs = self.jet_inputs[self.ind_truthflav]
         # self.edge_features = self.edge_features[self.ind_truthflav]
 
     def get_b_indeces(self):
@@ -420,6 +434,8 @@ class DatasetCreater:
     def get_track_input(self):
         return self.reco
 
+    def get_jet_input(self):
+        return self.jet_inputs
 
 class DataGenerator(IterableDataset):
     def __init__(

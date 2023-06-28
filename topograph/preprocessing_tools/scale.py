@@ -14,6 +14,7 @@ class Scaler:
         self.config = config
         self.global_conf = GlobalConfig()
         self.var_list = self.global_conf.track_inputs
+        self.var_list_jets = self.global_conf.jet_inputs
         self.var_list_vert = self.global_conf.vertex_features
 
     def Run(self):
@@ -46,6 +47,7 @@ class Scaler:
             input_file=file_name,
             nJets=file_length,
             tracks_name=self.config.tracks_name,
+            jets_name=self.config.jets_name,
             vert_prop_name=self.config.vertex_feat_name,
             chunk_size=chunk_size,
         )
@@ -89,6 +91,7 @@ class Scaler:
         input_file: str,
         nJets: int,
         tracks_name: str,
+        jets_name: str,
         vert_prop_name: str,
         chunk_size: int = int(10000),
     ):
@@ -137,17 +140,26 @@ class Scaler:
                     infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
                 )[:]
                 
+                jets_chunk = np.asarray(
+                    infile_all[f"/{jets_name}"][index_tuple[0] : index_tuple[1]]
+                )[:]
+
                 vert_prop_chunk = np.asarray(
                     infile_all[f"/{vert_prop_name}"][index_tuple[0] : index_tuple[1]]
                 )
 
                 track_mask = get_mask(tracks_chunk)
+                jets_mask = get_mask(jets_chunk)
                 vert_mask = get_mask(vert_prop_chunk)
 
                 X_train_tracks = np.stack(
                     [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
                 )
                 
+                X_train_jets = np.stack(
+                    [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
+                )
+
                 X_train_vert_prop = np.stack(
                     [np.nan_to_num(vert_prop_chunk[v]) for v in self.var_list_vert], axis=-1 #len(self.var_list_vert)
                 )
@@ -159,6 +171,13 @@ class Scaler:
                     scale_tracks=True
                 )
 
+                scale_dict_jet, _ = self.get_scaling(
+                    data=X_train_jets[:],
+                    var_names=self.var_list_jets,
+                    track_mask=jets_mask,
+                    scale_tracks=False
+                )
+
                 scale_dict_vert_prop, nJets = self.get_scaling(
                     data=X_train_vert_prop[:],
                     var_names=self.var_list_vert,
@@ -166,8 +185,8 @@ class Scaler:
                     scale_tracks=False
                 )
                 
-                scale_dict = {tracks_name: scale_dict_trk, vert_prop_name: scale_dict_vert_prop}
-                nEntries = {tracks_name: nTrks, vert_prop_name: nJets}
+                scale_dict = {tracks_name: scale_dict_trk, jets_name: scale_dict_jet, vert_prop_name: scale_dict_vert_prop}
+                nEntries = {tracks_name: nTrks, jets_name: nJets, vert_prop_name: nJets}
                 # Yield the scale dict and the number jets
                 yield scale_dict, nEntries
 
@@ -258,7 +277,7 @@ class Scaler:
         # Init a new combined scale dict
         combined_scale_dict = {}
 
-        for dict_name in [self.config.tracks_name, self.config.vertex_feat_name]:
+        for dict_name in [self.config.tracks_name, self.config.jets_name, self.config.vertex_feat_name]:
             combined_scale_dict_tmp = {}
             for var in first_scale_dict[dict_name]:
                 # Add var to combined dict
@@ -280,6 +299,7 @@ class Scaler:
         # Sum of nTrks corresponding to combined scale dict
         combined_ns = {
             self.config.tracks_name: first_ns[self.config.tracks_name] + second_ns[self.config.tracks_name],
+            self.config.jets_name: first_ns[self.config.jets_name] + second_ns[self.config.jets_name],
             self.config.vertex_feat_name: first_ns[self.config.vertex_feat_name] + second_ns[self.config.vertex_feat_name],
         }
 
@@ -329,7 +349,6 @@ class Scaler:
         combined_mean = (mean * first_N + tmp_mean * second_N) / (first_N + second_N)
 
         # Combine the std
-        ### CHECK CALC OF STDDEV
         combined_std = np.sqrt(
             (
                 (

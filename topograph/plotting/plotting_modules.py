@@ -810,7 +810,7 @@ class Plotter:
             ) as f:
                 grads = f["gradients"][:]
                 grads_shape = grads.shape
-            track_vars = list(range(len(self.global_config.track_inputs)))
+            track_vars = list(range(len(self.global_config.track_inputs)+len(self.global_config.jet_inputs)))
             if len(track_vars) != grads_shape[-1]:
                 self.logger.warning("Number of track variables is not the same as the one indicated by the saved gradients. Only use the numbers of variables as y-axis")
                 track_vars = list(range(grads_shape[-1]))
@@ -831,7 +831,7 @@ class Plotter:
                 yvals=track_vars,
                 zvals=np.stack((hists)),
                 plot_name=f"saliency_map_model_{model_file_number:03d}",
-                y_ticklabels=self.global_config.track_inputs,
+                y_ticklabels=self.global_config.track_inputs+self.global_config.jet_inputs,
                 swap_inputs=False
             )
     

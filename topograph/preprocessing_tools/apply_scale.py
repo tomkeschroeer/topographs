@@ -16,9 +16,11 @@ class Apply_Scaler:
         self.scale_dict_path_basic = f"{self.config.output}/{self.config.scale_dict}".replace(".json", "")
         self.global_conf = GlobalConfig()
         self.tracks_name = self.config.tracks_name
+        self.jets_name = self.config.jets_name
         self.vert_prop_name = self.config.vertex_feat_name
         self.var_list = {
             self.tracks_name: self.global_conf.track_inputs,
+            self.jets_name: self.global_conf.jet_inputs,
             self.vert_prop_name: self.global_conf.vertex_features
         }
         self.file_names = {
@@ -54,11 +56,22 @@ class Apply_Scaler:
             logger.info(f"Save scaled inputs in file {self.out_file}")
             with File(self.out_file, "w") as h5file:
                 for keyname in [self.tracks_name, self.vert_prop_name]:
+                    attach_jets = False
+                    if keyname == self.tracks_name:
+                        attach_jets = True
                     scale_generator = self.scale_generator(
                         input_file=input_file,
                         nJets = njets_per_file,
                         keyname=keyname,
                         scale_dict=scale_dict[keyname],
+                        chunk_size=chunk_size,
+                    )
+                    if attach_jets:
+                        scale_generator_jets = self.scale_generator(
+                        input_file=input_file,
+                        nJets = njets_per_file,
+                        keyname=self.jets_name,
+                        scale_dict=scale_dict[self.jets_name],
                         chunk_size=chunk_size,
                     )
                     # Set up chunk counter and start looping
@@ -69,6 +82,12 @@ class Apply_Scaler:
                         )
                         try:
                             data = next(scale_generator)
+                            if attach_jets:
+                                data_shape = data[0].shape
+                                data_jets = next(scale_generator_jets)
+                                data_jet_shape = data_jets[0].shape
+                                data_jets[0] = np.repeat(data_jets[0], data_shape[1],axis = 0).reshape(data_shape[0], data_shape[1], data_jet_shape[1])
+                                data = np.concatenate([data, data_jets], axis =-1)
 
                             if chunk_counter == 0:
                                 h5file.create_dataset(
