@@ -28,5 +28,6 @@ from topograph.modules.tools import (
 from topograph.modules.Vertex_properties import Matcher
 
 from topograph.modules.datasets import (
-    IterableFlavourTaggingDataset
+    IterableFlavourTaggingDataset,
+    Topographs_dataset
 )
