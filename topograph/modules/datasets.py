@@ -48,7 +48,11 @@ class Topographs_dataset(IterableDataset):
         self.n_batches = np.ceil(self.n_samples/self.batch_size)
         starts = np.linspace(0,(self.n_batches-1)*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
         ends = np.linspace(self.batch_size, self.n_batches*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
-        return zip(starts, ends)
+        if ends[-1] > self.n_samples:
+            inds = zip(starts[:-1], ends[:-1])
+        else:
+            inds = zip(starts, ends)
+        return inds
 
     def __iter__(self):
         indices = self.get_indeces()
