@@ -4,6 +4,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.ma as ma
 from h5py import File
 from mlxtend.evaluate import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
@@ -148,6 +149,7 @@ def get_predictions_and_labels(model, dataset):
     preds_v, preds_e = ([],[])
     labels_e, labels_v = ([], [])
     masks = []
+    # grads_perjet, grads_pertrack = ([],[])
     grads = []
     model.eval()
     for sample in dataset:
@@ -172,20 +174,32 @@ def get_predictions_and_labels(model, dataset):
         labels_e.append(labels_edge.detach().numpy())
         labels_v.append(labels_vertex.detach().numpy())
         masks.append(mask.detach().numpy())
-        grad = inputs.grad.data.mean(dim=-2)
-        grads.append(grad.detach().numpy()) 
+        grad = inputs.grad.data
+        grads.append(grad.detach().numpy())
+        # repmask = np.array(np.repeat(mask, inputs_shape[-1], axis = -1)).astype(bool).reshape(inputs_shape)
+        # grad = ma.array(grad, mask=~repmask)
+        # grad_only_b = grad[labels_edge == 1]
+        # gard_only_non_b = grad[np.logical_and(labels_edge == 0, mask)]
+        # grad_perjet = grad.mean(axis=-2)
+        # grads_perjet.append(grad_perjet)
+        # grads_pertrack.append(grad)
     shape_labels_e = np.array(labels_e).shape
     shape_labels_v = np.array(labels_v).shape
     shape_preds_e = np.array(preds_e).shape
     shape_preds_v = np.array(preds_v).shape
     shape_masks = np.array(masks).shape
     shape_grads = np.array(grads).shape
+    # shape_grads_perjet = ma.array(grads_perjet).shape
+    # shape_grads_pertrack = ma.array(grads_pertrack).shape
     preds_e = np.array(preds_e).reshape(shape_preds_e[0]*shape_preds_e[1],shape_preds_e[2])#,*shape_preds_e[3:])
     preds_v = np.array(preds_v).reshape(shape_preds_v[0]*shape_preds_v[1],*shape_preds_v[2:])#,*shape_preds_v[3:])
     labels_e = np.array(labels_e).reshape(shape_labels_e[0]*shape_labels_e[1],shape_labels_e[2])
     labels_v = np.array(labels_v).reshape(shape_labels_v[0]*shape_labels_v[1],*shape_labels_v[2:])
-    # masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
     grads = np.array(grads).reshape(shape_grads[0]*shape_grads[1],*shape_grads[2:])
+    masks = np.array(masks).reshape(shape_masks[0]*shape_masks[1],*shape_masks[2:])
+    # grads_perjet = ma.array(grads_perjet)
+    # grads_perjet.reshape(shape_grads_perjet[0]*shape_grads_perjet[1],*shape_grads_perjet[2:])
+    # # grads_pertrack = ma.array(grads_pertrack).reshape(shape_grads_pertrack[0]*shape_grads_pertrack[1],*shape_grads_pertrack[2:]).mean(axis=0)
     return preds_e, preds_v, labels_e, labels_v, masks, grads
 
 class Plotter:
@@ -248,6 +262,15 @@ class Plotter:
             "plot", False
         )
         self.plot_saliency = self.config.evaluation.get("plot_saliency", {}).get(
+            "plot", False
+        )
+        self.plot_saliency_pertrack = self.config.evaluation.get("plot_saliency_pertrack", {}).get(
+            "plot", False
+        )
+        self.plot_saliency_pervar = self.config.evaluation.get("plot_saliency_pervar", {}).get(
+            "plot", False
+        )
+        self.plot_n_tracks_per_jet = self.config.evaluation.get("plot_n_tracks_per_jet", {}).get(
             "plot", False
         )
         self.plot_vertex_labels = self.config.evaluation.get("vertex_labels", {}).get(
@@ -499,6 +522,12 @@ class Plotter:
         
         if self.plot_saliency:
             self.plot_saliency_map(model_file_numbers=self.model_file_numbers)
+
+        if self.plot_saliency_pertrack:
+            self.plot_saliency_map_pertrack(model_file_numbers=self.model_file_numbers)
+        
+        if self.plot_saliency_pervar:
+            self.plot_saliency_per_var(model_file_numbers=self.model_file_numbers)
             
         if self.plot_vertex_labels:
             self.plotting_vertex_labels_per_epoch(model_file_numbers=self.model_file_numbers)
@@ -508,6 +537,9 @@ class Plotter:
         
         if self.plot_target_input_corr:
             self.plot_target_input_correlation()
+
+        if self.plot_n_tracks_per_jet:
+            self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
                 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -650,20 +682,27 @@ class Plotter:
                     swap_inputs=True
                 )
 
-            plot_var_diff = PlotBase(
-                ylabel=f"Delta {var_str}",
-                xlabel=f"predicted {var_str}",
-                n_ratio_panels=0,
-                logy=False,
-            )
-
             regs = calculate_pT_diff(pred=preds, label=labels)()
-            plot_var_diff.initialise_figure()
-            plot_var_diff.axis_top.plot(labels, regs, "b.")
-            plot_var_diff.axis_top.plot([var_min, var_max], [0, 0], "r-")
-            plot_var_diff = create_figure(plot=plot_var_diff)
-            plot_var_diff.savefig(
-                f"{self.plot_dir}/Delta_{var}_model_{model_file_number}.pdf"
+            var_min = np.min(regs) #[~np.isnan(regs)])
+            var_max = np.max(regs) #[~np.isnan(regs)])
+            var_min_pred = np.min(preds[~np.isnan(preds)])
+            var_max_pred = np.max(preds[~np.isnan(preds)])
+            bins_x = np.linspace(var_min_pred, var_max_pred, 30)
+            bins_x = np.linspace(-2, 2, 30)
+            bins_y = np.linspace(var_min, var_max, 30)
+            bins_y = np.linspace(-1.5, 1.5, 30)
+            # bins = np.linspace(-2,2,30)
+            hist_Delta = np.histogram2d(preds, regs, bins=[bins_x, bins_y])[0]
+            self.plot_scatter_vals(
+                    ylabel=f"Delta {var_str}",
+                    xlabel=f"predicted {var_str}", 
+                    plot_name=f"Delta_{var}_model_{model_file_number}", 
+                    xvals=bins_x, 
+                    yvals=bins_y, 
+                    zvals=hist_Delta, 
+                    title=None, 
+                    y_ticklabels=None, 
+                    swap_inputs=True
             )
     
     def plotting_regression(self, model_file_numbers, var):
@@ -718,6 +757,33 @@ class Plotter:
             plot_var_diff.savefig(
                 f"{self.plot_dir}/Delta_{var}_model_{model_file_number}.pdf"
             )
+
+    def plotting_n_tracks(self, model_file_numbers):
+        self.logger.info("plotting number of tracks...")
+        with File(
+            f"{self.model_pred_folder}/epoch_pred_{model_file_numbers[0]:03d}.h5", "r"
+        ) as f:
+            labels_e = f["labels_edge"][:]
+            mask = f["mask"][:]
+        n_b_tracks = np.sum(labels_e, axis=1)
+        n_tracks = np.sum(mask, axis=1)
+        n_non_b_tracks = n_tracks - n_b_tracks
+        dists = [n_tracks, n_b_tracks, n_non_b_tracks]
+        legend_labels = ["all tracks", "b-tracks", "non-b tracks"]
+        self.plot_hist(
+            ylabel="number of jets",
+            xlabel="number of tracks",
+            vals=dists,
+            labels=legend_labels,
+            nbins=int(max(n_tracks))+1,
+            binrange=(-0.5,max(n_tracks)+0.5),
+            plot_name="number_of_tracks",
+            colours=get_colours(len(legend_labels)),
+            norm=False,
+            logy=False
+        )
+
+
 
     def plotting_confusion_matrix(self, model_file_numbers):
         for model_file_number in model_file_numbers:
@@ -800,8 +866,7 @@ class Plotter:
                 binrange=binrange,
                 plot_name=f"labels_split_epoch_{model_file_number}"
             )
-        
-    
+
     def plot_saliency_map(self, model_file_numbers):
         for model_file_number in model_file_numbers:
             self.logger.info(f"plotting saliency map for model {model_file_number}")
@@ -809,32 +874,200 @@ class Plotter:
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
                 grads = f["gradients"][:]
+                grads_mask = f["mask"][:]
                 grads_shape = grads.shape
+                labels_edge = f["labels_edge"][:]
+            rep_grad_mask = np.array(np.repeat(grads_mask, grads_shape[-1], axis = -1)).astype(bool).reshape(grads_shape)
+            rep_grad_mask_b = np.repeat(np.logical_and(grads_mask, labels_edge == 1), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
+            rep_grad_mask_nonb = np.repeat(np.logical_and(grads_mask, labels_edge == 0), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
+            grads_all = ma.array(grads, mask=~rep_grad_mask).mean(axis=1)
+            grads_b = ma.array(grads, mask=~rep_grad_mask_b).mean(axis=1)
+            grads_nonb = ma.array(grads, mask=~rep_grad_mask_nonb).mean(axis=1)
+            track_vars = list(range(len(self.global_config.track_inputs)))
+
+            if len(track_vars) != grads_shape[-1]:
+                self.logger.warning("Number of track variables is not the same as the one indicated by the saved gradients. Only use the numbers of variables as y-axis")
+                track_vars = list(range(grads_shape[-1]))
+
+            sal_bins_all = np.linspace(min(grads_all.flatten()), max(grads_all.flatten()), num=25)
+            hists_all = [np.histogram(grads_all[:,i][grads_all[:,i] != 0.0], bins=sal_bins_all)[0]/len(grads_all[:,i]) for i in track_vars]
+            minimal_perc = np.concatenate(np.array([np.argwhere(hist>0.1).flatten() for hist in hists_all]))
+            minimum = min(minimal_perc)
+            maximum = max(minimal_perc)
+            # sal_bins_all = np.linspace(minimum, maximum, num=25)
+            grads_all[grads_all<sal_bins_all[minimum]] = sal_bins_all[minimum]
+            grads_all[grads_all>sal_bins_all[maximum]] = sal_bins_all[maximum]
+            sal_bins_all = np.linspace(min(grads_all.flatten()), max(grads_all.flatten()), num=25)
+            # sal_bins_all = np.linspace(-0.1,0.01,50)
+            hists_all = [np.histogram(grads_all[:,i], bins=sal_bins_all)[0]/len(grads_all[:,i]) for i in track_vars]
+            self.plot_scatter_vals(
+                ylabel="input variable",
+                xlabel="gradient",
+                xvals=sal_bins_all[1:]-(sal_bins_all[1:]-sal_bins_all[0:-1])/2,
+                yvals=track_vars,
+                zvals=np.stack((hists_all)),
+                plot_name=f"saliency_map_alltracks_model_{model_file_number:03d}",
+                y_ticklabels=self.global_config.track_inputs,
+                swap_inputs=False
+            )
+
+            sal_bins_b = np.linspace(min(grads_b.flatten()), max(grads_b.flatten()), num=25)
+            hists_b = [np.histogram(grads_b[:,i][grads_b[:,i] != 0.0], bins=sal_bins_b)[0]/len(grads_b[:,i]) for i in track_vars]
+            minimal_perc = np.concatenate(np.array([np.argwhere(hist>0.1).flatten() for hist in hists_b]))
+            minimum = min(minimal_perc)
+            maximum = max(minimal_perc)
+            # sal_bins_b = np.linspace(minimum, maximum, num=25)
+            grads_b[grads_b<sal_bins_b[minimum]] = sal_bins_b[minimum]
+            grads_b[grads_b>sal_bins_b[maximum]] = sal_bins_b[maximum]
+            sal_bins_b = np.linspace(min(grads_b.flatten()), max(grads_b.flatten()), num=25)
+            self.plot_scatter_vals(
+                ylabel="input variable",
+                xlabel="gradient",
+                xvals=sal_bins_b[1:]-(sal_bins_b[1:]-sal_bins_b[0:-1])/2,
+                yvals=track_vars,
+                zvals=np.stack((hists_b)),
+                plot_name=f"saliency_map_btracks_model_{model_file_number:03d}",
+                y_ticklabels=self.global_config.track_inputs,
+                swap_inputs=False
+            )
+
+            sal_bins_nonb = np.linspace(min(grads_nonb.flatten()), max(grads_nonb.flatten()), num=25)
+            hists_nonb = [np.histogram(grads_nonb[:,i][grads_nonb[:,i] != 0.0], bins=sal_bins_nonb)[0]/len(grads_nonb[:,i]) for i in track_vars]
+            minimal_perc = np.concatenate(np.array([np.argwhere(hist>0.1).flatten() for hist in hists_nonb]))
+            minimum = min(minimal_perc)
+            maximum = max(minimal_perc)
+            # sal_bins_nonb = np.linspace(minimum, maximum, num=25)
+            grads_nonb[grads_nonb<sal_bins_nonb[minimum]] = sal_bins_nonb[minimum]
+            grads_nonb[grads_nonb>sal_bins_nonb[maximum]] = sal_bins_nonb[maximum]
+            sal_bins_nonb = np.linspace(min(grads_nonb.flatten()), max(grads_nonb.flatten()), num=25)
+            self.plot_scatter_vals(
+                ylabel="input variable",
+                xlabel="gradient",
+                xvals=sal_bins_nonb[1:]-(sal_bins_nonb[1:]-sal_bins_nonb[0:-1])/2,
+                yvals=track_vars,
+                zvals=np.stack((hists_nonb)),
+                plot_name=f"saliency_map_nonbtracks_model_{model_file_number:03d}",
+                y_ticklabels=self.global_config.track_inputs,
+                swap_inputs=False
+            )
+
+
+    def plot_saliency_map_pertrack(self, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            self.logger.info(f"plotting saliency map per track for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                grads = f["gradients"][:]
+                grads_mask = f["mask"][:]
+                grads_shape = grads.shape
+                labels_edge = f["labels_edge"][:]
+            rep_grad_mask = np.array(np.repeat(grads_mask, grads_shape[-1], axis = -1)).astype(bool).reshape(grads_shape)
+            rep_grad_mask_b = np.repeat(np.logical_and(grads_mask, labels_edge == 1), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
+            rep_grad_mask_nonb = np.repeat(np.logical_and(grads_mask, labels_edge == 0), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
+            grads_all = ma.array(grads, mask=~rep_grad_mask).mean(axis=0)
+            grads_b = ma.array(grads, mask=~rep_grad_mask_b).mean(axis=0)
+            grads_nonb = ma.array(grads, mask=~rep_grad_mask_nonb).mean(axis=0)
             track_vars = list(range(len(self.global_config.track_inputs)))
             if len(track_vars) != grads_shape[-1]:
                 self.logger.warning("Number of track variables is not the same as the one indicated by the saved gradients. Only use the numbers of variables as y-axis")
                 track_vars = list(range(grads_shape[-1]))
-            sal_bins = np.linspace(min(grads.flatten()), max(grads.flatten()), num=25)
-            hists = [np.histogram(grads[:,i], bins=sal_bins)[0]/len(grads[:,i]) for i in track_vars]
-            minimal_perc = np.concatenate(np.array([np.argwhere(hist>0.1).flatten() for hist in hists]))
-            minimum = min(minimal_perc)
-            maximum = max(minimal_perc)
-            
-            grads[grads<sal_bins[minimum]] = sal_bins[minimum]
-            grads[grads>sal_bins[maximum]] = sal_bins[maximum]
-            sal_bins = np.linspace(min(grads.flatten()), max(grads.flatten()), num=25)
-            hists = [np.histogram(grads[:,i], bins=sal_bins)[0]/len(grads[:,i]) for i in track_vars]
+            ntracks = 8
+            sal_bins = np.linspace(0,ntracks,ntracks+1)
             self.plot_scatter_vals(
                 ylabel="input variable",
-                xlabel="gradient",
+                xlabel="tracks",
                 xvals=sal_bins[1:]-(sal_bins[1:]-sal_bins[0:-1])/2,
                 yvals=track_vars,
-                zvals=np.stack((hists)),
-                plot_name=f"saliency_map_model_{model_file_number:03d}",
+                zvals=grads_all[:ntracks], #np.stack((hists)),
+                plot_name=f"saliency_map_alltracks_pertrack_model_{model_file_number:03d}",
                 y_ticklabels=self.global_config.track_inputs,
-                swap_inputs=False
+                swap_inputs=True
             )
-    
+            self.plot_scatter_vals(
+                ylabel="input variable",
+                xlabel="tracks",
+                xvals=sal_bins[1:]-(sal_bins[1:]-sal_bins[0:-1])/2,
+                yvals=track_vars,
+                zvals=grads_b[:ntracks], #np.stack((hists)),
+                plot_name=f"saliency_map_btracks_pertrack_model_{model_file_number:03d}",
+                y_ticklabels=self.global_config.track_inputs,
+                swap_inputs=True
+            )
+            self.plot_scatter_vals(
+                ylabel="input variable",
+                xlabel="tracks",
+                xvals=sal_bins[1:]-(sal_bins[1:]-sal_bins[0:-1])/2,
+                yvals=track_vars,
+                zvals=grads_nonb[:ntracks], #np.stack((hists)),
+                plot_name=f"saliency_map_nonbtracks_pertrack_model_{model_file_number:03d}",
+                y_ticklabels=self.global_config.track_inputs,
+                swap_inputs=True
+            )
+
+    def plot_saliency_per_var(self, model_file_numbers):
+        track_vars = list(range(len(self.global_config.track_inputs)))
+        for model_file_number in model_file_numbers:
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                grads = f["gradients"][:]
+                grads_mask = f["mask"][:]
+                grads_shape = grads.shape
+                labels_edge = f["labels_edge"][:]
+            rep_grad_mask_wozero = np.logical_and((np.repeat(grads_mask, grads_shape[-1], axis = -1)).astype(bool).reshape(grads_shape), grads!=0)
+            rep_grad_mask_b_wozero = np.logical_and(np.repeat(np.logical_and(grads_mask, labels_edge == 1), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape), grads!=0)
+            rep_grad_mask_nonb_wozero = np.logical_and(np.repeat(np.logical_and(grads_mask, labels_edge == 0), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape), grads!=0)
+            rep_grad_mask = np.repeat(grads_mask, grads_shape[-1], axis = -1).astype(bool).reshape(grads_shape)
+            rep_grad_mask_b = np.repeat(np.logical_and(grads_mask, labels_edge == 1), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
+            rep_grad_mask_nonb = np.repeat(np.logical_and(grads_mask, labels_edge == 0), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
+            for var in track_vars:
+                var_str = self.global_config.track_inputs[var]
+                self.logger.info(f"plotting gradients of variable {var_str} for model {model_file_number}")
+                dist_wozero = np.array(
+                    [
+                        np.array(grads[:,:,var][rep_grad_mask_wozero[:,:,var]]).flatten(), 
+                        np.array(grads[:,:,var][rep_grad_mask_b_wozero[:,:,var]]).flatten(), 
+                        np.array(grads[:,:,var][rep_grad_mask_nonb_wozero[:,:,var]]).flatten()
+                    ]
+                )
+                minimum_dist = min([min(d) for d in dist_wozero])
+                maximum_dist = max([max(d) for d in dist_wozero])
+                self.plot_hist(
+                    ylabel="normalised number of tracks",
+                    xlabel="gradient",
+                    plot_name=f"gradient_wzeros_per_var_{var_str}",
+                    vals=dist_wozero,
+                    labels=["gradients, all tracks", "gradients, b tracks", "gradients, non-b tracks"],
+                    nbins=25,
+                    binrange=(-0.1,0.1), #(minimum_dist,maximum_dist),
+                    colours=["red", "blue", "green"],
+                    logy=False
+                )
+        
+                dist_wzero = np.array(
+                    [
+                        np.array(grads[:,:,var][rep_grad_mask[:,:,var]]).flatten(), 
+                        np.array(grads[:,:,var][rep_grad_mask_b[:,:,var]]).flatten(), 
+                        np.array(grads[:,:,var][rep_grad_mask_nonb[:,:,var]]).flatten()
+                    ]
+                )
+                minimum_dist = min([min(d) for d in dist_wzero])
+                maximum_dist = max([max(d) for d in dist_wzero])
+                self.plot_hist(
+                    ylabel="normalised number of tracks",
+                    xlabel="gradient",
+                    plot_name=f"gradient_per_var_{var_str}",
+                    vals=dist_wzero,
+                    labels=["gradients, all tracks", "gradients, b tracks", "gradients, non-b tracks"],
+                    nbins=25,
+                    binrange=(-0.1,0.1), #(minimum_dist,maximum_dist),
+                    colours=["red", "blue", "green"],
+                    logy=False
+                )
+            
+
+
     def plot_model_weights(self, model_file_numbers):
         with File(
                 f"{self.model_pred_folder}/epoch_pred_001.h5", "r"
@@ -1001,18 +1234,18 @@ class Plotter:
         plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
 
     def plot_hist(
-        self, ylabel, xlabel, plot_name, vals, labels, nbins, binrange, colours, title=None
+        self, ylabel, xlabel, plot_name, vals, labels, nbins, binrange, colours, title=None, logy=True, norm=True
     ):
         plot_histo = HistogramPlot(
             n_ratio_panels=0,
             ylabel=ylabel,
             xlabel=xlabel,
-            logy=True,
+            logy=logy,
             leg_ncol=1,
             figsize=(5.5, 4.5),
             bins=np.linspace(*binrange, nbins, endpoint=True),
             y_scale=1.5,
-            norm=True
+            norm=norm
         )
 
         for val, label, col in zip(vals, labels, colours):
@@ -1107,8 +1340,7 @@ class GetEpochPrediction:
         elif activation == "sigmoid":
             c1 = pars[f"add_activation.c1"]
             c2 = pars[f"add_activation.c1"]
-        preds_e, preds_v, labels_e, labels_v, mask, grads = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
-
+        preds_e, preds_v, labels_e, labels_v, masks, grads  = get_predictions_and_labels(model=topomodel, dataset=self.dataset_loader)
         # model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
             "//", "/"
@@ -1131,8 +1363,10 @@ class GetEpochPrediction:
             f.create_dataset(name="pred_vertex_features", data=preds_v)
             f.create_dataset(name="labels_edge", data=labels_e)
             f.create_dataset(name="labels_vertex_features", data=labels_v)
-            # f.create_dataset(name="mask", data=mask)
+            f.create_dataset(name="mask", data=masks)
             f.create_dataset(name="gradients", data=grads)
+            # f.create_dataset(name="gradients_pertrack", data=grads_pertrack.data)
+            # f.create_dataset(name="gradients_pertrack_mask", data=grads_pertrack.mask)
             # for i in range(len(model_weights)):
             #     f.create_dataset(name=model_weight_dict[i], data=model_weights[i])
             if activation == "shifted_relu":
