@@ -364,11 +364,15 @@ class DatasetCreater:
             # self.edge_features = f["/edge_features"][
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
+            self.trackExtra= f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize
+            ]
 
         self.ind_truthflav = self.get_b_indeces()
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
+        self.trackExtra = self.trackExtra[self.ind_truthflav]
         # self.edge_features = self.edge_features[self.ind_truthflav]
 
     def get_b_indeces(self):
@@ -399,6 +403,12 @@ class DatasetCreater:
         # )
         tOL = np.logical_or(truthOriginLabel == 3, truthOriginLabel ==4).astype(int)
         return tOL
+
+    def get_edge_origin(self):
+        return self.truthOriginLabel
+    
+    def get_extra_track(self):
+        return self.trackExtra
 
     def get_edge_feat_y(self):
         edge_feat_y = np.array(

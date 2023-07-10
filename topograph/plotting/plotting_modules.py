@@ -8,7 +8,7 @@ import numpy.ma as ma
 from h5py import File
 from mlxtend.evaluate import confusion_matrix
 from mlxtend.plotting import plot_confusion_matrix
-from puma import PlotBase, Histogram, HistogramPlot
+from puma import PlotBase, Histogram, HistogramPlot, Roc, RocPlot
 from torch.nn import Module
 
 import torch.optim as optim
@@ -53,6 +53,19 @@ def get_var_names(var, used_vertex_properties):
     except ValueError:
         ind = -1
     return vardict[var], ind
+
+def get_track_origin(origin):
+    track_origin = {
+        0: "pile-up",
+        1: "Fake",
+        2: "Primary",
+        3: "FromB",
+        4: "FromBC",
+        5: "FromC",
+        6: "FromTau",
+        7: "Other Secondary"
+    }
+    return track_origin[origin]
 
 def get_point_styles(N):
     point_styles = [
@@ -540,6 +553,10 @@ class Plotter:
 
         if self.plot_n_tracks_per_jet:
             self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
+        
+        # self.plotting_track_origin()
+        
+        self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
                 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -704,6 +721,66 @@ class Plotter:
                     y_ticklabels=None, 
                     swap_inputs=True
             )
+
+    def plotting_roc_curves(self, model_file_numbers):
+        self.logger.info("plotting roc curves...")
+        for model_file_number in model_file_numbers:
+            self.logger.info(f"plotting predictions per epoch for model {model_file_number}")
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                labels = f["labels_edge"][:]
+                preds = f["pred_edge"][:]
+            Pos = preds[labels==1]
+            Neg = preds[labels==0]
+            percentages = np.linspace(start=0, end=100, num=50, endpoint=True)
+            percentages = 100-percentages
+            cut_vals_tpr = np.percentile(Pos, percentages)
+            fpr = [sum(Neg > cut_val_tpr)/len(Neg) for cut_val_tpr in cut_vals_tpr]
+            tpr = [sum(Pos > cut_val_tpr)/len(Pos) for cut_val_tpr in cut_vals_tpr]
+            self.plot_vals(
+                ylabel="TPR",
+                xlabel="FPR",
+                plot_name="ROC_curve",
+                vals=[tpr, fpr],
+                labels=[''],
+                title="ROC curve",
+                y_values_given=True
+            )
+
+
+    def plotting_track_origin(self):
+        test_file = (
+            f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
+        )
+        with File(test_file, "r") as test:
+            edge_origin = test["edge_origin"][:self.config.njets_test]
+            edge_label = test["Y_edge"][:self.config.njets_test]
+        track_origin = [
+            "pile-up",
+            "Fake",
+            "Primary",
+            "FromB",
+            "FromBC",
+            "FromC",
+            "FromTau",
+            "Other Secondary"
+        ]
+        self.plot_hist(
+            ylabel="number of tracks",
+            xlabel="track origin",
+            plot_name="origin_labels",
+            vals=[edge_origin, edge_origin[edge_label==1], edge_origin[edge_label==0]],
+            labels=["all tracks", "b-tracks", "non-b tracks"],
+            title="track origins",
+            logy=False,
+            norm=False,
+            nbins=8,
+            binrange=(-0.5,7.5),
+            y_ticklabels=track_origin,
+            colours=get_colours(3)
+        )
+
     
     def plotting_regression(self, model_file_numbers, var):
         for model_file_number in model_file_numbers:
@@ -852,7 +929,6 @@ class Plotter:
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
                 labels = f["labels_vertex_features"][:].flatten()
-            print(labels[:10])
             nbins = 50
             binrange = (min(labels),max(labels))            
             self.plot_hist(
@@ -1004,6 +1080,13 @@ class Plotter:
                 y_ticklabels=self.global_config.track_inputs,
                 swap_inputs=True
             )
+
+    def plot_jet_pt_from_tracks(self, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                grads = f["gradients"][:]
 
     def plot_saliency_per_var(self, model_file_numbers):
         track_vars = list(range(len(self.global_config.track_inputs)))
@@ -1234,7 +1317,7 @@ class Plotter:
         plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
 
     def plot_hist(
-        self, ylabel, xlabel, plot_name, vals, labels, nbins, binrange, colours, title=None, logy=True, norm=True
+        self, ylabel, xlabel, plot_name, vals, labels, nbins, binrange, colours, title=None, logy=True, norm=True, y_ticklabels=None
     ):
         plot_histo = HistogramPlot(
             n_ratio_panels=0,
@@ -1247,6 +1330,10 @@ class Plotter:
             y_scale=1.5,
             norm=norm
         )
+
+        if y_ticklabels is not None:
+            plot_histo.axis_top.set_yticks(list(range(len(y_ticklabels))))
+            plot_histo.axis_top.set_yticklabels(y_ticklabels)
 
         for val, label, col in zip(vals, labels, colours):
             plot_histo.add(

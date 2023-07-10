@@ -250,10 +250,23 @@ class Apply_Scaler:
                     if step == 0:
                         if self.config.edge_name in o.keys():
                             del o[self.config.edge_name]
+                        if "edge_origin" in o.keys():
+                            del o["edge_origin"]
+                        if "track_extra" in o.keys():
+                            del o["track_extra"]
                         edges = f[self.config.edge_name][indices[0] : indices[1]]
+                        edge_origin = f["edge_origin"][indices[0] : indices[1]]
+                        track_extra = f["track_extra"][indices[0] : indices[1]]
                         o.create_dataset(data=edges, name=self.config.edge_name, chunks=True, maxshape=(None, edges.shape[1]))
+                        o.create_dataset(data=edge_origin, name="edge_origin", chunks=True, maxshape=(None, edge_origin.shape[1]))
+                        o.create_dataset(data=track_extra, name="track_extra", chunks=True, maxshape=(None, track_extra.shape[1]))
                     else:
                         n_entries = indices[1] - indices[0]
                         o[self.config.edge_name].resize((o[self.config.edge_name].shape[0] + n_entries), axis=0)
                         o[self.config.edge_name][-n_entries:] = f[self.config.edge_name][indices[0] : indices[1]]
+                        o["edge_origin"].resize((o["edge_origin"].shape[0] + n_entries), axis=0)
+                        o["edge_origin"][-n_entries:] = f["edge_origin"][indices[0] : indices[1]]
+                        o["track_extra"].resize((o["track_extra"].shape[0] + n_entries), axis=0)
+                        o["track_extra"][-n_entries:] = f["track_extra"][indices[0] : indices[1]]
+
         logger.info("Appending done.")
