@@ -16,6 +16,7 @@ from torch import load, device, tensor, Tensor, autograd, ones_like, gradient
 from pytorch_lightning.callbacks import ModelSummary
 from torch.utils.data import DataLoader
 from torch.nn.functional import binary_cross_entropy_with_logits
+from sklearn.metrics import auc
 
 from topograph.modules import (
     TopographModel,
@@ -67,11 +68,33 @@ def get_track_origin(origin):
     }
     return track_origin[origin]
 
+def get_n_bins(dists, var):
+    if var in [
+        "numberOfPixelHits",
+        "numberOfSCTHits",
+        "numberOfInnermostPixelLayerHits",
+        "numberOfNextToInnermostPixelLayerHits", 
+        "numberOfInnermostPixelLayerSharedHits",
+        "numberOfInnermostPixelLayerSplitHits",
+        "numberOfPixelSharedHits", 
+        "numberOfPixelSplitHits",
+        "numberOfSCTSharedHits",
+        "numberOfPixelHoles",
+        "numberOfSCTHoles"
+    ]:
+        dist1 = np.unique(dists[0])
+        dist2 = np.unique(dists[1])
+        ticks = np.around(np.unique(list(dist1) + list(dist2)),2)
+        nbins = len(ticks)
+        rangebins = (min(ticks)-np.abs(ticks[1]-ticks[0])/2, max(ticks)+np.abs(ticks[1]-ticks[0])/2)
+        return nbins, rangebins, ticks
+    return 50, None, None
+
 def get_point_styles(N):
     point_styles = [
         "r-",
-        "b.",
-        "g.",
+        "b-",
+        "g-",
         "c.",
         "m.",
         "rx",
@@ -295,6 +318,9 @@ class Plotter:
         self.plot_target_input_corr = self.config.evaluation.get("plot_target_input_corr", {}).get(
             "plot", False
         )
+        self.plot_inputs = self.config.evaluation.get("plot_inputs", {}).get(
+            "plot", False
+        )
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "recalculate", False
         )
@@ -321,7 +347,9 @@ class Plotter:
         self.recalculate_target_input_corr = self.config.evaluation.get("plot_target_input_corr", {}).get(
             "recalculate", False
         )
-
+        self.recalculate_inputs = self.config.evaluation.get("plot_inputs", {}).get(
+            "recalculate", False
+        )
         self.plot_dir = f"{self.training_output_folder}/plots"
         self.model_pred_folder = f"{self.training_output_folder}/model_predictions"
         makedirs(self.plot_dir, exist_ok=True)
@@ -555,8 +583,9 @@ class Plotter:
             self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
         
         # self.plotting_track_origin()
-        
-        self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
+        # self.plotting_input()
+        # self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
+        self.plot_jet_pt_from_tracks()
                 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -714,39 +743,86 @@ class Plotter:
                     ylabel=f"Delta {var_str}",
                     xlabel=f"predicted {var_str}", 
                     plot_name=f"Delta_{var}_model_{model_file_number}", 
-                    xvals=bins_x, 
+                    xvals=bins_x,
                     yvals=bins_y, 
                     zvals=hist_Delta, 
                     title=None, 
                     y_ticklabels=None, 
                     swap_inputs=True
             )
+    
+    def plotting_input(self):
+        with File(self.test_file, "r") as f:
+            inputs = f["X_train_tracks"][:self.njet_test]
+            labels = f["Y_edge"][:self.njet_test]
+        input_mask = ~np.all(inputs[..., :3] == 0, axis=-1)
+        inputs_b = inputs[np.logical_and(labels==1, input_mask)]
+        inputs_nonb = inputs[np.logical_and(labels==0, input_mask)]
+        input_vars = self.global_config.track_inputs
+        for i in range(0,len(input_vars)):
+            self.logger.info(f"plotting distribution for {input_vars[i]}")
+            dist_b = inputs_b[:,i]
+            dist_nonb = inputs_nonb[:,i]
+            dists = [dist_b, dist_nonb]
+            nbins, binrange, ticks = get_n_bins(dists=dists, var=input_vars[i])
+            self.plot_hist(
+                ylabel="normalised number of tracks",
+                xlabel=input_vars[i],
+                plot_name=f"Distr_{input_vars[i]}",
+                colours=get_colours(2),
+                vals=dists,
+                labels=["b-tracks", "non-b tracks"],
+                nbins=nbins,
+                binrange=binrange,
+                x_ticklabels=ticks,
+                logy=False
+            )
 
     def plotting_roc_curves(self, model_file_numbers):
         self.logger.info("plotting roc curves...")
         for model_file_number in model_file_numbers:
-            self.logger.info(f"plotting predictions per epoch for model {model_file_number}")
+            self.logger.info(f"plotting roc curve for model {model_file_number}")
             with File(
                 f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
             ) as f:
-                labels = f["labels_edge"][:]
-                preds = f["pred_edge"][:]
+                labels = f["labels_edge"][:self.njet_test]
+                preds = f["pred_edge"][:self.njet_test]
+            with File(f"{self.test_file}", "r") as f:
+                edge_origin = f["edge_origin"][:self.njet_test]
             Pos = preds[labels==1]
             Neg = preds[labels==0]
-            percentages = np.linspace(start=0, end=100, num=50, endpoint=True)
-            percentages = 100-percentages
-            cut_vals_tpr = np.percentile(Pos, percentages)
+            Pos_b = preds[np.logical_and(labels == 1, edge_origin == 3)]
+            Neg_b = preds[np.logical_or(labels == 0, edge_origin == 4)]
+            Pos_c = preds[np.logical_and(labels == 1, edge_origin == 4)]
+            Neg_c = preds[np.logical_or(labels == 0, edge_origin == 3)]
+            percentages = np.linspace(start=0, stop=100, num=100, endpoint=True)
+            cut_vals_tpr = np.percentile(Pos, 100-percentages)
+            epsilon = 1e-3
             fpr = [sum(Neg > cut_val_tpr)/len(Neg) for cut_val_tpr in cut_vals_tpr]
             tpr = [sum(Pos > cut_val_tpr)/len(Pos) for cut_val_tpr in cut_vals_tpr]
-            self.plot_vals(
+            fpr_b = [sum(Neg_b > cut_val_tpr)/len(Neg_b) for cut_val_tpr in cut_vals_tpr]
+            tpr_b = [sum(Pos_b > cut_val_tpr)/len(Pos_b) for cut_val_tpr in cut_vals_tpr]
+            fpr_c = [sum(Neg_c > cut_val_tpr)/len(Neg_c) for cut_val_tpr in cut_vals_tpr]
+            tpr_c = [sum(Pos_c > cut_val_tpr)/len(Pos_c) for cut_val_tpr in cut_vals_tpr]
+            auc_val = np.round(auc(fpr, tpr), 2)
+            auc_val_b = np.round(auc(fpr_b, tpr_b), 2)
+            auc_val_c = np.round(auc(fpr_c, tpr_c), 2)
+            plot, plotname = self.plot_vals(
                 ylabel="TPR",
                 xlabel="FPR",
                 plot_name="ROC_curve",
-                vals=[tpr, fpr],
-                labels=[''],
-                title="ROC curve",
-                y_values_given=True
+                vals=[[fpr, tpr],[fpr_b, tpr_b],[fpr_c, tpr_c]],
+                labels=["b and bc", "b", "bc"],
+                title=f"ROC curve, AUC = {auc_val}, AUC_b = {auc_val_b}, AUC_bc = {auc_val_c}",
+                y_values_given=True,
+                point_styles=get_point_styles(3),
+                return_plot=True
             )
+            plot.axis_top.plot([0,1], [1,1], "b", linestyle="dashed")
+            plot.axis_top.plot([0,0], [0,1], "b", linestyle="dashed")
+
+            plot.savefig(plotname)
+
 
 
     def plotting_track_origin(self):
@@ -764,21 +840,25 @@ class Plotter:
             "FromBC",
             "FromC",
             "FromTau",
-            "Other Secondary"
+            "Oth. 2nd"
         ]
+
+        b_tracks = edge_origin[np.logical_and(edge_label==1, edge_origin!=-1)]
+        nonb_tracks = edge_origin[np.logical_and(edge_label==0, edge_origin!=-1)]
+
         self.plot_hist(
-            ylabel="number of tracks",
+            ylabel="normalised number of tracks",
             xlabel="track origin",
             plot_name="origin_labels",
-            vals=[edge_origin, edge_origin[edge_label==1], edge_origin[edge_label==0]],
-            labels=["all tracks", "b-tracks", "non-b tracks"],
+            vals=[b_tracks, nonb_tracks],
+            labels=["b-tracks", "non-b tracks"],
             title="track origins",
             logy=False,
-            norm=False,
+            norm=True,
             nbins=8,
             binrange=(-0.5,7.5),
-            y_ticklabels=track_origin,
-            colours=get_colours(3)
+            x_ticklabels=track_origin,
+            colours=get_colours(2),
         )
 
     
@@ -859,7 +939,6 @@ class Plotter:
             norm=False,
             logy=False
         )
-
 
 
     def plotting_confusion_matrix(self, model_file_numbers):
@@ -1081,12 +1160,58 @@ class Plotter:
                 swap_inputs=True
             )
 
-    def plot_jet_pt_from_tracks(self, model_file_numbers):
-        for model_file_number in model_file_numbers:
-            with File(
-                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-            ) as f:
-                grads = f["gradients"][:]
+    def plot_jet_pt_from_tracks(self):
+        with File(self.test_file, "r") as f:
+            data_target = f["jet_pt"][:self.njet_test]
+            labels_e = f["Y_edge"][:self.njet_test]
+            tracks_extra = f["track_extra"][:self.njet_test]
+            edge_origin = f["edge_origin"][:self.njet_test]
+        phis = tracks_extra["dphi"]
+        pt = tracks_extra["pt"]
+        # pt = pt[~np.isnan(pt)]
+        # phis = phis[~np.isnan(phis)]
+        pt = ma.array(pt,mask=~(labels_e == 1))
+        phis = ma.array(phis,mask=~(labels_e == 1))
+        pt_bs_coll = []
+        pt_true = []
+        pi = np.pi
+        pt_shape = pt.shape
+        for i in range(0, pt_shape[0]):
+            pt_bs = pt.data[i][~pt.mask[i]]
+            phi_bs = phis.data[i][~phis.mask[i]]
+            if len(pt_bs) > 0:
+                pt_b = pt_bs[0]
+                phi_b = phi_bs[0]
+            else:
+                continue
+            if len(pt_bs) > 1:
+                for j in range(1, len(pt_bs)):
+                    phi_b = np.abs(phi_b-phi_bs[j])
+                    if phi_b > pi:
+                        phi_b = pi-phi_b
+                    pt_b = np.sqrt(pt_b*pt_b + pt_bs[j]*pt_bs[j] - 2*pt_b*pt_bs[j]*np.cos(phi_b))
+            pt_true.append(data_target[i])
+            pt_bs_coll.append(pt_b)
+        true_min = min(pt_true)
+        cal_min = min(pt_bs_coll)
+        true_max = max(pt_true)
+        cal_max = max(pt_bs_coll)
+        bins_true = np.linspace(0, 70000, 20)
+        bins_cal = np.linspace(0, 20000, 20)
+        # bins_true = np.linspace(true_min, true_max, 50)
+        # bins_cal = np.linspace(cal_min, cal_max, 50)
+        print(cal_min, cal_max, true_min, true_max)
+        hist = np.histogram2d(pt_bs_coll, pt_true, bins=[bins_cal, bins_true])[0]
+        print(hist)
+        self.plot_scatter_vals(
+            xvals=bins_cal,
+            yvals=bins_true,
+            zvals=hist,
+            ylabel="True b-hadron p_T",
+            xlabel="p_T based on b-hadron tracks",
+            plot_name="calculated_bhadron_pt"
+        )
+
 
     def plot_saliency_per_var(self, model_file_numbers):
         track_vars = list(range(len(self.global_config.track_inputs)))
@@ -1104,37 +1229,43 @@ class Plotter:
             rep_grad_mask = np.repeat(grads_mask, grads_shape[-1], axis = -1).astype(bool).reshape(grads_shape)
             rep_grad_mask_b = np.repeat(np.logical_and(grads_mask, labels_edge == 1), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
             rep_grad_mask_nonb = np.repeat(np.logical_and(grads_mask, labels_edge == 0), grads_shape[-1], axis = -1).astype(bool).reshape(grads.shape)
-            for var in track_vars:
+            for var in track_vars[14:16]:
                 var_str = self.global_config.track_inputs[var]
                 self.logger.info(f"plotting gradients of variable {var_str} for model {model_file_number}")
                 dist_wozero = np.array(
                     [
-                        np.array(grads[:,:,var][rep_grad_mask_wozero[:,:,var]]).flatten(), 
-                        np.array(grads[:,:,var][rep_grad_mask_b_wozero[:,:,var]]).flatten(), 
-                        np.array(grads[:,:,var][rep_grad_mask_nonb_wozero[:,:,var]]).flatten()
+                        np.array(grads[:,:8,var][rep_grad_mask_wozero[:,:8,var]]).flatten(), 
+                        np.array(grads[:,:8,var][rep_grad_mask_b_wozero[:,:8,var]]).flatten(), 
+                        np.array(grads[:,:8,var][rep_grad_mask_nonb_wozero[:,:8,var]]).flatten()
                     ]
                 )
-                minimum_dist = min([min(d) for d in dist_wozero])
-                maximum_dist = max([max(d) for d in dist_wozero])
+                # minimum_dist = min([min(d) for d in dist_wozero])
+                # maximum_dist = max([max(d) for d in dist_wozero])
+                [minimum_dist,maximum_dist] = np.percentile(dist_wozero[0], q=[10,90])
+                for dist in dist_wozero:
+                    dist[dist<minimum_dist] = minimum_dist
+                    dist[dist>maximum_dist] = maximum_dist
+                nbins = 25
                 self.plot_hist(
                     ylabel="normalised number of tracks",
                     xlabel="gradient",
                     plot_name=f"gradient_wzeros_per_var_{var_str}",
                     vals=dist_wozero,
                     labels=["gradients, all tracks", "gradients, b tracks", "gradients, non-b tracks"],
-                    nbins=25,
-                    binrange=(-0.1,0.1), #(minimum_dist,maximum_dist),
+                    nbins=nbins,
+                    binrange=(minimum_dist, maximum_dist),
                     colours=["red", "blue", "green"],
                     logy=False
                 )
         
                 dist_wzero = np.array(
                     [
-                        np.array(grads[:,:,var][rep_grad_mask[:,:,var]]).flatten(), 
-                        np.array(grads[:,:,var][rep_grad_mask_b[:,:,var]]).flatten(), 
-                        np.array(grads[:,:,var][rep_grad_mask_nonb[:,:,var]]).flatten()
+                        np.array(grads[:,:8,var][rep_grad_mask[:,:8,var]]).flatten(),
+                        np.array(grads[:,:8,var][rep_grad_mask_b[:,:8,var]]).flatten(),
+                        np.array(grads[:,:8,var][rep_grad_mask_nonb[:,:8,var]]).flatten()
                     ]
                 )
+
                 minimum_dist = min([min(d) for d in dist_wzero])
                 maximum_dist = max([max(d) for d in dist_wzero])
                 self.plot_hist(
@@ -1148,7 +1279,6 @@ class Plotter:
                     colours=["red", "blue", "green"],
                     logy=False
                 )
-            
 
 
     def plot_model_weights(self, model_file_numbers):
@@ -1277,7 +1407,7 @@ class Plotter:
         fig.clear()
 
     def plot_vals(
-        self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None, y_values_given=False, y_ticklabels=None
+        self, ylabel, xlabel, plot_name, vals, labels, point_styles, title=None, y_values_given=False, y_ticklabels=None, return_plot=False
     ):  
         if y_values_given:
             ymax = max(vals[0][1])
@@ -1314,11 +1444,25 @@ class Plotter:
                 plot.axis_top.set_yticklabels(y_ticklabels)
         plot.axis_top.legend()
         plot = create_figure(plot=plot)
-        plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
+        if return_plot:
+            return plot, f"{self.plot_dir}/{plot_name}.pdf"
+        else:
+            plot.savefig(f"{self.plot_dir}/{plot_name}.pdf")
 
     def plot_hist(
-        self, ylabel, xlabel, plot_name, vals, labels, nbins, binrange, colours, title=None, logy=True, norm=True, y_ticklabels=None
+        self, ylabel, xlabel, plot_name, vals, labels, colours, nbins=50, title=None, logy=True, norm=True, y_ticklabels=None, x_ticklabels=None, binrange=None
     ):
+        if binrange is None:
+            minimum_glob = min(vals[0])
+            maximum_glob = max(vals[0])
+            if len(vals) > 1:
+                for val in vals[1:]:
+                    min_tmp = min(val)
+                    max_tmp = max(val)
+                    minimum_glob = min_tmp if min_tmp < minimum_glob else minimum_glob
+                    maximum_glob = max_tmp if max_tmp > maximum_glob else maximum_glob
+            binrange = (minimum_glob, maximum_glob)
+
         plot_histo = HistogramPlot(
             n_ratio_panels=0,
             ylabel=ylabel,
@@ -1326,7 +1470,7 @@ class Plotter:
             logy=logy,
             leg_ncol=1,
             figsize=(5.5, 4.5),
-            bins=np.linspace(*binrange, nbins, endpoint=True),
+            bins=np.linspace(*binrange, nbins+1, endpoint=True),
             y_scale=1.5,
             norm=norm
         )
@@ -1334,6 +1478,14 @@ class Plotter:
         if y_ticklabels is not None:
             plot_histo.axis_top.set_yticks(list(range(len(y_ticklabels))))
             plot_histo.axis_top.set_yticklabels(y_ticklabels)
+        
+        if x_ticklabels is not None:
+            if isinstance(x_ticklabels[0],str):
+                # plot_histo.axis_top.set_xticks([])
+                plot_histo.axis_top.set_xticks(list(range(len(x_ticklabels))))
+            else:
+                plot_histo.axis_top.set_xticks(x_ticklabels,x_ticklabels)
+            # plot_histo.axis_top.set_xticklabels(x_ticklabels)
 
         for val, label, col in zip(vals, labels, colours):
             plot_histo.add(
@@ -1344,7 +1496,7 @@ class Plotter:
                 )
             )
         plot_histo.draw()
-        plot_histo.savefig(f"{self.plot_dir}/{plot_name}.pdf")
+        plot_histo.savefig(f"{self.plot_dir}/{plot_name}.png")
 
     def save_vals(self, dataset_name, data):
         with File(self.plot_file, "a") as f:

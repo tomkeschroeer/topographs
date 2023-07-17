@@ -358,10 +358,16 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             ]
             self.reco_dtypes = self.reco.dtype
+            self.reco_jets = f["jets"].fields("pt")[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize
+            ]
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
-            # self.edge_features = f["/edge_features"][
+            self.trackExtraTruth = f["ConeExclFinalLabels"].fields(["pt", "phi"])[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize
+            ]
+            # self.edge_features = f["/edge_features"][ConeExclFinalLabels
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
             self.trackExtra= f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
@@ -373,6 +379,8 @@ class DatasetCreater:
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
         self.trackExtra = self.trackExtra[self.ind_truthflav]
+        self.trackExtraTruth = self.trackExtraTruth[self.ind_truthflav]
+        self.reco_jets = self.reco_jets[self.ind_truthflav]
         # self.edge_features = self.edge_features[self.ind_truthflav]
 
     def get_b_indeces(self):
@@ -407,8 +415,19 @@ class DatasetCreater:
     def get_edge_origin(self):
         return self.truthOriginLabel
     
+    def get_jet_pt(self):
+        return self.reco_jets
+
     def get_extra_track(self):
         return self.trackExtra
+    
+    def get_extra_track_truth(self):
+        return self.trackExtraTruth
+
+    def get_unscaled_pt(self):
+        flavour = self.truth["flavour"]
+        unscaled_pt = self.truth["pt"][flavour == 5]
+        return unscaled_pt
 
     def get_edge_feat_y(self):
         edge_feat_y = np.array(
