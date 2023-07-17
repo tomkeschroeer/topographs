@@ -341,6 +341,7 @@ class DatasetCreater:
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
         self.vertex_features = self.global_conf.vertex_features
+        self.ntracks = 20
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -355,17 +356,17 @@ class DatasetCreater:
                 "HadronConeExclExtendedTruthLabelID"
             ][self.step * self.stepsize : (self.step + 1) * self.stepsize]
             self.reco = f[f"/{self.config.input_tracks_name}"].fields(self.global_conf.track_inputs)[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize, :
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
             self.reco_dtypes = self.reco.dtype
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
             # self.edge_features = f["/edge_features"][
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
             self.trackExtra= f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
 
         self.ind_truthflav = self.get_b_indeces()

@@ -861,7 +861,6 @@ class Plotter:
         )
 
 
-
     def plotting_confusion_matrix(self, model_file_numbers):
         for model_file_number in model_file_numbers:
             self.logger.info(f"plotting confusion matrix for model {model_file_number}")
