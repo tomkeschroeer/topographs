@@ -3,16 +3,16 @@ Classes for loading the flavour tagging datasets for pytorch
 """
 # pylint: disable=no-member
 
-from pathlib import Path
 import math
+from math import isnan
+from pathlib import Path
 from typing import Union
 
 import h5py
 import numpy as np
-from math import isnan
-
 import torch as T
-from torch.utils.data import Dataset, IterableDataset, get_worker_info, TensorDataset
+from torch.utils.data import Dataset, IterableDataset, TensorDataset, get_worker_info
+
 from topograph.modules import get_sample_weights
 
 
@@ -24,13 +24,9 @@ def scary_shuffle(*arrays):
         np.random.shuffle(a)
         np.random.set_state(rng_state)
 
+
 class Topographs_dataset(IterableDataset):
-    def __init__(
-            self,
-            filename,
-            batch_size,
-            n_samples
-    ):
+    def __init__(self, filename, batch_size, n_samples):
         IterableDataset.__init__(self)
         self.filename = filename
         self.batch_size = batch_size
@@ -41,13 +37,25 @@ class Topographs_dataset(IterableDataset):
         self.tracks = self.file["X_train_tracks"]
         self.labels_v = self.file["Y_vertex_features"]
         self.labels_e = self.file["Y_edge"]
-    
+
     def get_indeces(self):
-        if self.n_samples == -1: 
+        if self.n_samples == -1:
             self.n_samples = len(self.tracks)
-        self.n_batches = np.ceil(self.n_samples/self.batch_size)
-        starts = np.linspace(0,(self.n_batches-1)*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
-        ends = np.linspace(self.batch_size, self.n_batches*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
+        self.n_batches = np.ceil(self.n_samples / self.batch_size)
+        starts = np.linspace(
+            0,
+            (self.n_batches - 1) * self.batch_size,
+            int(self.n_batches),
+            endpoint=True,
+            dtype=int,
+        )
+        ends = np.linspace(
+            self.batch_size,
+            self.n_batches * self.batch_size,
+            int(self.n_batches),
+            endpoint=True,
+            dtype=int,
+        )
         if ends[-1] > self.n_samples:
             inds = zip(starts[:-1], ends[:-1])
         else:
@@ -58,11 +66,13 @@ class Topographs_dataset(IterableDataset):
         indices = self.get_indeces()
         self.open()
         for inds in indices:
-            self.tracks_batch = self.tracks[inds[0]:inds[1]].astype(np.float32)
-            self.labels_v_batch = self.labels_v[inds[0]:inds[1]].astype(np.float32)
-            self.labels_e_batch = self.labels_e[inds[0]:inds[1]].astype(np.float32)
+            self.tracks_batch = self.tracks[inds[0] : inds[1]].astype(np.float32)
+            self.labels_v_batch = self.labels_v[inds[0] : inds[1]].astype(np.float32)
+            self.labels_e_batch = self.labels_e[inds[0] : inds[1]].astype(np.float32)
             self.mask_batch = ~np.all(self.tracks_batch[..., :3] == 0, axis=-1)
-            self.samples_weights_batch = np.array(list(map(get_sample_weights, self.labels_e_batch)), dtype=np.float32)
+            self.samples_weights_batch = np.array(
+                list(map(get_sample_weights, self.labels_e_batch)), dtype=np.float32
+            )
             yield self.tracks_batch, self.labels_e_batch, self.labels_v_batch, self.samples_weights_batch, self.mask_batch, None
 
     def __len__(self) -> int:
@@ -77,6 +87,7 @@ class Topographs_dataset(IterableDataset):
     def on_epoch_end(self):
         """Close the HDF file at the end on epoch to free up the cache"""
         self.file.close()
+
 
 class FlavourTaggingCommon:
     """Parent class to collect the common attributes and methods for the two types
@@ -105,11 +116,11 @@ class FlavourTaggingCommon:
         dtype: np.dtype = np.float32,
         buffer_size: int = 100_000,
         buffer_shuffle: bool = False,
-        track_name = "X_train_tracks",
-        Y_edge_name = "Y_edge",
-        Y_vertex_name = "Y_vertex_features",
-        njets = -1,
-        used_vertex_properties = None,
+        track_name="X_train_tracks",
+        Y_edge_name="Y_edge",
+        Y_vertex_name="Y_vertex_features",
+        njets=-1,
+        used_vertex_properties=None,
     ):
         """
         kwargs:
@@ -168,12 +179,12 @@ class FlavourTaggingCommon:
     def _open_file(self):
         """Open the HDF files and keep the tables open"""
         self.file = h5py.File(self.file_name, "r")
-        self.tracks = self.file[self.track_name][:self.njets]
+        self.tracks = self.file[self.track_name][: self.njets]
 
         ## Truth information is not available in test files
         # if self.dset != "test":
-        self.vertex_labels = self.file[self.Y_vertex_name][:self.njets]
-        self.edge_label = self.file[self.Y_edge_name][:self.njets]
+        self.vertex_labels = self.file[self.Y_vertex_name][: self.njets]
+        self.edge_label = self.file[self.Y_edge_name][: self.njets]
         self.sample_weights = np.array(list(map(get_sample_weights, self.edge_label)))
 
     def __len__(self) -> int:
@@ -189,6 +200,7 @@ class FlavourTaggingCommon:
     def on_epoch_end(self):
         """Close the HDF file at the end on epoch to free up the cache"""
         self.file.close()
+
 
 class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
     """Uses a distributed streaming method
@@ -237,10 +249,14 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
             if self.vars is None:
                 buf_tracks = self.tracks[buf_start:buf_end, :, :].astype(self.dtype)
             else:
-                buf_tracks = self.tracks[buf_start:buf_end, :, self.vars].astype(self.dtype)
+                buf_tracks = self.tracks[buf_start:buf_end, :, self.vars].astype(
+                    self.dtype
+                )
             buf_edge_labels = self.edge_label[buf_start:buf_end].astype("f")
             if self.used_vertex_properties is not None:
-                buf_vertex_labels = self.vertex_labels[buf_start:buf_end,self.used_vertex_properties].astype("f")
+                buf_vertex_labels = self.vertex_labels[
+                    buf_start:buf_end, self.used_vertex_properties
+                ].astype("f")
             else:
                 buf_vertex_labels = self.vertex_labels[buf_start:buf_end]
             buf_sample_weights = self.sample_weights[buf_start:buf_end].astype("f")
@@ -269,7 +285,7 @@ class IterableFlavourTaggingDataset(FlavourTaggingCommon, IterableDataset):
                 mask = ~np.all(tracks[..., :3] == 0, axis=-1)
                 # tracks[mask] = -T.inf
                 # tracks = T.Tensor(tracks).masked_fill(mask, T.inf)
-                mask_vertex_labels = np.all(~np.isnan(vertex_labels), axis = -1)
+                mask_vertex_labels = np.all(~np.isnan(vertex_labels), axis=-1)
                 yield tracks, edge_labels, vertex_labels, sample_weights, mask, mask_vertex_labels
 
     def __getitem__(self, *_args) -> None:

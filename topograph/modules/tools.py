@@ -4,9 +4,11 @@ import pathlib
 from glob import glob
 
 import numpy as np
+
 # import tensorflow.keras.backend as K
 import yaml
 from h5py import File
+
 # from tensorflow import TensorShape, Variable, constant, float32
 from torch.utils.data import IterableDataset
 
@@ -280,8 +282,8 @@ class GlobalConfig:
             global_conf = yaml.load(global_conf_file, Loader=yaml.FullLoader)
             self.track_inputs = global_conf.get("track_inputs")
             self.edge_features = global_conf.get("edge_features")
-            self.vertex_features = list(global_conf.get("vertex_features",{}).keys())
-            self.vertex_feat_dict = global_conf.get("vertex_features",{})
+            self.vertex_features = list(global_conf.get("vertex_features", {}).keys())
+            self.vertex_feat_dict = global_conf.get("vertex_features", {})
 
 
 class GetConfiguration:
@@ -346,33 +348,37 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
             # dt = self.truth.dtype
-            self.vertex_feat_dtypes = np.array(self.truth[self.global_conf.vertex_features].dtype)
-            self.vertex_feat_dtypes = np.dtype(list(self.truth[self.global_conf.vertex_features].dtype.fields.items()))
+            self.vertex_feat_dtypes = np.array(
+                self.truth[self.global_conf.vertex_features].dtype
+            )
+            self.vertex_feat_dtypes = np.dtype(
+                list(self.truth[self.global_conf.vertex_features].dtype.fields.items())
+            )
             # self.vertex_feat_dtypes = np.stack(self.vertex_feat_dtypes)
             # self.vertex_feat_dtypes = np.dtype(list(zip(self.vertex_feat_dtypes.names, self.vertex_feat_dtypes["formats"])))
             # self.vertex_feat_dtypes = zip(self.vertex_feat_dtypes["names"], self.vertex_feat_dtypes["formats"])
             self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][
                 "HadronConeExclExtendedTruthLabelID"
             ][self.step * self.stepsize : (self.step + 1) * self.stepsize]
-            self.reco = f[f"/{self.config.input_tracks_name}"].fields(self.global_conf.track_inputs)[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize, :
-            ]
+            self.reco = f[f"/{self.config.input_tracks_name}"].fields(
+                self.global_conf.track_inputs
+            )[self.step * self.stepsize : (self.step + 1) * self.stepsize, :]
             self.reco_dtypes = self.reco.dtype
             self.reco_jets = f["jets"].fields("pt")[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
-            self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize
-            ]
+            self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields(
+                "truthOriginLabel"
+            )[self.step * self.stepsize : (self.step + 1) * self.stepsize]
             self.trackExtraTruth = f["ConeExclFinalLabels"].fields(["pt", "phi"])[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
             # self.edge_features = f["/edge_features"][ConeExclFinalLabels
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
-            self.trackExtra= f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize
-            ]
+            self.trackExtra = f[f"/{self.config.input_tracks_name}"].fields(
+                ["pt", "dphi"]
+            )[self.step * self.stepsize : (self.step + 1) * self.stepsize]
 
         self.ind_truthflav = self.get_b_indeces()
         self.truth = self.truth[self.ind_truthflav]
@@ -409,18 +415,18 @@ class DatasetCreater:
         #         for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)
         #     ]
         # )
-        tOL = np.logical_or(truthOriginLabel == 3, truthOriginLabel ==4).astype(int)
+        tOL = np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int)
         return tOL
 
     def get_edge_origin(self):
         return self.truthOriginLabel
-    
+
     def get_jet_pt(self):
         return self.reco_jets
 
     def get_extra_track(self):
         return self.trackExtra
-    
+
     def get_extra_track_truth(self):
         return self.trackExtraTruth
 
@@ -555,24 +561,23 @@ class DataGenerator(IterableDataset):
                 and self.get_sample_weights
             ):
                 yield (
-                    self.track_batch,self.track_batch,
-                    self.edge_batch, self.vertex_feat_batch,
-                    self.sample_weight_batch
+                    self.track_batch,
+                    self.track_batch,
+                    self.edge_batch,
+                    self.vertex_feat_batch,
+                    self.sample_weight_batch,
                 )
             elif self.get_inputs and self.get_labels and self.get_weight_labels:
                 yield (
-                    self.track_batch, self.track_batch,
-                    self.edge_batch, self.vertex_feat_batch
+                    self.track_batch,
+                    self.track_batch,
+                    self.edge_batch,
+                    self.vertex_feat_batch,
                 )
             elif self.get_inputs and self.get_labels and not self.get_weight_labels:
-                yield (
-                    self.track_batch, self.track_batch,
-                    self.vertex_feat_batch
-                )
+                yield (self.track_batch, self.track_batch, self.vertex_feat_batch)
             elif self.get_inputs:
-                yield (
-                    self.track_batch, self.track_batch
-                )
+                yield (self.track_batch, self.track_batch)
             elif self.get_labels:
                 yield self.vertex_feat_batch
             elif self.get_weight_labels:

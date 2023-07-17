@@ -30,8 +30,5 @@ edge_features:
 vertex_features:
   pt:
     log: True
-  eta:
-    log: False
-
-
-    
+  # eta:
+  #   log: False

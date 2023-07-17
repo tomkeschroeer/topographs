@@ -1,13 +1,11 @@
+import json
+import os
+
 import numpy as np
 from h5py import File
-import os
-import json
 
-from topograph.modules.tools import (
-    get_logger,
-    GlobalConfig,
-    get_mask
-)
+from topograph.modules.tools import GlobalConfig, get_logger, get_mask
+
 
 class Scaler:
     def __init__(self, config):
@@ -23,8 +21,16 @@ class Scaler:
         # Extract the correct variables
         chunk_size = 1e5
 
-        file_name = f"{self.config.output}/{self.config.preprocessing_file_name}".replace(".h5","") + ".h5"
-        self.scale_dict_path = f"{self.config.output}/{self.config.scale_dict}".replace(".json","") + ".json"
+        file_name = (
+            f"{self.config.output}/{self.config.preprocessing_file_name}".replace(
+                ".h5", ""
+            )
+            + ".h5"
+        )
+        self.scale_dict_path = (
+            f"{self.config.output}/{self.config.scale_dict}".replace(".json", "")
+            + ".json"
+        )
         # Get the file_length
         file_length = len(File(file_name, "r")[f"/{self.config.tracks_name}"])
 
@@ -56,18 +62,13 @@ class Scaler:
             # Check if this is the first time loading from the generator
             if chunk_counter == 0:
                 # Get the first chunk of scales from the generator
-                scale_dict_selection, nEntries_loaded = next(
-                    scaling_generator
-                )
+                scale_dict_selection, nEntries_loaded = next(scaling_generator)
             else:
                 # Get the next chunk of scales from the generator
                 tmp_dict, tmp_nEntries_loaded = next(scaling_generator)
 
                 # Combine the scale dicts coming from the generator
-                (
-                    scale_dict_selection,
-                    nEntries_loaded,
-                ) = self.join_scale_dicts_trks(
+                (scale_dict_selection, nEntries_loaded,) = self.join_scale_dicts_trks(
                     first_scale_dict=scale_dict_selection,
                     second_scale_dict=tmp_dict,
                     first_ns=nEntries_loaded,
@@ -76,7 +77,7 @@ class Scaler:
 
         scale_dict_trk.update({self.config.input_tracks_name: scale_dict_selection})
 
-            # Add scale dict for given tracks selection to the more general one
+        # Add scale dict for given tracks selection to the more general one
         # TODO: change in python 3.9
         # save scale/shift dictionary to json file
         os.makedirs(os.path.dirname(self.scale_dict_path), exist_ok=True)
@@ -136,7 +137,7 @@ class Scaler:
                 tracks_chunk = np.asarray(
                     infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
                 )[:]
-                
+
                 vert_prop_chunk = np.asarray(
                     infile_all[f"/{vert_prop_name}"][index_tuple[0] : index_tuple[1]]
                 )
@@ -147,37 +148,40 @@ class Scaler:
                 X_train_tracks = np.stack(
                     [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
                 )
-                
+
                 X_train_vert_prop = np.stack(
-                    [np.nan_to_num(vert_prop_chunk[v]) for v in self.var_list_vert], axis=-1 #len(self.var_list_vert)
+                    [np.nan_to_num(vert_prop_chunk[v]) for v in self.var_list_vert],
+                    axis=-1,  # len(self.var_list_vert)
                 )
 
                 scale_dict_trk, nTrks = self.get_scaling(
                     data=X_train_tracks[:],
                     var_names=self.var_list,
                     track_mask=track_mask,
-                    scale_tracks=True
+                    scale_tracks=True,
                 )
 
                 scale_dict_vert_prop, nJets = self.get_scaling(
                     data=X_train_vert_prop[:],
                     var_names=self.var_list_vert,
                     track_mask=vert_mask,
-                    scale_tracks=False
+                    scale_tracks=False,
                 )
-                
-                scale_dict = {tracks_name: scale_dict_trk, vert_prop_name: scale_dict_vert_prop}
+
+                scale_dict = {
+                    tracks_name: scale_dict_trk,
+                    vert_prop_name: scale_dict_vert_prop,
+                }
                 nEntries = {tracks_name: nTrks, vert_prop_name: nJets}
                 # Yield the scale dict and the number jets
                 yield scale_dict, nEntries
-
 
     def get_scaling(
         self,
         data: np.ndarray,
         var_names: list,
         track_mask: np.ndarray,
-        scale_tracks = False
+        scale_tracks=False,
     ):
         """
         Calculate the scale dict for the tracks and return the dict.
@@ -206,19 +210,19 @@ class Scaler:
 
         # For each track variable
         for v, name in enumerate(var_names):
-            
+
             if scale_tracks:
-                f = data[:,:,v]
+                f = data[:, :, v]
             else:
                 if len(var_names) != 1:
-                    f = data[:,v]
+                    f = data[:, v]
                 else:
                     f = data[:]
-            
+
             slc = f[track_mask]
 
             # Get tracks
-            nEntries= len(slc)            
+            nEntries = len(slc)
 
             # Caculate normalisation parameters
             m, s = slc.mean(), slc.std()
@@ -279,8 +283,10 @@ class Scaler:
 
         # Sum of nTrks corresponding to combined scale dict
         combined_ns = {
-            self.config.tracks_name: first_ns[self.config.tracks_name] + second_ns[self.config.tracks_name],
-            self.config.vertex_feat_name: first_ns[self.config.vertex_feat_name] + second_ns[self.config.vertex_feat_name],
+            self.config.tracks_name: first_ns[self.config.tracks_name]
+            + second_ns[self.config.tracks_name],
+            self.config.vertex_feat_name: first_ns[self.config.vertex_feat_name]
+            + second_ns[self.config.vertex_feat_name],
         }
 
         return combined_scale_dict, combined_ns
