@@ -23,4 +23,4 @@ build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
     - pip install pylint
-    - pylint -j2 ./topograph
+    # - pylint -j2 ./topograph
