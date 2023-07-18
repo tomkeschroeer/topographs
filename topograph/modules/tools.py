@@ -341,7 +341,7 @@ class DatasetCreater:
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
         self.vertex_features = self.global_conf.vertex_features
-        self.ntracks = 20
+        self.ntracks = 40
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
