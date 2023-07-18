@@ -1,30 +1,31 @@
 """Training script to perform topograph training."""
 import argparse as pars
-import pytorch_lightning as pl
-import numpy as np
 import random as rd
-from h5py import File
-from os import makedirs
 import sys
+from os import makedirs
+
+import numpy as np
+import pytorch_lightning as pl
+from h5py import File
+
 sys.path.insert(0, "/home/users/s/schroeer/scratch/PhD/Topograph_repos/flavour_tagging")
 import shutil
 
 import torch.nn as nn
-from torch import tensor, save, from_numpy
 import torch.optim as optim
-from pytorch_lightning.loggers.wandb import WandbLogger
-from torch.utils.data import Dataset, DataLoader, TensorDataset, IterableDataset
-from pytorch_lightning.callbacks import ModelCheckpoint
 from lightning_lite.utilities.exceptions import MisconfigurationException
-from topograph.modules import get_sample_weights
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers.wandb import WandbLogger
+from torch import from_numpy, save, tensor
+from torch.utils.data import DataLoader, Dataset, IterableDataset, TensorDataset
 
 from topograph.modules import (
     GetConfiguration,
+    IterableFlavourTaggingDataset,
     TopographModel,
+    Topographs_dataset,
     get_sample_weights,
 )
-
-from topograph.modules import IterableFlavourTaggingDataset, Topographs_dataset
 
 
 def get_parser():
@@ -65,18 +66,23 @@ if __name__ == "__main__":
     n_epochs = config.epochs
     stepsize = config.stepsize
     lr = getattr(config, "lr", 1e-3)
-    
+
     loss_fac_edge = getattr(config, "loss_fac_edge", 100)
     loss_fac_vert = getattr(config, "loss_fac_vert", 1)
-    if loss_fac_edge is None: loss_fac_edge = 100
-    if loss_fac_vert is None: loss_fac_vert = 1
-    
-    used_vertex_properties = getattr(config,"used_vertex_properties",None)
+    if loss_fac_edge is None:
+        loss_fac_edge = 100
+    if loss_fac_vert is None:
+        loss_fac_vert = 1
+
+    used_vertex_properties = getattr(config, "used_vertex_properties", None)
 
     config_file_name = args.config
-    input_file_name = config_file_name.split("/")[-1].replace(".yaml","")
+    input_file_name = config_file_name.split("/")[-1].replace(".yaml", "")
     makedirs(config.output_training, exist_ok=True)
-    shutil.copyfile(config_file_name, f"{config.output_training}/{input_file_name}.yaml".replace("//","/"))
+    shutil.copyfile(
+        config_file_name,
+        f"{config.output_training}/{input_file_name}.yaml".replace("//", "/"),
+    )
 
     edge_weight_layer_name = "edge_weight"
     edge_feat_layer_name = "edge_feat"
@@ -107,13 +113,19 @@ if __name__ == "__main__":
             str_vars += f"_{var}"
 
     training_output_folder = config.output_training
-    training_output_folder = training_output_folder [:-1] if training_output_folder[-1] == "/" else training_output_folder
+    training_output_folder = (
+        training_output_folder[:-1]
+        if training_output_folder[-1] == "/"
+        else training_output_folder
+    )
     training_output_folder += str_vars
 
-    nodes_vertex=config.vertex_network["nodes"]
-    if isinstance(used_vertex_properties, int): nodes_vertex[-1] = 1 
-    elif isinstance(used_vertex_properties, (list,np.ndarray)): nodes_vertex[-1] = len(used_vertex_properties)
-    
+    nodes_vertex = config.vertex_network["nodes"]
+    if isinstance(used_vertex_properties, int):
+        nodes_vertex[-1] = 1
+    elif isinstance(used_vertex_properties, (list, np.ndarray)):
+        nodes_vertex[-1] = len(used_vertex_properties)
+
     topomodel = TopographModel(
         nodes_feat=edge_feat_nodes,
         nodes_weight=edge_weight_nodes,
@@ -127,8 +139,8 @@ if __name__ == "__main__":
     )
 
     makedirs(f"{training_output_folder}/modelfiles", exist_ok=True)
-    training_file = f"{config.output}/{config.training_file_name}".replace("//","/")
-    val_file = f"{config.output}/{config.validation_file_name}".replace("//","/")
+    training_file = f"{config.output}/{config.training_file_name}".replace("//", "/")
+    val_file = f"{config.output}/{config.validation_file_name}".replace("//", "/")
 
     topomodel.train()
     topograph_loss_edges = nn.BCELoss()
@@ -165,7 +177,7 @@ if __name__ == "__main__":
     # )
     tracks_dataset = Topographs_dataset(
         filename=training_file,
-        batch_size=min(njets,1024),
+        batch_size=min(njets, 1024),
         n_samples=njets,
     )
 
@@ -203,9 +215,7 @@ if __name__ == "__main__":
     #         from_numpy(mask_vertex_labels.astype(bool))
     # )
     valid_dataset = Topographs_dataset(
-        filename=val_file,
-        batch_size=min(njets_val,1024),
-        n_samples=njets_val
+        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val
     )
     valid_loader = DataLoader(valid_dataset, batch_size=None)
 
@@ -214,11 +224,11 @@ if __name__ == "__main__":
         monitor="valid/total",
         filename="checkpoint_train_{epoch}",
         dirpath=f"{training_output_folder}/checkpoints",
-        save_top_k=-1
+        save_top_k=-1,
     )
 
     logger = WandbLogger(
-        name = config.model_name,
+        name=config.model_name,
         save_dir=training_output_folder,
         project="pytorch_runs",
     )
@@ -228,7 +238,7 @@ if __name__ == "__main__":
         callbacks=[checkpoint],
         logger=logger,
         accelerator="auto",
-        log_every_n_steps=10
+        log_every_n_steps=10,
     )
 
     trainer.fit(

@@ -1,9 +1,8 @@
 import argparse as pars
 
 from topograph.modules import GetConfiguration
-from topograph.preprocessing_tools import (
+from topograph.preprocessing_tools import (  # H5toTfrecordsConverter,
     Apply_Scaler,
-    # H5toTfrecordsConverter,
     Merge,
     Prepare,
     Scaler,

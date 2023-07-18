@@ -1,45 +1,44 @@
+import numpy as np
+from torch import (
+    Tensor,
+    bmm,
+    empty,
+    exp,
+    from_numpy,
+    greater,
+    log,
+    reshape,
+    squeeze,
+    stack,
+    sum,
+    tensor,
+)
 from torch.nn import (
-    ReLU,
-    Softmax,
     Linear,
     Module,
-    init,
     ModuleList,
-    parameter,
-    Softplus,
+    MSELoss,
+    ReLU,
     Sigmoid,
-    MSELoss
+    Softmax,
+    Softplus,
+    init,
+    parameter,
 )
 
-from torch import(
-    bmm,
-    squeeze,
-    empty,
-    greater,
-    exp,
-    reshape,
-    tensor,
-    Tensor,
-    log,
-    stack,
-    from_numpy,
-    sum,
-)
-
-import numpy as np
 
 class Softplus_norm(Module):
     """
     class for the Softplus Layer to be used as an Activation for the edge weights.
     """
 
-    def __init__(self,norm, **kwargs):
+    def __init__(self, norm, **kwargs):
         """
         Init of the Sigmoid Layer.
         """
         super(Softplus_norm, self).__init__(**kwargs)
         self.norm = norm
-        
+
     def forward(self, x):
         """
         Define what happens when layer is called.
@@ -53,9 +52,10 @@ class Softplus_norm(Module):
         -------
         x with normalised Softmax activation applied.
         """
-        out = log(1+exp(x))/self.norm
-        return log(1+exp(x))/self.norm
-        
+        out = log(1 + exp(x)) / self.norm
+        return log(1 + exp(x)) / self.norm
+
+
 class Sigmoid_tr(Module):
     """
     class for the Sigmoid Layer to be used as an Activation for the edge weights.
@@ -113,9 +113,8 @@ class ShiftRelu(Module):
         -------
         x with Shifted ReLu activation applied.
         """
-        return (
-            self.slope * (x - self.shift) * greater(x, self.shift) 
-        )
+        return self.slope * (x - self.shift) * greater(x, self.shift)
+
 
 class EdgeLayers(Module):
     """
@@ -136,19 +135,11 @@ class EdgeLayers(Module):
         super().__init__()
         self.nodes = nodes
         self.layers = ModuleList()
-        for i in range(1,len(self.nodes)-1):
-            self.layers.append(
-                Linear(self.nodes[i-1], self.nodes[i])
-            )
-            self.layers.append(
-                ReLU()
-            )
-        self.layers.append(
-            Linear(self.nodes[-2], self.nodes[-1])
-        )
-        self.layers.append(
-            Sigmoid()
-        )
+        for i in range(1, len(self.nodes) - 1):
+            self.layers.append(Linear(self.nodes[i - 1], self.nodes[i]))
+            self.layers.append(ReLU())
+        self.layers.append(Linear(self.nodes[-2], self.nodes[-1]))
+        self.layers.append(Sigmoid())
 
     def forward(self, input_layer):
         """
@@ -191,18 +182,12 @@ class FeatLayers(Module):
         super().__init__()
         self.nodes = nodes
         self.layers = ModuleList()
-        for i in range(1,len(self.nodes)-1):
-            self.layers.append(
-                Linear(self.nodes[i-1], self.nodes[i])
-            )
-            self.layers.append(
-                ReLU()
-            )
+        for i in range(1, len(self.nodes) - 1):
+            self.layers.append(Linear(self.nodes[i - 1], self.nodes[i]))
+            self.layers.append(ReLU())
 
         # Set output and activation function
-        self.layers.append(
-            Linear(self.nodes[-2], self.nodes[-1])
-        )
+        self.layers.append(Linear(self.nodes[-2], self.nodes[-1]))
 
     def forward(self, input_layer):
         """
@@ -242,17 +227,11 @@ class VertexNetwork(Module):
         super().__init__()
         self.nodes = nodes
         self.layers = ModuleList()
-        for i in range(1,len(self.nodes)-1):
-            self.layers.append(
-                Linear(self.nodes[i-1], self.nodes[i])
-            )
-            self.layers.append(
-                ReLU()
-            )
+        for i in range(1, len(self.nodes) - 1):
+            self.layers.append(Linear(self.nodes[i - 1], self.nodes[i]))
+            self.layers.append(ReLU())
 
-        self.layers.append(
-            Linear(self.nodes[-2], self.nodes[-1])
-        )
+        self.layers.append(Linear(self.nodes[-2], self.nodes[-1]))
 
     def forward(self, input_layer):
         """
@@ -301,7 +280,7 @@ class DotProduct(Module):
             dot product of the inputs.
         """
         # sum(features * edges,axis=1)
-        pool = sum(feat_layer * edge_layer, axis=1)  #* mask.unsqueeze(-1)
+        pool = sum(feat_layer * edge_layer, axis=1)  # * mask.unsqueeze(-1)
         # pool = pool.sum()
         # pool = squeeze(pool,0)
         return pool
@@ -311,11 +290,11 @@ class MultipleMSELoss(Module):
     def __init__(self):
         super().__init__()
         self.mse_per_var = MSELoss(reduction="none")
-        
+
     def forward(self, output, target):
-        if target.size()[-1] == 1: return self.mse_per_var(target,output).mean()
-        average = target.abs().mean(dim=0)+1e-8
-        loss = (self.mse_per_var(target, output)/average)
+        if target.size()[-1] == 1:
+            return self.mse_per_var(target, output).mean()
+        average = target.abs().mean(dim=0) + 1e-8
+        loss = self.mse_per_var(target, output) / average
         loss = loss.mean()
         return loss
-    

@@ -1,4 +1,5 @@
 import argparse as pars
+
 import numpy as np
 
 from topograph.modules import GetConfiguration
@@ -21,9 +22,15 @@ def get_parser():
         required=True,
         help="config file giving the network parameters",
     )
-    parser.add_argument("--epoch", "-e", type=int, default=None, help="epoch number to evaluate")
-    parser.add_argument("--cutval", "-v", type=float, default=None, help="cut value used for efficiency")
-    parser.add_argument("--vars", "-o", type=str, default=None, help="numbers of variable")
+    parser.add_argument(
+        "--epoch", "-e", type=int, default=None, help="epoch number to evaluate"
+    )
+    parser.add_argument(
+        "--cutval", "-v", type=float, default=None, help="cut value used for efficiency"
+    )
+    parser.add_argument(
+        "--vars", "-o", type=str, default=None, help="numbers of variable"
+    )
 
     args = parser.parse_args()
     return args

@@ -1,37 +1,30 @@
 """script to build topograph network."""
 # from tensorflow.keras import Model
 
+from pathlib import Path
+from typing import Union
+
+import numpy as np
+import pytorch_lightning as pl
+import torch as T
+import torch.optim as optim
+import wandb
+from h5py import File
+from torch.autograd import grad
+from torch.nn import BCELoss, BCEWithLogitsLoss, Module, MSELoss, Softplus
+from torch.nn.functional import binary_cross_entropy_with_logits
+
 from topograph.modules.layers import (
-    VertexNetwork,
     DotProduct,
     EdgeLayers,
     FeatLayers,
+    MultipleMSELoss,
     ShiftRelu,
     Sigmoid,
     Softplus_norm,
-    MultipleMSELoss
+    VertexNetwork,
 )
-from torch.nn import (
-    Module,
-    BCELoss,
-    MSELoss,
-    Softplus,
-    BCEWithLogitsLoss
-) 
 
-from torch.nn.functional import binary_cross_entropy_with_logits
-
-from torch.autograd import grad
-
-import torch.optim as optim
-import pytorch_lightning as pl
-import torch as T
-import numpy as np
-from pathlib import Path
-from typing import Union
-import wandb
-
-from h5py import File
 
 class TopographModel(pl.LightningModule):
     """
@@ -41,8 +34,8 @@ class TopographModel(pl.LightningModule):
     def __init__(
         self,
         nodes_feat: list = [128, 30, 30, 30],
-        nodes_weight : list = [128, 30, 30, 1],
-        nodes_vertex : list = [30, 50, 50, 50, 1],
+        nodes_weight: list = [128, 30, 30, 1],
+        nodes_vertex: list = [30, 50, 50, 50, 1],
         activation_name: str = None,
         save_dir: str = None,
         name: str = None,
@@ -93,26 +86,36 @@ class TopographModel(pl.LightningModule):
         elif self.activation_name == "sigmoid":
             self.add_activation = Sigmoid()
         elif self.activation_name == "softplus":
-            norm = T.tensor(np.log(1+np.exp(1)))
+            norm = T.tensor(np.log(1 + np.exp(1)))
             self.add_activation = Softplus_norm(norm=norm)
         elif self.activation_name is None:
             self.add_activation = False
         else:
             raise KeyError(
-                f"Undefined additional actrivation: {self.activation_name}. Please select one"
-                ' of the following: ["shifted_relu", "sigmoid", "softplus"] or leave empty/remove'
-                " option."
+                f"Undefined additional actrivation: {self.activation_name}. Please"
+                ' select one of the following: ["shifted_relu", "sigmoid", "softplus"]'
+                " or leave empty/remove option."
             )
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
         # Define the loss funcitons
-        self.loss_fn_vertex = MSELoss() #MultipleMSELoss()
+        self.loss_fn_vertex = MSELoss()  # MultipleMSELoss()
 
         if save:
-            with File("/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5", "w") as inputs_file:
-                inputs_file.create_dataset(name="inputs",shape=(0,40,20),chunks=True, maxshape=(None,40,20))
-                inputs_file.create_dataset(name="labels",shape=(0,40,1), chunks=True, maxshape=(None,40,1))
-            
+            with File(
+                "/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5",
+                "w",
+            ) as inputs_file:
+                inputs_file.create_dataset(
+                    name="inputs",
+                    shape=(0, 40, 20),
+                    chunks=True,
+                    maxshape=(None, 40, 20),
+                )
+                inputs_file.create_dataset(
+                    name="labels", shape=(0, 40, 1), chunks=True, maxshape=(None, 40, 1)
+                )
+
     def on_fit_start(self):
         if wandb.run:
             wandb.define_metric("train/total", summary="min")
@@ -153,17 +156,26 @@ class TopographModel(pl.LightningModule):
         if save:
             inputs_save = inputs.reshape((1024, 40, 20))
             labels_save = labels_edge.reshape((1024, 40, 1))
-            with File("/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5", "a") as inputs_file:
+            with File(
+                "/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5",
+                "a",
+            ) as inputs_file:
                 len_inp = len(inputs_save)
-                inputs_file["inputs"].resize((inputs_file["inputs"].shape[0]+len_inp), axis=0)
+                inputs_file["inputs"].resize(
+                    (inputs_file["inputs"].shape[0] + len_inp), axis=0
+                )
                 inputs_file["inputs"][-len_inp:] = inputs_save
-                inputs_file["labels"].resize((inputs_file["labels"].shape[0]+len_inp), axis=0)
+                inputs_file["labels"].resize(
+                    (inputs_file["labels"].shape[0] + len_inp), axis=0
+                )
                 inputs_file["labels"][-len_inp:] = labels_save
 
         labels_shape = labels_edge.size()
         labels_edge = labels_edge.reshape(labels_shape[0], labels_shape[1], 1)
         sample_weight_shape = sample_weights.size()
-        sample_weights = sample_weights.reshape(sample_weight_shape[0], sample_weight_shape[1], 1)
+        sample_weights = sample_weights.reshape(
+            sample_weight_shape[0], sample_weight_shape[1], 1
+        )
         # labels_vertex_shape = labels_vertex.size()
         # labels_vertex = labels_vertex.reshape(labels_vertex_shape[1], labels_vertex_shape[2])
         # inputs_shape = inputs.size()
@@ -174,11 +186,15 @@ class TopographModel(pl.LightningModule):
         # mask_vertex = mask_vertex.reshape(mask_vertex_shape[1])
 
         vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
-        loss_edge_cal = binary_cross_entropy_with_logits(edge_out, labels_edge, sample_weights)
+        loss_edge_cal = binary_cross_entropy_with_logits(
+            edge_out, labels_edge, sample_weights
+        )
         loss_vertex_cal = self.loss_fn_vertex(
             vertex_out[mask_vertex], labels_vertex[mask_vertex]
         )
-        total = self.loss_fac_edge*loss_edge_cal + self.loss_fac_vert*loss_vertex_cal
+        total = (
+            self.loss_fac_edge * loss_edge_cal + self.loss_fac_vert * loss_vertex_cal
+        )
         # total = loss_edge_cal
         return loss_edge_cal, loss_vertex_cal, total
 
@@ -190,7 +206,9 @@ class TopographModel(pl.LightningModule):
         return total
 
     def validation_step(self, sample: tuple, _batch_idx: int):
-        loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx, save=False)
+        loss_edge_cal, loss_vertex_cal, total = self.basis_step(
+            sample, _batch_idx, save=False
+        )
         self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
         self.log("valid/edge", loss_edge_cal)
