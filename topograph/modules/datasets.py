@@ -10,6 +10,7 @@ from typing import Union
 import h5py
 import numpy as np
 from math import isnan
+from time import sleep
 
 import torch as T
 from torch.utils.data import Dataset, IterableDataset, get_worker_info, TensorDataset
@@ -35,6 +36,9 @@ class Topographs_dataset(IterableDataset):
         self.filename = filename
         self.batch_size = batch_size
         self.n_samples = n_samples
+        r = self.n_samples%self.batch_size
+        if r != 0:
+            self.n_samples = self.n_samples-r
 
     def open(self):
         self.file = h5py.File(self.filename)
@@ -43,16 +47,12 @@ class Topographs_dataset(IterableDataset):
         self.labels_e = self.file["Y_edge"]
     
     def get_indeces(self):
-        if self.n_samples == -1: 
-            self.n_samples = len(self.tracks)
+        # if self.n_samples == -1: 
+        #     self.n_samples = len(self.tracks)
         self.n_batches = np.ceil(self.n_samples/self.batch_size)
         starts = np.linspace(0,(self.n_batches-1)*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
         ends = np.linspace(self.batch_size, self.n_batches*self.batch_size, int(self.n_batches), endpoint=True, dtype=int)
-        if ends[-1] > self.n_samples:
-            inds = zip(starts[:-1], ends[:-1])
-        else:
-            inds = zip(starts, ends)
-        return inds
+        return zip(starts, ends)
 
     def __iter__(self):
         indices = self.get_indeces()
