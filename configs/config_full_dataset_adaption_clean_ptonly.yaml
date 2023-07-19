@@ -1,8 +1,8 @@
 input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fulltruth/user.toschroe.410470.e6337_s3681_r13167_p4931.tdd.EMPFlowTruth_n40.22_2_75.22-06-27_truth_40tracks_output.h5/*.h5
 #/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
 
-output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_clean_pt_datasetad/
-output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad
+output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_clean_pt_datasetad_less_tracks/
+output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad_less_tracks
 model_name: model_dataset_adaption_clean
 
 one_file_name: topograph_ttbar_inputfiles_combined.h5
@@ -54,7 +54,11 @@ evaluation:
   model_file_numbers:
     - 1
     - 45
+<<<<<<< Updated upstream
     - 90
+=======
+    - 70
+>>>>>>> Stashed changes
     - 145
     - 199
   n_samples: 1_000
@@ -77,21 +81,21 @@ evaluation:
     plot: False
     recalculate: False
   plot_conf_matrix:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_loss: {}
   plot_preds_per_epoch:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_preds_scatter:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_saliency:
-    plot: False
+    plot: True
   plot_saliency_pertrack:
-    plot: False
+    plot: True
   plot_saliency_pervar:
-    plot: False
+    plot: True
   plot_n_tracks_per_jet:
     plot: False
   plot_target_input_corr:
