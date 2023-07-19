@@ -1,120 +1,300 @@
-"""Keras model of the DIPS tagger."""
-
-from tensorflow.keras import activations  # pylint: disable=import-error
-from tensorflow.keras.layers import (  # pylint: disable=import-error
-    Activation,
-    Dense,
-    Masking,
-    TimeDistributed,
-    Layer,
-    Dot,
-    Input,
-    Flatten
+import numpy as np
+from torch import (
+    Tensor,
+    bmm,
+    empty,
+    exp,
+    from_numpy,
+    greater,
+    log,
+    reshape,
+    squeeze,
+    stack,
+    sum,
+    tensor,
+)
+from torch.nn import (
+    Linear,
+    Module,
+    ModuleList,
+    MSELoss,
+    ReLU,
+    Sigmoid,
+    Softmax,
+    Softplus,
+    init,
+    parameter,
 )
 
-class TrksLayers(Layer):
+
+class Softplus_norm(Module):
     """
-    Define a TrksLayers as a layer
+    class for the Softplus Layer to be used as an Activation for the edge weights.
     """
-    def __init__(self, nodes, net_name):
+
+    def __init__(self, norm, **kwargs):
         """
-        Init for TrksLayers
+        Init of the Sigmoid Layer.
+        """
+        super(Softplus_norm, self).__init__(**kwargs)
+        self.norm = norm
+
+    def forward(self, x):
+        """
+        Define what happens when layer is called.
+
+        Parameters
+        ----------
+        x : tf.Tensor
+            output of previous layer.
+
+        Returns
+        -------
+        x with normalised Softmax activation applied.
+        """
+        out = log(1 + exp(x)) / self.norm
+        return log(1 + exp(x)) / self.norm
+
+
+class Sigmoid_tr(Module):
+    """
+    class for the Sigmoid Layer to be used as an Activation for the edge weights.
+    """
+
+    def __init__(self, **kwargs):
+        """
+        Init of the Sigmoid Layer.
+        """
+        super(Sigmoid, self).__init__(**kwargs)
+        self.c1 = empty(1)
+        init.constant_(self.c1, 1)
+        self.c2 = empty(1)
+        init.constant_(self.c2, 1)
+
+    def forward(self, x):
+        """
+        Define what happens when layer is called.
+
+        Parameters
+        ----------
+        x : tf.Tensor
+            output of previous layer.
+
+        Returns
+        -------
+        x with Sigmoid activation applied.
+        """
+        return 1 / (1 + exp(-self.c1 * (x - self.c2)))
+
+
+class ShiftRelu(Module):
+    """
+    class for the Shifted ReLu Layer to be used as an Activation for the edge weights.
+    """
+
+    def __init__(self, **kwargs):
+        """
+        Init of the ShiftReLu Layer.
+        """
+        super(ShiftRelu, self).__init__(**kwargs)
+        self.shift = parameter.Parameter(Tensor(tensor(0.2)), requires_grad=True)
+        self.slope = parameter.Parameter(Tensor(tensor(1.0)), requires_grad=True)
+
+    def forward(self, x):
+        """
+        Define what happens when layer is called.
+
+        Parameters
+        ----------
+        x : tf.Tensor
+            output of previous layer.
+
+        Returns
+        -------
+        x with Shifted ReLu activation applied.
+        """
+        return self.slope * (x - self.shift) * greater(x, self.shift)
+
+
+class EdgeLayers(Module):
+    """
+    class for the layer to predict the edge weights.
+    """
+
+    def __init__(self, nodes):
+        """
+        Init for EdgeLayers
 
         Parameters
         ----------
         nodes: list
-            list of the number of nodes for all hidden layers
+            list of the number of nodes for all hidden layers.
         net_name: str
-            name of the network
+            name of the network.
+        """
+        super().__init__()
+        self.nodes = nodes
+        self.layers = ModuleList()
+        for i in range(1, len(self.nodes) - 1):
+            self.layers.append(Linear(self.nodes[i - 1], self.nodes[i]))
+            self.layers.append(ReLU())
+        self.layers.append(Linear(self.nodes[-2], self.nodes[-1]))
+        self.layers.append(Sigmoid())
+
+    def forward(self, input_layer):
+        """
+        Define what happens when layer is called.
+
+        Parameters
+        ----------
+        input_layer : object
+            input of EdgeLayer.
 
         Returns
         -------
-        input : object
-            returns input of TrksLayer layer
-        output : object
-            returns output layer of DenseNetwork
+        tdd : object
+            output layer of EdgeLayer.
         """
-        self.nodes = nodes
-        self.net_name = net_name
-
-    def __call__(self, input_shape):
         # Set the track input
-        input = Input(shape = input_shape)
-        masked_inputs = Masking(mask_value=0)(input)
-        tdd = masked_inputs
+        # print(input_layer)
+        tdd = self.layers[0](input_layer)
+        for layer in self.layers[1:]:
+            tdd = layer(tdd)
+        return tdd
 
-        # Define the TimeDistributed layers for the different tracks
-        for i, phi_nodes in enumerate(self.nodes[:-1]):
 
-            tdd = TimeDistributed(Dense(phi_nodes), name=f"{self.net_name}_Phi{i}_Dense")(tdd)
+class FeatLayers(Module):
+    """
+    class for the layer to predict the edge weights.
+    """
 
-            tdd = TimeDistributed(Activation(activations.relu), name=f"{self.net_name}_Phi{i}_ReLU")(
-                tdd
-            )
+    def __init__(self, nodes):
+        """
+        Init for FeatLayers.
+
+        Parameters
+        ----------
+        nodes: list
+            list of the number of nodes for all hidden layers.
+        net_name: str
+            name of the network.
+        """
+        super().__init__()
+        self.nodes = nodes
+        self.layers = ModuleList()
+        for i in range(1, len(self.nodes) - 1):
+            self.layers.append(Linear(self.nodes[i - 1], self.nodes[i]))
+            self.layers.append(ReLU())
 
         # Set output and activation function
-        output = TimeDistributed(Dense(self.nodes[-1], activation="softmax"), name=self.net_name)(tdd)
+        self.layers.append(Linear(self.nodes[-2], self.nodes[-1]))
 
-        return input, output
-
-class DenseNetwork(Layer):
-    """
-    Define a DenseNetwork as a layer
-    """
-    def __init__(
-        self,
-        nodes,
-    ):
+    def forward(self, input_layer):
         """
-        Init for DenseNetwork
+        Define what happens when layer is called.
+
+        Parameters
+        ----------
+        input_layer : object
+            input of FeatLayer.
+
+        Returns
+        -------
+        tdd : object
+            output layer of FeatLayer.
+        """
+        # print(input_layer.shape)
+        tdd = self.layers[0](input_layer)
+        for layer in self.layers[1:]:
+            tdd = layer(tdd)
+        return tdd
+
+
+class VertexNetwork(Module):
+    """
+    class for the dense layer to predict the vertex feature.
+    """
+
+    def __init__(self, nodes, **kwargs):
+        """
+        Init for DenseNetwork.
 
         Parameters
         ----------
         nodes: list
-            list of the number of nodes for all hidden layers
-
-        Returns
-        -------
-        output : object
-            returns output layer of DenseNetwork
+            list of the number of nodes for all hidden layers.
         """
+        super().__init__()
         self.nodes = nodes
+        self.layers = ModuleList()
+        for i in range(1, len(self.nodes) - 1):
+            self.layers.append(Linear(self.nodes[i - 1], self.nodes[i]))
+            self.layers.append(ReLU())
 
-    def __call__(self, dense_ntw):
-        for node in self.nodes[:-1]:
-            dense_ntw = Dense(node)(dense_ntw)
-        output = Dense(self.nodes[-1], activation="softmax", name="Jet_class")(dense_ntw)
-        return output
+        self.layers.append(Linear(self.nodes[-2], self.nodes[-1]))
 
-class DotProduct(Layer):
-    """
-    Define a DotProduct as a layer
-    """
-    def __init__(
-        self,
-        layer1,
-        layer2
-    ):
+    def forward(self, input_layer):
         """
-        Init for DotProduct
+        Define what happens when layer is called.
 
         Parameters
         ----------
-        layer1: Layer object
-            first layer used for dot product
-        layer1: Layer object
-            second layer used for dot product
-        
+        input_layer : object
+            input of DenseNetwork, output from the Dot product of the
+            EdgeLayer and FeatLayer.
+
+        Returns
+        -------
+        dense_ntw : object
+            output layer of FeatLayer.
+        """
+        dense_ntw = self.layers[0](tensor(input_layer))
+        for layer in self.layers[1:]:
+            dense_ntw = layer(dense_ntw)
+        return dense_ntw
+
+
+class DotProduct(Module):
+    """
+    class for the dense layer to predict the vertex feature.
+    """
+
+    def __init__(self, **kwargs):
+        """
+        Init for DotProduct.
+        """
+        super().__init__(**kwargs)
+
+    def forward(self, feat_layer, edge_layer, mask):
+        """
+        Define what happens when layer is called.
+
+        Parameters
+        ----------
+        inputs : list
+            list of layers to calculate the dot product from.
+
         Returns
         -------
         pool : object
-            returns the dot product of two layers
+            dot product of the inputs.
         """
-        self.layer1 = layer1
-        self.layer2 = layer2
-    def __call__(self):
-        pool = Dot(axes = 1)([self.layer1, self.layer2])
-        pool = Flatten()(pool)
+        # sum(features * edges,axis=1)
+        pool = sum(feat_layer * edge_layer, axis=1)  # * mask.unsqueeze(-1)
+        # pool = pool.sum()
+        # pool = squeeze(pool,0)
         return pool
-    
 
+
+class MultipleMSELoss(Module):
+    def __init__(self):
+        super().__init__()
+        self.mse_per_var = MSELoss(reduction="none")
+
+    def forward(self, output, target):
+        if target.size()[-1] == 1:
+            return self.mse_per_var(target, output).mean()
+        average = target.abs().mean(dim=0) + 1e-8
+        loss = self.mse_per_var(target, output) / average
+        loss = loss.mean()
+        return loss

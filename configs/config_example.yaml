@@ -1,0 +1,69 @@
+input: < h5 input file >
+
+output: < Output file name for h5 files >
+output_training: < Output file name for plots and model files >
+
+one_file_name: < Name of merged file >
+preprocessing_file_name: < Name of preprocessed file >
+scale_dict: < Scale dict name >
+
+training_file_name: < train file name >
+validation_file_name: < validation file name >
+testing_file_name: < test file name >
+
+njets: 10_000_000
+njets_val: 1_000_000
+njets_test: 1_000_000
+
+input_tracks_name: tracks_loose
+input_truth_name: truth_hadrons
+input_jet_name: jets
+
+tracks_name: "X_train_tracks"
+edge_name: "Y_edge"
+edge_feat_name: "Y_edge_features"
+vertex_feat_name: Y_vertex_features
+
+epochs: 200
+stepsize: 15000
+lr: 0.001
+use_sample_weights: True
+
+edge_feature_network:
+  nodes: [70, 70, 70, 30]
+  n_tracks_name: tracks
+
+edge_weight_network:
+  nodes: [70, 70, 70, 1]
+  n_tracks_name: tracks
+  add_activation: shifted_relu
+
+vertex_network:
+  nodes: [50, 50, 50, 1]
+
+tfrecords:
+  batch_size: 5000
+  use_tfrecords_to_train: True
+  nfiles_to_load: 10
+
+evaluation:
+  model_file_numbers: [200]
+  n_samples: 10_000
+  plot_efficiency:
+    plot: False
+    recalculate: False
+  plot_efficiency_zeros_only:
+    plot: False
+    recalculate: False
+  plot_efficiency_ones_only:
+    plot: False
+    recalculate: False
+  plot_parameters:
+    plot: False
+    recalculate: False
+  plot_pt:
+    plot: True
+    recalculate: True
+  plot_conf_matrix:
+    plot: False
+    recalculate: False
