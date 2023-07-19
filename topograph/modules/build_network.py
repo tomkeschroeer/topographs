@@ -24,6 +24,16 @@ from topograph.modules.layers import (
     Softplus_norm,
     VertexNetwork,
 )
+from torch.nn import (
+    Module,
+    BCELoss,
+    MSELoss,
+    L1Loss,
+    Softplus,
+    BCEWithLogitsLoss
+) 
+
+from torch.nn.functional import binary_cross_entropy_with_logits
 
 
 class TopographModel(pl.LightningModule):
@@ -99,7 +109,7 @@ class TopographModel(pl.LightningModule):
         self.dot_product = DotProduct()
         self.vertex_network = VertexNetwork(nodes=self.nodes_vertex)
         # Define the loss funcitons
-        self.loss_fn_vertex = MSELoss()  # MultipleMSELoss()
+        self.loss_fn_vertex = L1Loss() #MultipleMSELoss()
 
         if save:
             with File(

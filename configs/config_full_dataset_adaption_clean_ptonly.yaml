@@ -2,8 +2,8 @@ input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fullt
 #/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
 
 output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_clean_pt_datasetad/
-output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad
-model_name: model_dataset_adaption_clean
+output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad_MAE_loss
+model_name: model_dataset_MAE_Loss
 
 one_file_name: topograph_ttbar_inputfiles_combined.h5
 preprocessing_file_name: preprocessed_ttbar_topograph.h5
