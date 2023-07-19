@@ -13,7 +13,7 @@ import numpy as np
 import torch as T
 from torch.utils.data import Dataset, IterableDataset, TensorDataset, get_worker_info
 
-from topograph.modules import get_sample_weights
+from topograph.modules.tools import get_sample_weights
 
 
 def scary_shuffle(*arrays):
