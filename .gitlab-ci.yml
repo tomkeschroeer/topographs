@@ -22,12 +22,8 @@ stages:          # List of stages for jobs, and their order of execution
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
-<<<<<<< HEAD
     - pip install --upgrade pip setuptools wheel
     - pip install python-gitlab==2.10.1
     - pip install pylint==2.12.2
     - pip install pyyaml
-=======
-    - pip install pylint
-    # - pylint -j2 ./topograph
->>>>>>> 510677c1c67ec5565e2bb76fbf28dfc0e0e0d872
+
