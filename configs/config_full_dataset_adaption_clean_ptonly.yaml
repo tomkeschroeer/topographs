@@ -52,10 +52,10 @@ tfrecords:
 
 evaluation:
   model_file_numbers:
-    # - 1
-    # - 45
-    # - 90
-    # - 145
+    - 1
+    - 45
+    - 90
+    - 145
     - 199
   n_samples: 1_000
   plot_efficiency:
@@ -71,8 +71,8 @@ evaluation:
     plot: False
     recalculate: False
   plot_pt:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_eta:
     plot: False
     recalculate: False
@@ -93,4 +93,6 @@ evaluation:
   plot_saliency_pervar:
     plot: False
   plot_n_tracks_per_jet:
-    plot: True
+    plot: False
+  plot_target_input_corr:
+    plot: True 

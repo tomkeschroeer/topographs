@@ -1492,8 +1492,21 @@ class Plotter:
         hist_dict = {}
         self.logger.info(f"plotting correlation between targets and input")
         with File(self.test_file, "r") as f:
-            data_target = f["Y_vertex_features"][: self.njet_test]
-            data_input = f["X_train_tracks"][: self.njet_test]
+            data_target = f["Y_vertex_features"][:self.njet_test]
+            data_input = f["X_train_tracks"][:self.njet_test]
+        mask = ~np.all(data_input[..., :3] == 0, axis=-1)
+        mask_target = np.any(mask, axis=-1)
+        ind_False = np.where(mask_target==False)
+
+        input_shape = data_input.shape
+        rep_mask = (
+                np.array(np.repeat(mask, input_shape[-1], axis=-1))
+                .astype(bool)
+                .reshape(input_shape)
+            )
+        data_input = ma.array(data_input,mask=~rep_mask)
+        data_target = ma.array(data_target,mask=~mask_target)
+
         for i, target_name in enumerate(self.global_config.vertex_features):
             hist_dict[target_name] = {}
             for var_num, var in enumerate(self.global_config.track_inputs):
@@ -1503,11 +1516,21 @@ class Plotter:
                 bins_input = np.linspace(
                     min(d_input.flatten()), max(d_input.flatten()), 30
                 )
+                data_track0 = d_input[:, 0]
+                vertex_track0 = ma.array(vertex_feat.data, mask=data_track0.mask)
                 hist_dict[target_name][f"{var}_track0"] = np.histogram2d(
-                    d_input[:, 0], vertex_feat, bins=[bins_input, bins_target]
+                    ma.compressed(data_track0), ma.compressed(vertex_track0), bins=[bins_input, bins_target]
                 )[0]
+                data_track1 = d_input[:, 1]
+                vertex_track1 = ma.array(vertex_feat.data, mask=data_track1.mask)
                 hist_dict[target_name][f"{var}_track1"] = np.histogram2d(
-                    d_input[:, 1], vertex_feat, bins=[bins_input, bins_target]
+                    ma.compressed(data_track1), ma.compressed(vertex_track1), bins=[bins_input, bins_target]
+                )[0]
+                hist_dict[target_name][f"{var}_mean"] = np.histogram2d(
+                    ma.mean(d_input, axis=-1), vertex_feat, bins=[bins_input, bins_target]
+                )[0]
+                hist_dict[target_name][f"{var}_sum"] = np.histogram2d(
+                    ma.sum(d_input, axis=-1), vertex_feat, bins=[bins_input, bins_target]
                 )[0]
                 self.logger.info(
                     f"plotting correlation between {var} and {target_name} for track 1"
@@ -1533,7 +1556,30 @@ class Plotter:
                     zvals=hist_dict[target_name][f"{var}_track1"],
                     title=f"correlation between input {var} and {target_name}, track 2",
                 )
-
+                self.logger.info(
+                    f"plotting correlation between {var} and {target_name}, taking the mean"
+                )
+                self.plot_scatter_vals(
+                    xlabel=var,
+                    ylabel=target_name,
+                    plot_name=f"{target_name}_{var}_corr_mean",
+                    yvals=bins_target,
+                    xvals=bins_input,
+                    zvals=hist_dict[target_name][f"{var}_mean"],
+                    title=f"correlation between input {var} and {target_name}, mean",
+                )
+                self.logger.info(
+                    f"plotting correlation between {var} and {target_name}, taking the sum."
+                )
+                self.plot_scatter_vals(
+                    xlabel=var,
+                    ylabel=target_name,
+                    plot_name=f"{target_name}_{var}_corr_sum",
+                    yvals=bins_target,
+                    xvals=bins_input,
+                    zvals=hist_dict[target_name][f"{var}_sum"],
+                    title=f"correlation between input {var} and {target_name}, sum",
+                )
     def plot_scatter_vals(
         self,
         ylabel,
@@ -1683,7 +1729,7 @@ class Plotter:
         for val, label, col in zip(vals, labels, colours):
             plot_histo.add(Histogram(val, label=label, colour=col))
         plot_histo.draw()
-        plot_histo.savefig(f"{self.plot_dir}/{plot_name}.png")
+        plot_histo.savefig(f"{self.plot_dir}/{plot_name}.pdf")
 
     def save_vals(self, dataset_name, data):
         with File(self.plot_file, "a") as f:
