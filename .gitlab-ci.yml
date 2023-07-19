@@ -16,11 +16,13 @@
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
 
+variables:
+  IMAGE_TYPE: "gitlab-registry.cern.ch/toschroe/docker-please/master:latest"
+
 stages:          # List of stages for jobs, and their order of execution
   - build
 
 build-job:       # This job runs in the build stage, which runs first.
   stage: build
   script:
-    - pip install pylint
-    # - pylint -j2 ./topograph
+    - echo "have to fill this"
