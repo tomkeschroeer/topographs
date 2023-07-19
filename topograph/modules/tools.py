@@ -343,6 +343,7 @@ class DatasetCreater:
         self.ind_truthflav = None
         self.replace_invalid = replace_invalid
         self.vertex_features = self.global_conf.vertex_features
+        self.ntracks = 40
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -360,25 +361,25 @@ class DatasetCreater:
             self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][
                 "HadronConeExclExtendedTruthLabelID"
             ][self.step * self.stepsize : (self.step + 1) * self.stepsize]
-            self.reco = f[f"/{self.config.input_tracks_name}"].fields(
-                self.global_conf.track_inputs
-            )[self.step * self.stepsize : (self.step + 1) * self.stepsize, :]
+            self.reco = f[f"/{self.config.input_tracks_name}"].fields(self.global_conf.track_inputs)[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
+            ]
             self.reco_dtypes = self.reco.dtype
             self.reco_jets = f["jets"].fields("pt")[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
-            self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields(
-                "truthOriginLabel"
-            )[self.step * self.stepsize : (self.step + 1) * self.stepsize]
+            self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
+            ]
             self.trackExtraTruth = f["ConeExclFinalLabels"].fields(["pt", "phi"])[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
             # self.edge_features = f["/edge_features"][ConeExclFinalLabels
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
-            self.trackExtra = f[f"/{self.config.input_tracks_name}"].fields(
-                ["pt", "dphi"]
-            )[self.step * self.stepsize : (self.step + 1) * self.stepsize]
+            self.trackExtra= f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
+            ]
 
         self.ind_truthflav = self.get_b_indeces()
         self.truth = self.truth[self.ind_truthflav]
