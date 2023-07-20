@@ -288,6 +288,9 @@ class Plotter:
         self.plot_hadron_pt = self.config.evaluation.get("plot_hadron_pt", {}).get(
             "plot", False
         )
+        self.plot_linear_fit = self.config.evaluation.get("plot_linear_fit", {}).get(
+            "plot", False
+        )
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "recalculate", False
         )
@@ -509,7 +512,7 @@ class Plotter:
             self.plot_saliency_map_pertrack(model_file_numbers=self.model_file_numbers)
 
         if self.plot_saliency_pervar:
-            self.plot_saliency_per_var(model_file_numbers=self.model_file_numbers)
+            self.plotting_saliency_per_var(model_file_numbers=self.model_file_numbers)
 
         if self.plot_vertex_labels:
             self.plotting_vertex_labels_per_epoch(
@@ -517,10 +520,10 @@ class Plotter:
             )
 
         if self.plot_weights:
-            self.plot_model_weights(model_file_numbers=self.model_file_numbers)
+            self.plotting_model_weights(model_file_numbers=self.model_file_numbers)
 
         if self.plot_target_input_corr:
-            self.plot_target_input_correlation()
+            self.plotting_target_input_correlation()
 
         if self.plot_n_tracks_per_jet:
             self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
@@ -536,6 +539,9 @@ class Plotter:
 
         if self.plot_hadron_pt:
             self.plotting_hadron_pt_from_tracks()
+        
+        if self.plot_linear_fit:
+            self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -798,6 +804,32 @@ class Plotter:
             plot.axis_top.plot([0, 0], [0, 1], "b", linestyle="dashed")
 
             plot.savefig(plotname)
+    
+    def plotting_linear_fit(self, model_file_numbers):
+        for model_file_number in model_file_numbers:
+            with File(
+                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+            ) as f:
+                labels = f["labels_vertex_features"][: self.njet_test]
+                preds = f["pred_vertex_features"][: self.njet_test]
+            for i in range(len(self.global_config.vertex_features)):
+                self.logger.info(f"plotting distance to linear regression for model {model_file_number} and variable {self.global_config.vertex_features[i]}")
+                pred_var = preds[:,i]
+                labels_var = labels[:,i]
+                var_bins = np.linspace(labels_var.min(), labels_var.max(), 10)
+                fit = np.polyfit(pred_var, labels_var, deg=1)
+                dist = np.abs((fit[0]*pred_var + fit[1])-(labels_var))
+                hist_bins = [dist[np.logical_and(labels_var>var_bins[j], labels_var<var_bins[j+1])].mean() for j in range(len(var_bins)-1)]
+                self.plot_vals(
+                    ylabel="mean of distance to linear fit",
+                    xlabel="true b-hadron pT",
+                    plot_name="linear_fit_distance",
+                    vals=[[var_bins[:-1]+(var_bins[1]-var_bins[0])/2, hist_bins]],
+                    labels=[""],
+                    point_styles=["bo"],
+                    y_values_given=True,
+                )
+
 
     def plotting_track_origin(self):
         test_file = f"{self.config.output}/{self.config.testing_file_name}".replace(
@@ -1285,7 +1317,7 @@ class Plotter:
             plot_name="calculated_bhadron_pt",
         )
 
-    def plot_saliency_per_var(self, model_file_numbers):
+    def plotting_saliency_per_var(self, model_file_numbers):
         track_vars = list(range(len(self.global_config.track_inputs)))
         for model_file_number in model_file_numbers:
             with File(
@@ -1418,7 +1450,7 @@ class Plotter:
                     logy=False,
                 )
 
-    def plot_model_weights(self, model_file_numbers):
+    def plotting_model_weights(self, model_file_numbers):
         with File(f"{self.model_pred_folder}/epoch_pred_001.h5", "r") as f:
             keys = list(f.keys())
         keys_bias = [k for k in keys if "bias" in k]
@@ -1488,7 +1520,7 @@ class Plotter:
                 swap_inputs=True,
             )
 
-    def plot_target_input_correlation(self):
+    def plotting_target_input_correlation(self):
         hist_dict = {}
         self.logger.info(f"plotting correlation between targets and input")
         with File(self.test_file, "r") as f:

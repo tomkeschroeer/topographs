@@ -71,8 +71,8 @@ evaluation:
     plot: False
     recalculate: False
   plot_pt:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_eta:
     plot: False
     recalculate: False
@@ -95,4 +95,6 @@ evaluation:
   plot_n_tracks_per_jet:
     plot: False
   plot_target_input_corr:
-    plot: True 
+    plot: False
+  plot_linear_fit:
+    plot: True
