@@ -60,7 +60,6 @@ class Prepare:
                         train_file.create_dataset("track_extra_truth", data = datasets.get_extra_track_truth(), chunks=True, maxshape=(None,n_tracks,))
                         train_file.create_dataset("unscaled_pt", data = datasets.get_unscaled_pt(), chunks=True, maxshape=(None,))
                         train_file.create_dataset("jet_pt", data = datasets.get_jet_pt(), chunks=True, maxshape=(None,))
-                        train_file.create_dataset("truthOriginLabel", data = datasets.get_truthOriginLabel(), chunks=True, maxshape=(None,))
                 else:
                     njets_step = datasets.get_n_valid_jets()
                     logger.info(f"loading {njets_step} valid jets")
