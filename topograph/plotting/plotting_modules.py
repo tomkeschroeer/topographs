@@ -816,18 +816,21 @@ class Plotter:
                 self.logger.info(f"plotting distance to linear regression for model {model_file_number} and variable {self.global_config.vertex_features[i]}")
                 pred_var = preds[:,i]
                 labels_var = labels[:,i]
-                var_bins = np.linspace(labels_var.min(), labels_var.max(), 10)
+                bounds = min([-labels_var.min(), labels_var.max()])
+                var_bins = np.linspace(-bounds,bounds, 11)
                 slope, offset = np.polyfit(pred_var, labels_var, deg=1)
-                dist = np.abs(slope*var_bins+offset - var_bins)
-                # hist_bins = [dist[np.logical_and(labels_var>var_bins[j], labels_var<var_bins[j+1])].mean() for j in range(len(var_bins)-1)]
+                dist = slope*var_bins+offset - var_bins
+                slope_dist = np.round(dist[1]-dist[0]/(var_bins[1]-var_bins[0]),4)
+                offset_dist = np.round(dist[0]-slope_dist*var_bins[0],4)
                 self.plot_vals(
                     ylabel="mean of distance to linear fit",
                     xlabel="true b-hadron pT",
-                    plot_name="linear_fit_distance_model_{model_file_number}_{self.global_config.vertex_features[i]}",
-                    vals=[[var_bins[:-1]+(var_bins[1]-var_bins[0])/2, dist]],
-                    labels=[""],
+                    plot_name=f"linear_fit_distance_model_{model_file_number}_{self.global_config.vertex_features[i]}",
+                    vals=[[var_bins, dist]],
+                    labels=["$f(p_T^{true}) = $"+f"{slope_dist}" + "$p_T^{true} + $" + f"{offset_dist}"],
                     point_styles=["bo"],
                     y_values_given=True,
+                    legend_loc="lower right"
                 )
 
 
@@ -1660,6 +1663,7 @@ class Plotter:
         y_values_given=False,
         y_ticklabels=None,
         return_plot=False,
+        legend_loc="best"
     ):
         if y_values_given:
             ymax = max(vals[0][1])
@@ -1700,7 +1704,7 @@ class Plotter:
             if y_ticklabels is not None:
                 plot.axis_top.set_yticks(list(range(len(y_ticklabels))))
                 plot.axis_top.set_yticklabels(y_ticklabels)
-        plot.axis_top.legend()
+        plot.axis_top.legend(loc=legend_loc)
         plot = create_figure(plot=plot)
         if return_plot:
             return plot, f"{self.plot_dir}/{plot_name}.pdf"
