@@ -817,14 +817,14 @@ class Plotter:
                 pred_var = preds[:,i]
                 labels_var = labels[:,i]
                 var_bins = np.linspace(labels_var.min(), labels_var.max(), 10)
-                fit = np.polyfit(pred_var, labels_var, deg=1)
-                dist = np.abs((fit[0]*pred_var + fit[1])-(labels_var))
-                hist_bins = [dist[np.logical_and(labels_var>var_bins[j], labels_var<var_bins[j+1])].mean() for j in range(len(var_bins)-1)]
+                slope, offset = np.polyfit(pred_var, labels_var, deg=1)
+                dist = np.abs(slope*var_bins+offset - var_bins)
+                # hist_bins = [dist[np.logical_and(labels_var>var_bins[j], labels_var<var_bins[j+1])].mean() for j in range(len(var_bins)-1)]
                 self.plot_vals(
                     ylabel="mean of distance to linear fit",
                     xlabel="true b-hadron pT",
-                    plot_name="linear_fit_distance",
-                    vals=[[var_bins[:-1]+(var_bins[1]-var_bins[0])/2, hist_bins]],
+                    plot_name="linear_fit_distance_model_{model_file_number}_{self.global_config.vertex_features[i]}",
+                    vals=[[var_bins[:-1]+(var_bins[1]-var_bins[0])/2, dist]],
                     labels=[""],
                     point_styles=["bo"],
                     y_values_given=True,
