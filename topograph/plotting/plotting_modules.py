@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader
 from topograph.modules import (
     GlobalConfig,
     IterableFlavourTaggingDataset,
+    Topographs_dataset,
     TopographModel,
     get_logger,
 )
@@ -133,17 +134,18 @@ def get_colours(N):
 
 
 def load_topomodel(
-    modelfile=None,
+    modelfile_1=None,
+    modelfile_2=None,
     nodes_feat=[20, 70, 70, 70, 30],
     nodes_weight=[20, 70, 70, 70, 1],
     nodes_vertex=[30, 50, 50, 50, 1],
     activation_name=None,
 ):
-    if modelfile is None:
-        raise KeyError("Please provide vaild modelfile.")
+    if modelfile_1 is None or modelfile_2 is None:
+        raise KeyError("Please provide two vaild modelfiles.")
 
-    topomodel = TopographModel.load_from_checkpoint(
-        checkpoint_path=modelfile,
+    topomodel_b = TopographModel.load_from_checkpoint(
+        checkpoint_path=modelfile_1,
         save_dir="./",
         name="name",
         nodes_feat=nodes_feat,
@@ -151,48 +153,77 @@ def load_topomodel(
         nodes_vertex=nodes_vertex,
         activation_name=activation_name,
     )
-    return topomodel
+
+    topomodel_c = TopographModel.load_from_checkpoint(
+        checkpoint_path=modelfile_2,
+        save_dir="./",
+        name="name",
+        nodes_feat=nodes_feat,
+        nodes_weight=nodes_weight,
+        nodes_vertex=nodes_vertex,
+        activation_name=activation_name,
+    )
+    return topomodel_b, topomodel_c
 
 
-def get_predictions_and_labels(model, dataset):
-    preds_v, preds_e = ([], [])
-    labels_e, labels_v = ([], [])
+def get_predictions_and_labels(model_c, model_b, dataset):
+    preds_v_c, preds_e_c, preds_v_b, preds_e_b = ([], [], [], [])
+    labels_v_c, labels_e_c, labels_v_b, labels_e_b = ([], [], [], [])
     masks = []
     grads = []
-    model.eval()
+    model_c.eval()
+    model_b.eval()
     for sample in dataset:
-        inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
+        inputs, labels_edge_c, labels_vertex_c, labels_edge_b, labels_vertex_b, samples_weights_c, samples_weights_b, mask, _= sample
         inputs.requires_grad_()
-        output_v, output_e = model.forward(inputs, mask)
-        output_e.backward(gradient=ones_like(output_e))
-        preds_v.append(output_v.detach().numpy())
-        preds_e.append(output_e.detach().numpy())
-        labels_e.append(labels_edge.detach().numpy())
-        labels_v.append(labels_vertex.detach().numpy())
+        output_v_c, output_e_c = model_c.forward(inputs, mask)
+        output_v_b, output_e_b = model_b.forward(inputs, mask)
+        output_e_c.backward(gradient=ones_like(output_e_c))
+        output_e_b.backward(gradient=ones_like(output_e_b))
+        preds_v_c.append(output_v_c.detach().numpy())
+        preds_v_b.append(output_v_b.detach().numpy())
+        preds_e_c.append(output_e_c.detach().numpy())
+        preds_e_b.append(output_e_b.detach().numpy())
+        labels_e_c.append(labels_edge_c.detach().numpy())
+        labels_e_b.append(labels_edge_b.detach().numpy())
+        labels_v_c.append(labels_vertex_c.detach().numpy())
+        labels_v_b.append(labels_vertex_b.detach().numpy())
         masks.append(mask.detach().numpy())
         grad = inputs.grad.data
         grads.append(grad.detach().numpy())
-    shape_labels_e = np.array(labels_e).shape
-    shape_labels_v = np.array(labels_v).shape
-    shape_preds_e = np.array(preds_e).shape
-    shape_preds_v = np.array(preds_v).shape
+    shape_labels_e = np.array(labels_e_b).shape
+    shape_labels_v = np.array(labels_v_b).shape
+    shape_preds_e = np.array(preds_e_b).shape
+    shape_preds_v = np.array(preds_v_b).shape
     shape_masks = np.array(masks).shape
     shape_grads = np.array(grads).shape
-    preds_e = np.array(preds_e).reshape(
+    preds_e_c = np.array(preds_e_c).reshape(
         shape_preds_e[0] * shape_preds_e[1], shape_preds_e[2]
     )  # ,*shape_preds_e[3:])
-    preds_v = np.array(preds_v).reshape(
+    preds_v_c = np.array(preds_v_c).reshape(
         shape_preds_v[0] * shape_preds_v[1], *shape_preds_v[2:]
     )  # ,*shape_preds_v[3:])
-    labels_e = np.array(labels_e).reshape(
+    labels_e_c = np.array(labels_e_c).reshape(
         shape_labels_e[0] * shape_labels_e[1], shape_labels_e[2]
     )
-    labels_v = np.array(labels_v).reshape(
+    labels_v_c = np.array(labels_v_c).reshape(
+        shape_labels_v[0] * shape_labels_v[1], *shape_labels_v[2:]
+    )
+    preds_e_b = np.array(preds_e_b).reshape(
+        shape_preds_e[0] * shape_preds_e[1], shape_preds_e[2]
+    )  # ,*shape_preds_e[3:])
+    preds_v_b = np.array(preds_v_b).reshape(
+        shape_preds_v[0] * shape_preds_v[1], *shape_preds_v[2:]
+    )  # ,*shape_preds_v[3:])
+    labels_e_b = np.array(labels_e_b).reshape(
+        shape_labels_e[0] * shape_labels_e[1], shape_labels_e[2]
+    )
+    labels_v_b = np.array(labels_v_b).reshape(
         shape_labels_v[0] * shape_labels_v[1], *shape_labels_v[2:]
     )
     grads = np.array(grads).reshape(shape_grads[0] * shape_grads[1], *shape_grads[2:])
     masks = np.array(masks).reshape(shape_masks[0] * shape_masks[1], *shape_masks[2:])
-    return preds_e, preds_v, labels_e, labels_v, masks, grads
+    return preds_e_c, preds_e_b, preds_v_c, preds_v_b, labels_e_c, labels_e_b, labels_v_c, labels_v_b, masks, grads
 
 
 class Plotter:
@@ -328,14 +359,10 @@ class Plotter:
         self.metadata_dict = {}
         with File(self.test_file, "r") as f:
             (
-                self.metadata_dict["n_jets"],
+                _,
                 self.metadata_dict["n_trks"],
                 self.metadata_dict["n_trk_features"],
             ) = f[f"{self.config.tracks_name}"].shape
-            _, self.metadata_dict["n_vertex_feat"] = f[
-                f"{self.config.vertex_feat_name}"
-            ].shape
-
         self.n_modelfiles = 0
         # self.effs, self.effs_zeros, self.effs_ones = [],[],[]
 
@@ -343,14 +370,16 @@ class Plotter:
         nbins_scatter = 100
         self.n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
         self.get_all_values()
+        self.endings = ["_c", "_b"]
 
-        if self.check_if_recalculate():
+        # if self.check_if_recalculate():
+        for ending in self.endings:
             for i in range(self.n_modelfiles):
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{i:03d}.h5", "r"
                 ) as model_data:
-                    preds = model_data["pred_edge"][:]
-                    labels = model_data["labels_edge"][:]
+                    preds = model_data[f"pred_edge{ending}"][:]
+                    labels = model_data[f"labels_edge{ending}"][:]
                     # grads = model_data["grads"][:]
                     slope, shift, c1, c2 = None, None, None, None
                     if self.add_activation == "shifted_relu":
@@ -417,131 +446,131 @@ class Plotter:
                         zeros_only=True,
                     )
 
-        if self.plot_effs:
-            self.logger.info(f"plotting efficiencies...")
-            if self.effs is not None:
-                self.plot_vals(
-                    ylabel="efficiency",
-                    xlabel="epoch",
-                    plot_name="eff_per_epoch"
-                    if self.cut_val is None
-                    else f"eff_per_epoch_cutval={self.cut_val}",
-                    vals=[self.effs],
-                    labels=[""],
-                    point_styles=get_point_styles(1),
+            if self.plot_effs:
+                self.logger.info(f"plotting efficiencies...")
+                if self.effs is not None:
+                    self.plot_vals(
+                        ylabel="efficiency",
+                        xlabel="epoch",
+                        plot_name=f"eff_per_epoch{ending}"
+                        if self.cut_val is None
+                        else f"eff_per_epoch_cutval={self.cut_val}",
+                        vals=[self.effs],
+                        labels=[""],
+                        point_styles=get_point_styles(1),
+                    )
+
+            if self.plot_effs_ones:
+                self.logger.info(f"plotting efficiencies, ones only...")
+                if self.effs_ones is not None:
+                    self.plot_vals(
+                        ylabel="efficiency",
+                        xlabel="epoch",
+                        plot_name=f"eff_per_epoch_ones{ending}"
+                        if self.cut_val is None
+                        else f"eff_per_epoch_ones_cutval={self.cut_val}",
+                        vals=[self.effs_ones],
+                        labels=[""],
+                        point_styles=get_point_styles(1),
+                    )
+
+            if self.plot_effs_zeros:
+                self.logger.info(f"plotting efficiencies, zeros only...")
+                if self.effs_zeros is not None:
+                    self.plot_vals(
+                        ylabel="efficiency",
+                        xlabel="epoch",
+                        plot_name=f"eff_per_epoch_zeros{ending}"
+                        if self.cut_val is None
+                        else f"eff_per_epoch_zeros_cutval={self.cut_val}",
+                        vals=[self.effs_zeros],
+                        labels=[""],
+                        point_styles=get_point_styles(1),
+                    )
+
+            if self.plot_pt:
+                self.logger.info(f"plotting pT...")
+                self.plotting_regression_scatter(
+                    model_file_numbers=self.model_file_numbers, var="pT"
                 )
 
-        if self.plot_effs_ones:
-            self.logger.info(f"plotting efficiencies, ones only...")
-            if self.effs_ones is not None:
-                self.plot_vals(
-                    ylabel="efficiency",
-                    xlabel="epoch",
-                    plot_name="eff_per_epoch_ones"
-                    if self.cut_val is None
-                    else f"eff_per_epoch_ones_cutval={self.cut_val}",
-                    vals=[self.effs_ones],
-                    labels=[""],
-                    point_styles=get_point_styles(1),
+            if self.plot_eta:
+                self.logger.info(f"plotting eta...")
+                self.plotting_regression_scatter(
+                    model_file_numbers=self.model_file_numbers, var="eta"
                 )
 
-        if self.plot_effs_zeros:
-            self.logger.info(f"plotting efficiencies, zeros only...")
-            if self.effs_zeros is not None:
-                self.plot_vals(
-                    ylabel="efficiency",
-                    xlabel="epoch",
-                    plot_name="eff_per_epoch_zeros"
-                    if self.cut_val is None
-                    else f"eff_per_epoch_zeros_cutval={self.cut_val}",
-                    vals=[self.effs_zeros],
-                    labels=[""],
-                    point_styles=get_point_styles(1),
+            if self.plot_conf_matrix:
+                self.logger.info("plotting confusion matrix...")
+                self.plotting_confusion_matrix(
+                    model_file_numbers=self.model_file_numbers,
                 )
 
-        if self.plot_pt:
-            self.logger.info(f"plotting pT...")
-            self.plotting_regression_scatter(
-                model_file_numbers=self.model_file_numbers, var="pT"
-            )
+            if self.plot_preds_per_epoch:
+                self.logger.info("plotting predictions per epoch...")
+                self.plotting_preds_per_epoch(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_eta:
-            self.logger.info(f"plotting eta...")
-            self.plotting_regression_scatter(
-                model_file_numbers=self.model_file_numbers, var="eta"
-            )
+            if self.plot_preds_scatter:
+                self.logger.info(f"plotting predictions in scatter plot...")
+                self.plot_scatter_vals(
+                    ylabel="predicition",
+                    xlabel="epoch",
+                    plot_name="predictions",
+                    xvals=list(range(0, len(self.preds_scatter))),
+                    yvals=np.linspace(
+                        self.startpoint_scatter,
+                        self.endpoint_scatter,
+                        num=len(self.preds_scatter[0]),
+                        endpoint=True,
+                    ),
+                    zvals=self.preds_scatter,
+                    title="predictions",
+                )
 
-        if self.plot_conf_matrix:
-            self.logger.info("plotting confusion matrix...")
-            self.plotting_confusion_matrix(
-                model_file_numbers=self.model_file_numbers,
-            )
+            if self.recalculate_preds_scatter:
+                self.save_vals(dataset_name="preds_scatter", data=self.preds_scatter)
+                self.save_vals(dataset_name="endpoint_scatter", data=self.endpoint_scatter)
+                self.save_vals(
+                    dataset_name="startpoint_scatter", data=self.startpoint_scatter
+                )
 
-        if self.plot_preds_per_epoch:
-            self.logger.info("plotting predictions per epoch...")
-            self.plotting_preds_per_epoch(model_file_numbers=self.model_file_numbers)
+            if self.plot_saliency:
+                self.plot_saliency_map(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_preds_scatter:
-            self.logger.info(f"plotting predictions in scatter plot...")
-            self.plot_scatter_vals(
-                ylabel="predicition",
-                xlabel="epoch",
-                plot_name="predictions",
-                xvals=list(range(0, len(self.preds_scatter))),
-                yvals=np.linspace(
-                    self.startpoint_scatter,
-                    self.endpoint_scatter,
-                    num=len(self.preds_scatter[0]),
-                    endpoint=True,
-                ),
-                zvals=self.preds_scatter,
-                title="predictions",
-            )
+            if self.plot_saliency_pertrack:
+                self.plot_saliency_map_pertrack(model_file_numbers=self.model_file_numbers)
 
-        if self.recalculate_preds_scatter:
-            self.save_vals(dataset_name="preds_scatter", data=self.preds_scatter)
-            self.save_vals(dataset_name="endpoint_scatter", data=self.endpoint_scatter)
-            self.save_vals(
-                dataset_name="startpoint_scatter", data=self.startpoint_scatter
-            )
+            if self.plot_saliency_pervar:
+                self.plotting_saliency_per_var(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_saliency:
-            self.plot_saliency_map(model_file_numbers=self.model_file_numbers)
+            if self.plot_vertex_labels:
+                self.plotting_vertex_labels_per_epoch(
+                    model_file_numbers=self.model_file_numbers
+                )
 
-        if self.plot_saliency_pertrack:
-            self.plot_saliency_map_pertrack(model_file_numbers=self.model_file_numbers)
+            if self.plot_weights:
+                self.plotting_model_weights(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_saliency_pervar:
-            self.plotting_saliency_per_var(model_file_numbers=self.model_file_numbers)
+            if self.plot_target_input_corr:
+                self.plotting_target_input_correlation()
 
-        if self.plot_vertex_labels:
-            self.plotting_vertex_labels_per_epoch(
-                model_file_numbers=self.model_file_numbers
-            )
+            if self.plot_n_tracks_per_jet:
+                self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_weights:
-            self.plotting_model_weights(model_file_numbers=self.model_file_numbers)
+            if self.plot_track_origin:
+                self.plotting_track_origin()
 
-        if self.plot_target_input_corr:
-            self.plotting_target_input_correlation()
+            if self.plot_inputs:
+                self.plotting_input()
 
-        if self.plot_n_tracks_per_jet:
-            self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
+            if self.plot_roc_curves:
+                self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_track_origin:
-            self.plotting_track_origin()
-
-        if self.plot_inputs:
-            self.plotting_input()
-
-        if self.plot_roc_curves:
-            self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
-
-        if self.plot_hadron_pt:
-            self.plotting_hadron_pt_from_tracks()
-        
-        if self.plot_linear_fit:
-            self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
+            if self.plot_hadron_pt:
+                self.plotting_hadron_pt_from_tracks()
+            
+            if self.plot_linear_fit:
+                self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -666,88 +695,90 @@ class Plotter:
             if var_numb == -1:
                 self.logger.warning(f"Skipping plotting of {var}, not used in training")
                 break
-            with File(
-                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-            ) as f:
-                try:
-                    preds = f["pred_vertex_features"][:, var_numb]
-                except ValueError:
-                    preds = f["pred_vertex_features"][:]
-                try:
-                    labels = f["labels_vertex_features"][:, var_numb]
-                except ValueError:
-                    labels = f["labels_vertex_features"][:]
+            for ending in self.endings:
+                with File(
+                    f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+                ) as f:
+                    try:
+                        preds = f[f"pred_vertex_features{ending}"][:, var_numb]
+                    except ValueError:
+                        preds = f[f"pred_vertex_features{ending}"][:]
+                    try:
+                        labels = f[f"labels_vertex_features{ending}"][:, var_numb]
+                    except ValueError:
+                        labels = f[f"labels_vertex_features{ending}"][:]
 
-            var_min = np.min(labels[~np.isnan(labels)])
-            var_max = np.max(labels[~np.isnan(labels)])
-            var_min_pred = np.min(preds[~np.isnan(preds)])
-            var_max_pred = np.max(preds[~np.isnan(preds)])
-            bins = np.linspace(
-                min(var_min, var_min_pred), max(var_max, var_max_pred), 20
-            )
-            bins = np.linspace(-2, 2, 60)
-            hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
-            self.plot_scatter_vals(
-                ylabel=f"true {var_str}",
-                xlabel=f"predicted {var_str}",
-                plot_name=f"{var}_regression_model_{model_file_number}",
-                xvals=bins,
-                yvals=bins,
-                zvals=hist,
-                title=None,
-                y_ticklabels=None,
-                swap_inputs=True,
-            )
+                var_min = np.min(labels[~np.isnan(labels)])
+                var_max = np.max(labels[~np.isnan(labels)])
+                var_min_pred = np.min(preds[~np.isnan(preds)])
+                var_max_pred = np.max(preds[~np.isnan(preds)])
+                bins = np.linspace(
+                    min(var_min, var_min_pred), max(var_max, var_max_pred), 20
+                )
+                bins = np.linspace(-2, 2, 60)
+                hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
+                self.plot_scatter_vals(
+                    ylabel=f"true {var_str}",
+                    xlabel=f"predicted {var_str}",
+                    plot_name=f"{var}_regression_model_{model_file_number}{ending}",
+                    xvals=bins,
+                    yvals=bins,
+                    zvals=hist,
+                    title=None,
+                    y_ticklabels=None,
+                    swap_inputs=True,
+                )
 
-            regs = calculate_pT_diff(pred=preds, label=labels)()
-            var_min = np.min(regs)  # [~np.isnan(regs)])
-            var_max = np.max(regs)  # [~np.isnan(regs)])
-            var_min_pred = np.min(preds[~np.isnan(preds)])
-            var_max_pred = np.max(preds[~np.isnan(preds)])
-            bins_x = np.linspace(var_min_pred, var_max_pred, 30)
-            bins_x = np.linspace(-2, 2, 30)
-            bins_y = np.linspace(var_min, var_max, 30)
-            bins_y = np.linspace(-1.5, 1.5, 30)
-            # bins = np.linspace(-2,2,30)
-            hist_Delta = np.histogram2d(preds, regs, bins=[bins_x, bins_y])[0]
-            self.plot_scatter_vals(
-                ylabel=f"Delta {var_str}",
-                xlabel=f"predicted {var_str}",
-                plot_name=f"Delta_{var}_model_{model_file_number}",
-                xvals=bins_x,
-                yvals=bins_y,
-                zvals=hist_Delta,
-                title=None,
-                y_ticklabels=None,
-                swap_inputs=True,
-            )
+                regs = calculate_pT_diff(pred=preds, label=labels)()
+                var_min = np.min(regs)  # [~np.isnan(regs)])
+                var_max = np.max(regs)  # [~np.isnan(regs)])
+                var_min_pred = np.min(preds[~np.isnan(preds)])
+                var_max_pred = np.max(preds[~np.isnan(preds)])
+                bins_x = np.linspace(var_min_pred, var_max_pred, 30)
+                bins_x = np.linspace(-2, 2, 30)
+                bins_y = np.linspace(var_min, var_max, 30)
+                bins_y = np.linspace(-1.5, 1.5, 30)
+                # bins = np.linspace(-2,2,30)
+                hist_Delta = np.histogram2d(preds, regs, bins=[bins_x, bins_y])[0]
+                self.plot_scatter_vals(
+                    ylabel=f"Delta {var_str}",
+                    xlabel=f"predicted {var_str}",
+                    plot_name=f"Delta_{var}_model_{model_file_number}{ending}",
+                    xvals=bins_x,
+                    yvals=bins_y,
+                    zvals=hist_Delta,
+                    title=None,
+                    y_ticklabels=None,
+                    swap_inputs=True,
+                )
 
     def plotting_input(self):
-        with File(self.test_file, "r") as f:
-            inputs = f["X_train_tracks"][: self.njet_test]
-            labels = f["Y_edge"][: self.njet_test]
-        input_mask = ~np.all(inputs[..., :3] == 0, axis=-1)
-        inputs_b = inputs[np.logical_and(labels == 1, input_mask)]
-        inputs_nonb = inputs[np.logical_and(labels == 0, input_mask)]
-        input_vars = self.global_config.track_inputs
-        for i in range(0, len(input_vars)):
-            self.logger.info(f"plotting distribution for {input_vars[i]}")
-            dist_b = inputs_b[:, i]
-            dist_nonb = inputs_nonb[:, i]
-            dists = [dist_b, dist_nonb]
-            nbins, binrange, ticks = get_n_bins(dists=dists, var=input_vars[i])
-            self.plot_hist(
-                ylabel="normalised number of tracks",
-                xlabel=input_vars[i],
-                plot_name=f"Distr_{input_vars[i]}",
-                colours=get_colours(2),
-                vals=dists,
-                labels=["b-tracks", "non-b tracks"],
-                nbins=nbins,
-                binrange=binrange,
-                x_ticklabels=ticks,
-                logy=False,
-            )
+        for ending in self.endings:
+            with File(self.test_file, "r") as f:
+                inputs = f[f"X_train_tracks{ending}"][: self.njet_test]
+                labels = f[f"Y_edge{ending}"][: self.njet_test]
+            input_mask = ~np.all(inputs[..., :3] == 0, axis=-1)
+            inputs_b = inputs[np.logical_and(labels == 1, input_mask)]
+            inputs_nonb = inputs[np.logical_and(labels == 0, input_mask)]
+            input_vars = self.global_config.track_inputs
+            for i in range(0, len(input_vars)):
+                self.logger.info(f"plotting distribution for {input_vars[i]}")
+                dist_b = inputs_b[:, i]
+                dist_nonb = inputs_nonb[:, i]
+                dists = [dist_b, dist_nonb]
+                nbins, binrange, ticks = get_n_bins(dists=dists, var=input_vars[i])
+                self.plot_hist(
+                    ylabel="normalised number of tracks",
+                    xlabel=input_vars[i],
+                    plot_name=f"Distr_{input_vars[i]}",
+                    colours=get_colours(2),
+                    vals=dists,
+                    labels=["b-tracks", "non-b tracks"],
+                    nbins=nbins,
+                    binrange=binrange,
+                    x_ticklabels=ticks,
+                    logy=False,
+                )
 
     def plotting_roc_curves(self, model_file_numbers):
         self.logger.info("plotting roc curves...")
@@ -1786,16 +1817,10 @@ class GetEpochPrediction:
         )
         njets_test = getattr(config, "njets_test", -1)
         njets_test = -1 if njets_test is None else njets_test
-        self.dataset = IterableFlavourTaggingDataset(
-            dset="test",
-            buffer_shuffle=False,
-            file_name=self.test_file,
-            batch_size=100,  # min(njets_test, 1024),
-            drop_last=True,
-            buffer_size=10_000,
-            njets=njets_test,
-            vars=vars,
-            used_vertex_properties=getattr(self.config, "used_vertex_properties", None),
+        self.dataset = Topographs_dataset(
+            filename=self.test_file,
+            batch_size=min(njets_test, 1024),
+            n_samples=njets_test
         )
         self.dataset_loader = DataLoader(
             self.dataset,
@@ -1811,6 +1836,8 @@ class GetEpochPrediction:
                 str_vars += f"_{var}"
 
         self.training_output_folder = config.output_training
+        self.training_output_folder_model1 = config.output_training_model1
+        self.training_output_folder_model2 = config.output_training_model2
         self.training_output_folder = (
             self.training_output_folder[:-1]
             if self.training_output_folder[-1] == "/"
@@ -1832,8 +1859,11 @@ class GetEpochPrediction:
                 else len(self.used_vertex_properties)
             )
         # layer, model_sub, model
-        topomodel = load_topomodel(
-            modelfile=f"{self.training_output_folder}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace(
+        topomodel_b, topomodel_c = load_topomodel(
+            modelfile_1=f"{self.training_output_folder_model1}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace(
+                "//", "/"
+            ),
+            modelfile_2=f"{self.training_output_folder_model2}/checkpoints/checkpoint_train_epoch={self.epoch}.ckpt".replace(
                 "//", "/"
             ),
             nodes_feat=edge_feat_nodes,
@@ -1842,19 +1872,19 @@ class GetEpochPrediction:
             activation_name=self.config.edge_weight_network.get("add_activation", None),
         )
 
-        self.metadata_dict = {}
-        with File(self.test_file, "r") as f:
-            (
-                self.metadata_dict["n_jets"],
-                self.metadata_dict["n_trks"],
-                self.metadata_dict["n_trk_features"],
-            ) = f[f"{self.config.tracks_name}"].shape
-            _, self.metadata_dict["n_vertex_feat"] = f[
-                f"{self.config.vertex_feat_name}"
-            ].shape
+        # self.metadata_dict = {}
+        # with File(self.test_file, "r") as f:
+        #     (
+        #         self.metadata_dict["n_jets"],
+        #         self.metadata_dict["n_trks"],
+        #         self.metadata_dict["n_trk_features"],
+        #     ) = f[f"{self.config.tracks_name}"].shape
+        #     _, self.metadata_dict["n_vertex_feat"] = f[
+        #         f"{self.config.vertex_feat_name}"
+        #     ].shape
 
-        preds_e, preds_v, labels_e, labels_v, masks, grads = get_predictions_and_labels(
-            model=topomodel, dataset=self.dataset_loader
+        preds_e_c, preds_e_b, preds_v_c, preds_v_b, labels_e_c, labels_e_b, labels_v_c, labels_v_b, masks, grads = get_predictions_and_labels(
+            model_b=topomodel_b, model_c=topomodel_c, dataset=self.dataset_loader
         )
         # model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
@@ -1874,10 +1904,14 @@ class GetEpochPrediction:
 
         makedirs(self.output_folder, exist_ok=True)
         with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
-            f.create_dataset(name="pred_edge", data=preds_e)
-            f.create_dataset(name="pred_vertex_features", data=preds_v)
-            f.create_dataset(name="labels_edge", data=labels_e)
-            f.create_dataset(name="labels_vertex_features", data=labels_v)
+            f.create_dataset(name="pred_edge_c", data=preds_e_c)
+            f.create_dataset(name="pred_vertex_features_c", data=preds_v_c)
+            f.create_dataset(name="labels_edge_c", data=labels_e_c)
+            f.create_dataset(name="labels_vertex_features_c", data=labels_v_c)
+            f.create_dataset(name="pred_edge_b", data=preds_e_b)
+            f.create_dataset(name="pred_vertex_features_b", data=preds_v_b)
+            f.create_dataset(name="labels_edge_b", data=labels_e_b)
+            f.create_dataset(name="labels_vertex_features_b", data=labels_v_b)
             f.create_dataset(name="mask", data=masks)
             f.create_dataset(name="gradients", data=grads)
             # f.create_dataset(name="gradients_pertrack", data=grads_pertrack.data)

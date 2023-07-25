@@ -76,7 +76,7 @@ def get_logger():
 def get_mask(trks):
     for var, dtype in trks.dtype.fields.items():
         if "f" in dtype[0].str:
-            mask = ~np.isnan(trks[var])
+            mask = np.logical_and(~np.isnan(trks[var]), ~(trks[var]==-999.))
             return mask
 
 
@@ -334,7 +334,7 @@ class GetConfiguration:
 
 
 class DatasetCreater:
-    def __init__(self, config, input_file, step, stepsize, replace_invalid=False):
+    def __init__(self, config, input_file, step, stepsize, replace_invalid=False, jet_type="b"):
         self.global_conf = GlobalConfig()
         self.config = config
         self.input_file = input_file
@@ -344,6 +344,7 @@ class DatasetCreater:
         self.replace_invalid = replace_invalid
         self.vertex_features = self.global_conf.vertex_features
         self.ntracks = 40
+        self.jet_type = jet_type
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -381,7 +382,10 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
 
-        self.ind_truthflav = self.get_b_indeces()
+        self.ind_truthflav_b, self.ind_truthflav_c = self.get_cb_indeces()
+        self.ind_truthflav = np.logical_or(self.ind_truthflav_b, self.ind_truthflav_c)
+        self.ind_truthflav_b = self.ind_truthflav_b[self.ind_truthflav]
+        self.ind_truthflav_c = self.ind_truthflav_c[self.ind_truthflav]
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
@@ -390,10 +394,13 @@ class DatasetCreater:
         self.reco_jets = self.reco_jets[self.ind_truthflav]
         # self.edge_features = self.edge_features[self.ind_truthflav]
 
-    def get_b_indeces(self):
+    def get_cb_indeces(self):
         hadronflavour = self.truth["flavour"]
+        if self.jet_type == "b":
         return np.logical_and(
             self.HadrConeTruth == 5, [sum(hf == 5) == 1 for hf in hadronflavour]
+        ), np.logical_and(
+            self.HadrConeTruth == 4, [sum(hf == 4) == 1 for hf in hadronflavour]
         )
 
     def get_n_valid_jets(self):
@@ -401,23 +408,12 @@ class DatasetCreater:
 
     def get_edge_y(self):
         truthOriginLabel = self.truthOriginLabel
-        # tOL_fromB = [
-        #     [OL == 3 for OL in tracklabels] for tracklabels in truthOriginLabel
-        # ]
-        # tOL_fromBC = [
-        #     [OL == 4 for OL in tracklabels] for tracklabels in truthOriginLabel
-        # ]
-        # tOL = np.array(
-        #     [
-        #         [
-        #             np.array([edge_y]).astype(int)
-        #             for edge_y in (np.logical_or(fromB, fromBC))
-        #         ]
-        #         for fromB, fromBC in zip(tOL_fromB, tOL_fromBC)
-        #     ]
-        # )
-        tOL = np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int)
-        return tOL
+        ntracks = truthOriginLabel.shape[-1]
+        tOL_b = np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int)
+        tOL_b[~self.ind_truthflav_b] = [0]*ntracks
+        tOL_c = (truthOriginLabel == 5).astype(int)
+        tOL_c[~self.ind_truthflav_c] = [0]*ntracks
+        return tOL_b, tOL_c
 
     def get_edge_origin(self):
         return self.truthOriginLabel
@@ -447,11 +443,15 @@ class DatasetCreater:
 
     def get_vertex_feat_y(self):
         flavour = self.truth["flavour"]
-        vertex_feat = self.truth[self.vertex_features][flavour == 5]
+        vert_feats = self.truth[self.vertex_features]
         for key in self.vertex_features:
             if self.global_conf.vertex_feat_dict[key]["log"]:
-                vertex_feat[key] = np.log(vertex_feat[key])
-        return vertex_feat
+                vert_feats[key] = np.log(vert_feats[key])
+        vertex_feat_b = np.full(shape=(sum(self.ind_truthflav)),fill_value=-999., dtype=vert_feats.dtype)
+        vertex_feat_c = np.full(shape=(sum(self.ind_truthflav)),fill_value=-999., dtype=vert_feats.dtype)
+        vertex_feat_b[self.ind_truthflav_b] = vert_feats[self.ind_truthflav_b][flavour[self.ind_truthflav_b] == 5]
+        vertex_feat_c[self.ind_truthflav_c] = vert_feats[self.ind_truthflav_c][flavour[self.ind_truthflav_c] == 4]
+        return vertex_feat_b, vertex_feat_c
 
     def get_track_input(self):
         return self.reco

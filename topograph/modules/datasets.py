@@ -38,8 +38,10 @@ class Topographs_dataset(IterableDataset):
     def open(self):
         self.file = h5py.File(self.filename)
         self.tracks = self.file["X_train_tracks"]
-        self.labels_v = self.file["Y_vertex_features"]
-        self.labels_e = self.file["Y_edge"]
+        self.labels_v_c = self.file["Y_vertex_features_c"]
+        self.labels_e_c = self.file["Y_edge_c"]
+        self.labels_v_b = self.file["Y_vertex_features_b"]
+        self.labels_e_b = self.file["Y_edge_b"]
 
     def get_indeces(self):
         # if self.n_samples == -1: 
@@ -54,13 +56,18 @@ class Topographs_dataset(IterableDataset):
         self.open()
         for inds in indices:
             self.tracks_batch = self.tracks[inds[0] : inds[1]].astype(np.float32)
-            self.labels_v_batch = self.labels_v[inds[0] : inds[1]].astype(np.float32)
-            self.labels_e_batch = self.labels_e[inds[0] : inds[1]].astype(np.float32)
+            self.labels_v_c_batch = self.labels_v_c[inds[0] : inds[1]].astype(np.float32)
+            self.labels_e_c_batch = self.labels_e_c[inds[0] : inds[1]].astype(np.float32)
+            self.labels_v_b_batch = self.labels_v_b[inds[0] : inds[1]].astype(np.float32)
+            self.labels_e_b_batch = self.labels_e_b[inds[0] : inds[1]].astype(np.float32)
             self.mask_batch = ~np.all(self.tracks_batch[..., :3] == 0, axis=-1)
-            self.samples_weights_batch = np.array(
-                list(map(get_sample_weights, self.labels_e_batch)), dtype=np.float32
+            self.samples_weights_c_batch = np.array(
+                list(map(get_sample_weights, self.labels_e_c_batch)), dtype=np.float32
             )
-            yield self.tracks_batch, self.labels_e_batch, self.labels_v_batch, self.samples_weights_batch, self.mask_batch, None
+            self.samples_weights_b_batch = np.array(
+                list(map(get_sample_weights, self.labels_e_b_batch)), dtype=np.float32
+            )
+            yield self.tracks_batch, self.labels_e_c_batch, self.labels_v_c_batch, self.labels_e_b_batch, self.labels_v_b_batch, self.samples_weights_c_batch, self.samples_weights_b_batch, self.mask_batch, None
 
     def __len__(self) -> int:
         num_sampels = self.n_samples if self.n_samples != -1 else len(self.tracks)

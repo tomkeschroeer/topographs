@@ -138,19 +138,29 @@ class Scaler:
                     infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
                 )[:]
 
-                vert_prop_chunk = np.asarray(
-                    infile_all[f"/{vert_prop_name}"][index_tuple[0] : index_tuple[1]]
+                vert_prop_chunk_b = np.asarray(
+                    infile_all[f"/{vert_prop_name}_b"][index_tuple[0] : index_tuple[1]]
+                )
+
+                vert_prop_chunk_c = np.asarray(
+                    infile_all[f"/{vert_prop_name}_c"][index_tuple[0] : index_tuple[1]]
                 )
 
                 track_mask = get_mask(tracks_chunk)
-                vert_mask = get_mask(vert_prop_chunk)
+                vert_mask_b = get_mask(vert_prop_chunk_b)
+                vert_mask_c = get_mask(vert_prop_chunk_c)
 
                 X_train_tracks = np.stack(
                     [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
                 )
 
-                X_train_vert_prop = np.stack(
-                    [np.nan_to_num(vert_prop_chunk[v]) for v in self.var_list_vert],
+                X_train_vert_prop_b = np.stack(
+                    [np.nan_to_num(vert_prop_chunk_b[v]) for v in self.var_list_vert],
+                    axis=-1,  # len(self.var_list_vert)
+                )
+
+                X_train_vert_prop_c = np.stack(
+                    [np.nan_to_num(vert_prop_chunk_c[v]) for v in self.var_list_vert],
                     axis=-1,  # len(self.var_list_vert)
                 )
 
@@ -161,18 +171,26 @@ class Scaler:
                     scale_tracks=True,
                 )
 
-                scale_dict_vert_prop, nJets = self.get_scaling(
-                    data=X_train_vert_prop[:],
+                scale_dict_vert_prop_b, nJets_b = self.get_scaling(
+                    data=X_train_vert_prop_b[:],
                     var_names=self.var_list_vert,
-                    track_mask=vert_mask,
+                    track_mask=vert_mask_b,
+                    scale_tracks=False,
+                )
+
+                scale_dict_vert_prop_c, nJets_c = self.get_scaling(
+                    data=X_train_vert_prop_c[:],
+                    var_names=self.var_list_vert,
+                    track_mask=vert_mask_c,
                     scale_tracks=False,
                 )
 
                 scale_dict = {
                     tracks_name: scale_dict_trk,
-                    vert_prop_name: scale_dict_vert_prop,
+                    f"{vert_prop_name}_b": scale_dict_vert_prop_b,
+                    f"{vert_prop_name}_c": scale_dict_vert_prop_c,
                 }
-                nEntries = {tracks_name: nTrks, vert_prop_name: nJets}
+                nEntries = {tracks_name: nTrks, f"{vert_prop_name}_b": nJets_b, f"{vert_prop_name}_c": nJets_c}
                 # Yield the scale dict and the number jets
                 yield scale_dict, nEntries
 
@@ -261,8 +279,9 @@ class Scaler:
 
         # Init a new combined scale dict
         combined_scale_dict = {}
+        dict_names = first_scale_dict.keys()
 
-        for dict_name in [self.config.tracks_name, self.config.vertex_feat_name]:
+        for dict_name in dict_names:
             combined_scale_dict_tmp = {}
             for var in first_scale_dict[dict_name]:
                 # Add var to combined dict
@@ -283,10 +302,7 @@ class Scaler:
 
         # Sum of nTrks corresponding to combined scale dict
         combined_ns = {
-            self.config.tracks_name: first_ns[self.config.tracks_name]
-            + second_ns[self.config.tracks_name],
-            self.config.vertex_feat_name: first_ns[self.config.vertex_feat_name]
-            + second_ns[self.config.vertex_feat_name],
+            name: first_ns[name]+second_ns[name] for name in dict_names
         }
 
         return combined_scale_dict, combined_ns

@@ -19,7 +19,8 @@ class Apply_Scaler:
         self.vert_prop_name = self.config.vertex_feat_name
         self.var_list = {
             self.tracks_name: self.global_conf.track_inputs,
-            self.vert_prop_name: self.global_conf.vertex_features,
+            f"{self.vert_prop_name}_b": self.global_conf.vertex_features,
+            f"{self.vert_prop_name}_c": self.global_conf.vertex_features,
         }
         self.file_names = {
             self.config.training_file_name: self.config.njets,
@@ -57,12 +58,12 @@ class Apply_Scaler:
             # scale_dict[self.vert_prop_name] = full_scale_dict[self.vert_prop_name]
 
         logger.info("Applying scaling and shifting.")
-
+        dict_names = scale_dict.keys()
         for file_name, njets_per_file in self.file_names.items():
             self.out_file = f"{self.config.output}/{file_name}".replace(".h5.h5", ".h5")
             logger.info(f"Save scaled inputs in file {self.out_file}")
             with File(self.out_file, "w") as h5file:
-                for keyname in [self.tracks_name, self.vert_prop_name]:
+                for keyname in dict_names:
                     scale_generator = self.scale_generator(
                         input_file=input_file,
                         nJets=njets_per_file,
@@ -264,19 +265,26 @@ class Apply_Scaler:
                             del o["unscaled_pt"]
                         if "jet_pt" in o.keys():
                             del o["jet_pt"]
-                        edges = f[self.config.edge_name][indices[0] : indices[1]]
+                        edges_b = f[f"{self.config.edge_name}_b"][indices[0] : indices[1]]
+                        edges_c = f[f"{self.config.edge_name}_c"][indices[0] : indices[1]]
                         edge_origin = f["edge_origin"][indices[0] : indices[1]]
                         track_extra = f["track_extra"][indices[0] : indices[1]]
-                        track_extra_truth = f["track_extra_truth"][
-                            indices[0] : indices[1]
-                        ]
-                        unscaled_pt = f["unscaled_pt"][indices[0] : indices[1]]
-                        jet_pt = f["jet_pt"][indices[0] : indices[1]]
+                        # track_extra_truth = f["track_extra_truth"][
+                        #     indices[0] : indices[1]
+                        # ]
+                        # unscaled_pt = f["unscaled_pt"][indices[0] : indices[1]]
+                        # jet_pt = f["jet_pt"][indices[0] : indices[1]]
                         o.create_dataset(
-                            data=edges,
-                            name=self.config.edge_name,
+                            data=edges_b,
+                            name=f"{self.config.edge_name}_b",
                             chunks=True,
-                            maxshape=(None, edges.shape[1]),
+                            maxshape=(None, edges_b.shape[1]),
+                        )
+                        o.create_dataset(
+                            data=edges_c,
+                            name=f"{self.config.edge_name}_c",
+                            chunks=True,
+                            maxshape=(None, edges_c.shape[1]),
                         )
                         o.create_dataset(
                             data=edge_origin,
@@ -290,31 +298,37 @@ class Apply_Scaler:
                             chunks=True,
                             maxshape=(None, track_extra.shape[1]),
                         )
-                        o.create_dataset(
-                            data=track_extra_truth,
-                            name="track_extra_truth",
-                            chunks=True,
-                            maxshape=(None, track_extra.shape[1]),
-                        )
-                        o.create_dataset(
-                            data=unscaled_pt,
-                            name="unscaled_pt",
-                            chunks=True,
-                            maxshape=(None,),
-                        )
-                        o.create_dataset(
-                            data=unscaled_pt,
-                            name="jet_pt",
-                            chunks=True,
-                            maxshape=(None,),
-                        )
+                        # o.create_dataset(
+                        #     data=track_extra_truth,
+                        #     name="track_extra_truth",
+                        #     chunks=True,
+                        #     maxshape=(None, track_extra.shape[1]),
+                        # )
+                        # o.create_dataset(
+                        #     data=unscaled_pt,
+                        #     name="unscaled_pt",
+                        #     chunks=True,
+                        #     maxshape=(None,),
+                        # )
+                        # o.create_dataset(
+                        #     data=unscaled_pt,
+                        #     name="jet_pt",
+                        #     chunks=True,
+                        #     maxshape=(None,),
+                        # )
                     else:
                         n_entries = indices[1] - indices[0]
-                        o[self.config.edge_name].resize(
-                            (o[self.config.edge_name].shape[0] + n_entries), axis=0
+                        o[f"{self.config.edge_name}_c"].resize(
+                            (o[f"{self.config.edge_name}_c"].shape[0] + n_entries), axis=0
                         )
-                        o[self.config.edge_name][-n_entries:] = f[
-                            self.config.edge_name
+                        o[f"{self.config.edge_name}_c"][-n_entries:] = f[
+                            f"{self.config.edge_name}_c"
+                        ][indices[0] : indices[1]]
+                        o[f"{self.config.edge_name}_b"].resize(
+                            (o[f"{self.config.edge_name}_b"].shape[0] + n_entries), axis=0
+                        )
+                        o[f"{self.config.edge_name}_b"][-n_entries:] = f[
+                            f"{self.config.edge_name}_b"
                         ][indices[0] : indices[1]]
                         o["edge_origin"].resize(
                             (o["edge_origin"].shape[0] + n_entries), axis=0
@@ -328,19 +342,19 @@ class Apply_Scaler:
                         o["track_extra"][-n_entries:] = f["track_extra"][
                             indices[0] : indices[1]
                         ]
-                        o["track_extra_truth"].resize(
-                            (o["track_extra_truth"].shape[0] + n_entries), axis=0
-                        )
-                        o["track_extra_truth"][-n_entries:] = f["track_extra_truth"][
-                            indices[0] : indices[1]
-                        ]
-                        o["unscaled_pt"].resize(
-                            (o["unscaled_pt"].shape[0] + n_entries), axis=0
-                        )
-                        o["unscaled_pt"][-n_entries:] = f["unscaled_pt"][
-                            indices[0] : indices[1]
-                        ]
-                        o["jet_pt"].resize((o["jet_pt"].shape[0] + n_entries), axis=0)
-                        o["jet_pt"][-n_entries:] = f["jet_pt"][indices[0] : indices[1]]
+                        # o["track_extra_truth"].resize(
+                        #     (o["track_extra_truth"].shape[0] + n_entries), axis=0
+                        # )
+                        # o["track_extra_truth"][-n_entries:] = f["track_extra_truth"][
+                        #     indices[0] : indices[1]
+                        # ]
+                        # o["unscaled_pt"].resize(
+                        #     (o["unscaled_pt"].shape[0] + n_entries), axis=0
+                        # )
+                        # o["unscaled_pt"][-n_entries:] = f["unscaled_pt"][
+                        #     indices[0] : indices[1]
+                        # ]
+                        # o["jet_pt"].resize((o["jet_pt"].shape[0] + n_entries), axis=0)
+                        # o["jet_pt"][-n_entries:] = f["jet_pt"][indices[0] : indices[1]]
 
         logger.info("Appending done.")
