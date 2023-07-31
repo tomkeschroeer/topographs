@@ -44,6 +44,7 @@ class TopographModel(pl.LightningModule):
         save: bool = False,
         loss_fac_edge: float = 100,
         loss_fac_vert: float = 1,
+        tr_jet_type: str = "b"
     ):
         """
         Init of TopographModel class
@@ -74,6 +75,7 @@ class TopographModel(pl.LightningModule):
         self.full_name = Path(save_dir, name)
         self.loss_fac_edge = loss_fac_edge
         self.loss_fac_vert = loss_fac_vert
+        self.tr_jet_type = tr_jet_type
 
         self.nodes_feat = nodes_feat
         self.nodes_weight = nodes_weight
@@ -152,7 +154,10 @@ class TopographModel(pl.LightningModule):
         return dense_vertex_out, edge_wt_out
 
     def basis_step(self, sample, _batch_idx, save=False):
-        inputs, labels_edge, labels_vertex, sample_weights, mask, mask_vertex = sample
+        inputs, labels, mask, mask_vertex = sample
+        labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
+        sample_weights = labels[f"sample_weights_{self.tr_jet_type}"]
+        labels_vertex =  labels[f"Y_vertex_features_{self.tr_jet_type}"]
         if save:
             inputs_save = inputs.reshape((1024, 40, 20))
             labels_save = labels_edge.reshape((1024, 40, 1))

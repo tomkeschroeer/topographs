@@ -98,8 +98,8 @@ if __name__ == "__main__":
             metadata_dict["n_trks"],
             metadata_dict["n_trk_features"],
         ) = f[f"{config.tracks_name}"].shape
-        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
-        _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
+        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}_{config.jet_types[0]}"].shape
+        _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}_{config.jet_types[0]}"].shape
 
     edge_feat_nodes = config.edge_feature_network["nodes"]
     edge_weight_nodes = config.edge_weight_network["nodes"]
@@ -179,6 +179,7 @@ if __name__ == "__main__":
         filename=training_file,
         batch_size=min(njets, 1024),
         n_samples=njets,
+        jet_types=config.jet_types
     )
 
     tracks_loader = DataLoader(tracks_dataset, batch_size=None)
@@ -215,7 +216,7 @@ if __name__ == "__main__":
     #         from_numpy(mask_vertex_labels.astype(bool))
     # )
     valid_dataset = Topographs_dataset(
-        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val
+        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val, jet_types=config.jet_types
     )
     valid_loader = DataLoader(valid_dataset, batch_size=None)
 

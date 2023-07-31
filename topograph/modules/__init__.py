@@ -24,5 +24,6 @@ from topograph.modules.tools import (  # DataLoader,
     shifted_relu_activation,
     shifted_relu_activation_train,
     step_activation,
+    scary_shuffle,
 )
 from topograph.modules.Vertex_properties import Matcher

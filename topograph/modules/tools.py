@@ -79,6 +79,13 @@ def get_mask(trks):
             mask = np.logical_and(~np.isnan(trks[var]), ~(trks[var]==-999.))
             return mask
 
+def scary_shuffle(*arrays):
+    """?!Should?! shuffle a collection of arrays inplace in the exact same way"""
+    assert all(len(a) == len(arrays[0]) for a in arrays)
+    rng_state = np.random.get_state()
+    for a in arrays:
+        np.random.shuffle(a)
+        np.random.set_state(rng_state)
 
 def get_types_shapes(
     get_labels: bool = True,
@@ -382,10 +389,7 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
 
-        self.ind_truthflav_b, self.ind_truthflav_c = self.get_cb_indeces()
-        self.ind_truthflav = np.logical_or(self.ind_truthflav_b, self.ind_truthflav_c)
-        self.ind_truthflav_b = self.ind_truthflav_b[self.ind_truthflav]
-        self.ind_truthflav_c = self.ind_truthflav_c[self.ind_truthflav]
+        self.ind_truthflav = self.get_indeces()
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
@@ -394,14 +398,16 @@ class DatasetCreater:
         self.reco_jets = self.reco_jets[self.ind_truthflav]
         # self.edge_features = self.edge_features[self.ind_truthflav]
 
-    def get_cb_indeces(self):
+    def get_indeces(self):
         hadronflavour = self.truth["flavour"]
         if self.jet_type == "b":
-        return np.logical_and(
-            self.HadrConeTruth == 5, [sum(hf == 5) == 1 for hf in hadronflavour]
-        ), np.logical_and(
-            self.HadrConeTruth == 4, [sum(hf == 4) == 1 for hf in hadronflavour]
-        )
+            return np.logical_and(
+                self.HadrConeTruth == 5, [sum(hf == 5) == 1 for hf in hadronflavour]
+            )
+        if self.jet_type == "c":
+            return np.logical_and(
+                self.HadrConeTruth == 4, [sum(hf == 4) == 1 for hf in hadronflavour]
+            )
 
     def get_n_valid_jets(self):
         return sum(self.ind_truthflav)
@@ -409,11 +415,10 @@ class DatasetCreater:
     def get_edge_y(self):
         truthOriginLabel = self.truthOriginLabel
         ntracks = truthOriginLabel.shape[-1]
-        tOL_b = np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int)
-        tOL_b[~self.ind_truthflav_b] = [0]*ntracks
-        tOL_c = (truthOriginLabel == 5).astype(int)
-        tOL_c[~self.ind_truthflav_c] = [0]*ntracks
-        return tOL_b, tOL_c
+        if self.jet_type == "b":
+            return np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int)
+        if self.jet_type == "c":
+            return (truthOriginLabel == 5).astype(int)
 
     def get_edge_origin(self):
         return self.truthOriginLabel
@@ -429,7 +434,10 @@ class DatasetCreater:
 
     def get_unscaled_pt(self):
         flavour = self.truth["flavour"]
-        unscaled_pt = self.truth["pt"][flavour == 5]
+        if self.jet_type == "b":
+            unscaled_pt = self.truth["pt"][flavour == 5]
+        elif self.jet_type == "c":
+            unscaled_pt = self.truth["pt"][flavour == 4]
         return unscaled_pt
 
     def get_edge_feat_y(self):
@@ -440,18 +448,17 @@ class DatasetCreater:
             ]
         )
         return edge_feat_y
-
+    
     def get_vertex_feat_y(self):
         flavour = self.truth["flavour"]
-        vert_feats = self.truth[self.vertex_features]
+        if self.jet_type == "b":
+            vertex_feat = self.truth[self.vertex_features][flavour == 5]
+        elif self.jet_type == "c":
+            vertex_feat = self.truth[self.vertex_features][flavour == 4]
         for key in self.vertex_features:
             if self.global_conf.vertex_feat_dict[key]["log"]:
-                vert_feats[key] = np.log(vert_feats[key])
-        vertex_feat_b = np.full(shape=(sum(self.ind_truthflav)),fill_value=-999., dtype=vert_feats.dtype)
-        vertex_feat_c = np.full(shape=(sum(self.ind_truthflav)),fill_value=-999., dtype=vert_feats.dtype)
-        vertex_feat_b[self.ind_truthflav_b] = vert_feats[self.ind_truthflav_b][flavour[self.ind_truthflav_b] == 5]
-        vertex_feat_c[self.ind_truthflav_c] = vert_feats[self.ind_truthflav_c][flavour[self.ind_truthflav_c] == 4]
-        return vertex_feat_b, vertex_feat_c
+                vertex_feat[key] = np.log(vertex_feat[key])
+        return vertex_feat
 
     def get_track_input(self):
         return self.reco

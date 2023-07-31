@@ -1,16 +1,8 @@
 import numpy as np
 
 
-def get_cut_val(slope=None, shift=None, c1=None, c2=None):
-    if slope is not None and shift is not None:
-        # calculated as: return true if 1/4th after function != 0
-        cut_val = (slope * (1 - shift)) / 4
-        # cut_val = 0.8/slope + shift
-    elif c1 is not None and c2 is not None:
-        cut_val = np.log(4) / c1 + c2
-    else:
-        # cut_val = np.log(np.exp(0.8)-1)
-        cut_val = 0.6
+def get_cut_val():
+    cut_val = 0.6
     return cut_val
 
 
@@ -30,9 +22,8 @@ class calculate_efficiency:
     ):
         self.pred_f = pred.flatten()
         self.label_f = label.flatten()
-
         self.Ntotal = Ntotal
-        self.cut_val = get_cut_val(slope, shift, c1, c2) if cut_val is None else cut_val
+        self.cut_val = get_cut_val() if cut_val is None else cut_val
         self.ones_only = ones_only
         self.zeros_only = zeros_only
 
@@ -67,9 +58,9 @@ class calculate_efficiency:
 
 
 class calculate_binary_preds:
-    def __init__(self, preds, slope, shift, c1, c2):
+    def __init__(self, preds):
         self.preds = preds
-        self.cut_val = get_cut_val(slope, shift, c1, c2)
+        self.cut_val = get_cut_val()
 
     def __call__(self):
         preds_bin = list(map(self.convert_preds_to_bin, self.preds))

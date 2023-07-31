@@ -64,6 +64,9 @@ if __name__ == "__main__":
     if args.scale:
         scale = Scaler(config)
         scale.Run()
+    if args.merge:
+        merge = Merge(config, dataset_types)
+        merge.Run()
     if args.apply_scales:
         apply_scales = Apply_Scaler(config, dataset_types)
         apply_scales.Run()

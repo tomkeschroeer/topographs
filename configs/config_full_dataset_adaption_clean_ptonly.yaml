@@ -1,12 +1,12 @@
 input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fulltruth/user.toschroe.410470.e6337_s3681_r13167_p4931.tdd.EMPFlowTruth_n40.22_2_75.22-06-27_truth_40tracks_output.h5/*.h5
 #/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
 
-output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_clean_pt_datasetad/
-output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad
-model_name: model_dataset_adaption_clean
+output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_clean_pt_bcjets/
+output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_bcjets
+model_name: model_bcjets
 
 one_file_name: topograph_ttbar_inputfiles_combined.h5
-preprocessing_file_name: preprocessed_ttbar_topograph.h5
+preprocessing_file_name: preprocessed_f_ttbar_topograph.h5
 scale_dict: scale_dict_ttbar.json
 
 training_file_name: training_ttbar_topographs.h5
@@ -21,6 +21,14 @@ input_tracks_name: tracks_loose
 input_truth_name: truth_hadrons
 input_jet_name: jets
 
+model_files:
+  c: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_cjets
+  b: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad
+
+jet_types:
+  - c
+  - b
+
 tracks_name: "X_train_tracks"
 edge_name: "Y_edge"
 edge_feat_name: "Y_edge_features"
@@ -29,7 +37,7 @@ vertex_feat_name: Y_vertex_features
 epochs: 200
 stepsize: 10_000
 lr: 0.01
-use_sample_weights: True
+use_sample_weights: False
 loss_fac_edge: 100
 loss_fac_vert: 1
 
@@ -47,7 +55,7 @@ vertex_network:
 
 tfrecords:
   batch_size: 5000
-  use_tfrecords_to_train: True
+  use_tfrecords_to_train: False
   nfiles_to_load: 10
 
 evaluation:
@@ -97,4 +105,8 @@ evaluation:
   plot_target_input_corr:
     plot: False
   plot_linear_fit:
+    plot: False
+  plot_track_origin:
     plot: True
+  plot_inputs:
+    plot: False
