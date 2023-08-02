@@ -466,89 +466,89 @@ class Plotter:
                         point_styles=get_point_styles(1),
                     )
 
-            if self.plot_pt:
-                self.logger.info(f"plotting pT...")
-                self.plotting_regression_scatter(
-                    model_file_numbers=self.model_file_numbers, var="pT"
-                )
+        if self.plot_pt:
+            self.logger.info(f"plotting pT...")
+            self.plotting_regression_scatter(
+                model_file_numbers=self.model_file_numbers, var="pT"
+            )
 
-            if self.plot_eta:
-                self.logger.info(f"plotting eta...")
-                self.plotting_regression_scatter(
-                    model_file_numbers=self.model_file_numbers, var="eta"
-                )
+        if self.plot_eta:
+            self.logger.info(f"plotting eta...")
+            self.plotting_regression_scatter(
+                model_file_numbers=self.model_file_numbers, var="eta"
+            )
 
-            if self.plot_conf_matrix:
-                self.logger.info("plotting confusion matrix...")
-                self.plotting_confusion_matrix(
-                    model_file_numbers=self.model_file_numbers,
-                )
+        if self.plot_conf_matrix:
+            self.logger.info("plotting confusion matrix...")
+            self.plotting_confusion_matrix(
+                model_file_numbers=self.model_file_numbers,
+            )
 
-            if self.plot_preds_per_epoch:
-                self.logger.info("plotting predictions per epoch...")
-                self.plotting_preds_per_epoch(model_file_numbers=self.model_file_numbers)
+        if self.plot_preds_per_epoch:
+            self.logger.info("plotting predictions per epoch...")
+            self.plotting_preds_per_epoch(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_preds_scatter:
-                self.logger.info(f"plotting predictions in scatter plot...")
-                self.plotting_scatter_vals(
-                    ylabel="predicition",
-                    xlabel="epoch",
-                    plot_name="predictions",
-                    xvals=list(range(0, len(self.preds_scatter))),
-                    yvals=np.linspace(
-                        self.startpoint_scatter,
-                        self.endpoint_scatter,
-                        num=len(self.preds_scatter[0]),
-                        endpoint=True,
-                    ),
-                    zvals=self.preds_scatter,
-                    title="predictions",
-                )
+        if self.plot_preds_scatter:
+            self.logger.info(f"plotting predictions in scatter plot...")
+            self.plotting_scatter_vals(
+                ylabel="predicition",
+                xlabel="epoch",
+                plot_name="predictions",
+                xvals=list(range(0, len(self.preds_scatter))),
+                yvals=np.linspace(
+                    self.startpoint_scatter,
+                    self.endpoint_scatter,
+                    num=len(self.preds_scatter[0]),
+                    endpoint=True,
+                ),
+                zvals=self.preds_scatter,
+                title="predictions",
+            )
 
-            if self.recalculate_preds_scatter:
-                self.save_vals(dataset_name="preds_scatter", data=self.preds_scatter)
-                self.save_vals(dataset_name="endpoint_scatter", data=self.endpoint_scatter)
-                self.save_vals(
-                    dataset_name="startpoint_scatter", data=self.startpoint_scatter
-                )
+        if self.recalculate_preds_scatter:
+            self.save_vals(dataset_name="preds_scatter", data=self.preds_scatter)
+            self.save_vals(dataset_name="endpoint_scatter", data=self.endpoint_scatter)
+            self.save_vals(
+                dataset_name="startpoint_scatter", data=self.startpoint_scatter
+            )
 
-            if self.plot_saliency:
-                self.plotting_saliency_map(model_file_numbers=self.model_file_numbers)
+        if self.plot_saliency:
+            self.plotting_saliency_map(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_saliency_pertrack:
-                self.plotting_saliency_map_pertrack(model_file_numbers=self.model_file_numbers)
+        if self.plot_saliency_pertrack:
+            self.plotting_saliency_map_pertrack(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_saliency_pervar:
-                self.plotting_saliency_map_pervar(model_file_numbers=self.model_file_numbers)
+        if self.plot_saliency_pervar:
+            self.plotting_saliency_map_pervar(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_vertex_labels:
-                self.plotting_vertex_labels_per_epoch(
-                    model_file_numbers=self.model_file_numbers
-                )
+        if self.plot_vertex_labels:
+            self.plotting_vertex_labels_per_epoch(
+                model_file_numbers=self.model_file_numbers
+            )
 
-            if self.plot_weights:
-                self.plotting_model_weights(model_file_numbers=self.model_file_numbers)
+        if self.plot_weights:
+            self.plotting_model_weights(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_target_input_corr:
-                self.plotting_target_input_correlation()
+        if self.plot_target_input_corr:
+            self.plotting_target_input_correlation()
 
-            if self.plot_n_tracks_per_jet:
-                self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
+        if self.plot_n_tracks_per_jet:
+            self.plotting_n_tracks(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_track_origin:
-                self.plotting_track_origin()
+        if self.plot_track_origin:
+            self.plotting_track_origin()
 
-            if self.plot_inputs:
-                self.plotting_input(model_file_numbers=self.model_file_numbers)
+        if self.plot_inputs:
+            self.plotting_input(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_roc_curves:
-                self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
+        if self.plot_roc_curves:
+            self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
 
-            if self.plot_hadron_pt:
-                self.plotting_hadron_pt_from_tracks()
-            
-            if self.plot_linear_fit:
-                self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
+        if self.plot_hadron_pt:
+            self.plotting_hadron_pt_from_tracks()
+        
+        if self.plot_linear_fit:
+            self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
@@ -685,7 +685,8 @@ class Plotter:
                         labels = f[f"labels_vertex_features_{jet_type}"][:, var_numb]
                     except ValueError:
                         labels = f[f"labels_vertex_features_{jet_type}"][:self.njet_test]
-
+                preds = preds[labels != -999.]
+                labels = labels[labels != -999.]
                 var_min = np.min(labels[~np.isnan(labels)])
                 var_max = np.max(labels[~np.isnan(labels)])
                 var_min_pred = np.min(preds[~np.isnan(preds)])
@@ -830,6 +831,8 @@ class Plotter:
                     self.logger.info(f"plotting distance to linear regression for model {model_file_number} and variable {self.global_config.vertex_features[i]} for {jet_type}-jets")
                     pred_var = preds[:,i]
                     labels_var = labels[:,i]
+                    pred_var = pred_var[labels_var != -999.]
+                    labels_var = labels_var[labels_var != -999.]
                     bounds = min([-labels_var.min(), labels_var.max()])
                     var_bins = np.linspace(-bounds,bounds, 11)
                     slope, offset = np.polyfit(pred_var, labels_var, deg=1)
