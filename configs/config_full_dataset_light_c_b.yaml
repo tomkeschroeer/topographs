@@ -1,0 +1,114 @@
+input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fulltruth/user.toschroe.410470.e6337_s3681_r13167_p4931.tdd.EMPFlowTruth_n40.22_2_75.22-06-27_truth_40tracks_output.h5/*.h5
+#/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
+
+output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_light_c_b/
+output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b
+model_name: model_lightbcjets
+
+one_file_name: topograph_ttbar_inputfiles_combined.h5
+preprocessing_file_name: preprocessed_f_ttbar_topograph.h5
+scale_dict: scale_dict_ttbar.json
+
+training_file_name: training_ttbar_topographs.h5
+validation_file_name: validation_ttbar_topographs.h5
+testing_file_name: testing_ttbar_topographs.h5
+
+njets: 1_000_000
+njets_val: 500_000
+njets_test: 50_000
+
+input_tracks_name: tracks_loose
+input_truth_name: truth_hadrons
+input_jet_name: jets
+
+model_files:
+  c: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_cjets
+  b: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad
+  light: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b
+
+jet_types:
+  - c
+  - b
+  - light
+
+tracks_name: "X_train_tracks"
+edge_name: "Y_edge"
+edge_feat_name: "Y_edge_features"
+vertex_feat_name: Y_vertex_features
+
+epochs: 200
+stepsize: 10_000
+lr: 0.01
+use_sample_weights: False
+loss_fac_edge: 100
+loss_fac_vert: 1
+
+edge_feature_network:
+  nodes: [21, 20, 20, 30]
+  n_tracks_name: tracks
+
+edge_weight_network:
+  nodes: [21, 20, 20, 1]
+  n_tracks_name: tracks
+  add_activation:
+
+vertex_network:
+  nodes: [30, 30, 30, 30, 1]
+
+tfrecords:
+  batch_size: 5000
+  use_tfrecords_to_train: False
+  nfiles_to_load: 10
+
+evaluation:
+  model_file_numbers:
+    # - 1
+    # - 45
+    # - 90
+    # - 145
+    - 199
+  n_samples: 1_000
+  plot_efficiency:
+    plot: False
+    recalculate: False
+  plot_efficiency_zeros_only:
+    plot: False 
+    recalculate: False
+  plot_efficiency_ones_only:
+    plot: False
+    recalculate: False
+  plot_parameters:
+    plot: False
+    recalculate: False
+  plot_pt:
+    plot: False
+    recalculate: False
+  plot_eta:
+    plot: False
+    recalculate: False
+  plot_conf_matrix:
+    plot: False
+    recalculate: False
+  plot_loss: {}
+  plot_preds_per_epoch:
+    plot: False
+    recalculate: False
+  plot_preds_scatter:
+    plot: False
+    recalculate: False
+  plot_saliency:
+    plot: False
+  plot_saliency_pertrack:
+    plot: False
+  plot_saliency_pervar:
+    plot: False
+  plot_n_tracks_per_jet:
+    plot: False
+  plot_target_input_corr:
+    plot: False
+  plot_linear_fit:
+    plot: True
+  plot_track_origin:
+    plot: False
+  plot_inputs:
+    plot: False
