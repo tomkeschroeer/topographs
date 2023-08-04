@@ -44,7 +44,8 @@ class TopographModel(pl.LightningModule):
         save: bool = False,
         loss_fac_edge: float = 100,
         loss_fac_vert: float = 1,
-        tr_jet_type: str = "b"
+        tr_jet_type: str = "b",
+        small_net: bool = False
     ):
         """
         Init of TopographModel class
@@ -76,6 +77,7 @@ class TopographModel(pl.LightningModule):
         self.loss_fac_edge = loss_fac_edge
         self.loss_fac_vert = loss_fac_vert
         self.tr_jet_type = tr_jet_type
+        self.small_net = small_net
 
         self.nodes_feat = nodes_feat
         self.nodes_weight = nodes_weight
@@ -120,12 +122,13 @@ class TopographModel(pl.LightningModule):
 
     def on_fit_start(self):
         if wandb.run:
-            wandb.define_metric("train/total", summary="min")
             wandb.define_metric("train/edge", summary="min")
-            wandb.define_metric("train/vertex", summary="min")
-            wandb.define_metric("valid/total", summary="min")
             wandb.define_metric("valid/edge", summary="min")
-            wandb.define_metric("valid/vertex", summary="min")
+            if not self.small_net:
+                wandb.define_metric("train/total", summary="min")
+                wandb.define_metric("train/vertex", summary="min")
+                wandb.define_metric("valid/total", summary="min")
+                wandb.define_metric("valid/vertex", summary="min")
 
     def forward(self, inputs, mask):
         """
@@ -145,6 +148,7 @@ class TopographModel(pl.LightningModule):
         """
         edge_wt_out = self.edge_layer(inputs)
         edge_feat_out = self.feat_layer(inputs)
+        if self.small_net: return None, edge_wt_out
         if self.activation_name is not None:
             add_activation = self.add_activation(edge_wt_out)
             dt_product = self.dot_product(edge_feat_out, add_activation, mask)
@@ -157,23 +161,8 @@ class TopographModel(pl.LightningModule):
         inputs, labels, mask, mask_vertex = sample
         labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
         sample_weights = labels[f"sample_weights_{self.tr_jet_type}"]
-        labels_vertex =  labels[f"Y_vertex_features_{self.tr_jet_type}"]
-        if save:
-            inputs_save = inputs.reshape((1024, 40, 20))
-            labels_save = labels_edge.reshape((1024, 40, 1))
-            with File(
-                "/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5",
-                "a",
-            ) as inputs_file:
-                len_inp = len(inputs_save)
-                inputs_file["inputs"].resize(
-                    (inputs_file["inputs"].shape[0] + len_inp), axis=0
-                )
-                inputs_file["inputs"][-len_inp:] = inputs_save
-                inputs_file["labels"].resize(
-                    (inputs_file["labels"].shape[0] + len_inp), axis=0
-                )
-                inputs_file["labels"][-len_inp:] = labels_save
+        if not self.small_net:
+            labels_vertex =  labels[f"Y_vertex_features_{self.tr_jet_type}"]
 
         labels_shape = labels_edge.size()
         labels_edge = labels_edge.reshape(labels_shape[0], labels_shape[1], 1)
@@ -194,6 +183,7 @@ class TopographModel(pl.LightningModule):
         loss_edge_cal = binary_cross_entropy_with_logits(
             edge_out, labels_edge, sample_weights
         )
+        if self.small_net: return loss_edge_cal, None, None
         loss_vertex_cal = self.loss_fn_vertex(
             vertex_out[mask_vertex], labels_vertex[mask_vertex]
         )
@@ -205,18 +195,21 @@ class TopographModel(pl.LightningModule):
 
     def training_step(self, sample: tuple, _batch_idx: int):
         loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+        self.log("train/edge", loss_edge_cal)
+        if self.small_net: return loss_edge_cal
         self.log("train/total", total)
         self.log("train/vertex", loss_vertex_cal)
-        self.log("train/edge", loss_edge_cal)
         return total
 
     def validation_step(self, sample: tuple, _batch_idx: int):
         loss_edge_cal, loss_vertex_cal, total = self.basis_step(
             sample, _batch_idx, save=False
         )
+        self.log("valid/edge", loss_edge_cal)
+        if self.small_net: return loss_edge_cal
         self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
-        self.log("valid/edge", loss_edge_cal)
+        return total
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)

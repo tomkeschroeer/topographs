@@ -291,6 +291,12 @@ class GlobalConfig:
             self.edge_features = global_conf.get("edge_features")
             self.vertex_features = list(global_conf.get("vertex_features", {}).keys())
             self.vertex_feat_dict = global_conf.get("vertex_features", {})
+            self.flavour = global_conf.get("flavour", {})
+            for key, fl in self.flavour.items():
+                if fl == "None":
+                    self.flavour[key] = None
+            self.truthOriginLabel = global_conf.get("truthOriginLabel", {})
+            self.hadron_cone_excl_label = global_conf.get("HadronConeExclLabel", {})
 
 
 class GetConfiguration:
@@ -332,6 +338,7 @@ class GetConfiguration:
                 setattr(self, item, self.conf[item])
             else:
                 raise KeyError(f"You need to specify {item} in your config file")
+        self.small_net = self.conf.get("small_net", False)
 
     def get_all_input_files(self):
         try:
@@ -400,25 +407,33 @@ class DatasetCreater:
 
     def get_indeces(self):
         hadronflavour = self.truth["flavour"]
-        if self.jet_type == "b":
-            return np.logical_and(
-                self.HadrConeTruth == 5, [sum(hf == 5) == 1 for hf in hadronflavour]
-            )
-        if self.jet_type == "c":
-            return np.logical_and(
-                self.HadrConeTruth == 4, [sum(hf == 4) == 1 for hf in hadronflavour]
-            )
+        hadrconemask = self.check_cases_and_return(
+            self.HadrConeTruth,
+            self.global_conf.hadron_cone_excl_label[self.jet_type],
+        )
+        hflavourmask = [self.check_cases_and_return(
+            hf,
+            self.global_conf.flavour[self.jet_type],
+        ) for hf in hadronflavour]
+        if None in hflavourmask[0]:
+            return hadrconemask
+        return np.logical_and(
+            hadrconemask, np.sum(hflavourmask, axis = 1) == 1
+        )
 
     def get_n_valid_jets(self):
         return sum(self.ind_truthflav)
 
     def get_edge_y(self):
         truthOriginLabel = self.truthOriginLabel
-        ntracks = truthOriginLabel.shape[-1]
-        if self.jet_type == "b":
-            return np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int)
-        if self.jet_type == "c":
-            return (truthOriginLabel == 5).astype(int)
+        return self.check_cases_and_return(truthOriginLabel,self.global_conf.truthOriginLabel[self.jet_type]).astype(int)
+        # if self.jet_type == "b":
+        #     return np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int) #FromBC FromB
+        # if self.jet_type == "c":
+        #     return (truthOriginLabel == 5).astype(int) #FromC
+        # if self.jet_type == "light":
+        #     return (truthOriginLabel == 2).astype(int) #Primary
+            
 
     def get_edge_origin(self):
         return self.truthOriginLabel
@@ -434,11 +449,12 @@ class DatasetCreater:
 
     def get_unscaled_pt(self):
         flavour = self.truth["flavour"]
-        if self.jet_type == "b":
-            unscaled_pt = self.truth["pt"][flavour == 5]
-        elif self.jet_type == "c":
-            unscaled_pt = self.truth["pt"][flavour == 4]
-        return unscaled_pt
+        mask = self.check_cases_and_return(
+            flavour,
+            self.global_conf.flavour[self.jet_type],
+        )
+        if None in mask: return np.full(shape=mask.shape[0], fill_value=-999.)
+        return self.truth["pt"][mask]
 
     def get_edge_feat_y(self):
         edge_feat_y = np.array(
@@ -451,17 +467,32 @@ class DatasetCreater:
     
     def get_vertex_feat_y(self):
         flavour = self.truth["flavour"]
-        if self.jet_type == "b":
-            vertex_feat = self.truth[self.vertex_features][flavour == 5]
-        elif self.jet_type == "c":
-            vertex_feat = self.truth[self.vertex_features][flavour == 4]
+        vertex_feat = self.truth[self.vertex_features]
+        vert_dtype = vertex_feat.dtype
+        mask = self.check_cases_and_return(
+            flavour,
+            self.global_conf.flavour[self.jet_type],
+        )
+        if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
+        vertex_feat = vertex_feat[mask]
         for key in self.vertex_features:
             if self.global_conf.vertex_feat_dict[key]["log"]:
                 vertex_feat[key] = np.log(vertex_feat[key])
-        return vertex_feat
+        return np.array(vertex_feat, dtype=vert_dtype)
 
     def get_track_input(self):
         return self.reco
+
+    def check_cases_and_return(self, data, jettype_inf):
+        if isinstance(jettype_inf, int):
+            return (data == jettype_inf)
+        if isinstance(jettype_inf, list):
+            x1 = (data == jettype_inf[0])
+            for i in range(1,len(jettype_inf)):
+                x1 = np.logical_or(x1, data == jettype_inf[i])
+            return x1
+        if jettype_inf is None:
+            return np.full(shape=data.shape, fill_value=None)
 
 
 class DataGenerator(IterableDataset):

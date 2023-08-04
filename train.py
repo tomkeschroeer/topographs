@@ -136,6 +136,8 @@ if __name__ == "__main__":
         lr=lr,
         loss_fac_edge=loss_fac_edge,
         loss_fac_vert=loss_fac_vert,
+        tr_jet_type=config.train_jet_type,
+        small_net=config.small_net,
     )
 
     makedirs(f"{training_output_folder}/modelfiles", exist_ok=True)
@@ -222,7 +224,7 @@ if __name__ == "__main__":
 
     makedirs(f"{training_output_folder}/checkpoints", exist_ok=True)
     checkpoint = ModelCheckpoint(
-        monitor="valid/total",
+        monitor="valid/edge" if config.small_net else "valid/total",
         filename="checkpoint_train_{epoch}",
         dirpath=f"{training_output_folder}/checkpoints",
         save_top_k=-1,

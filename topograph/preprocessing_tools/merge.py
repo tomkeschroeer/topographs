@@ -30,7 +30,7 @@ class Merge:
         array_full={}
         array_dict_labels_full={}
         array_dict_comb_labels_full = {}
-        non_stack_keys = ["Y_edge", "Y_vertex_features"]
+        non_stack_keys = [self.config.edge_name, self.config.vertex_feat_name]
         keys = [key for key in File(f"{output_file}_{jet_types[0]}.h5").keys() if key not in non_stack_keys]
         with File(
             f"{output_file}.h5", "w"
@@ -46,11 +46,11 @@ class Merge:
                                 array_dict_labels_full.update(array_dict_labels)
                             else:
                                 with File(f"{output_file}_{jet_type_2}.h5", "r") as h5fr_2:
-                                    y_edge = h5fr_2[f"/Y_edge"][step*stepsize:(step+1)*stepsize]
-                                    y_vertex = h5fr_2[f"/Y_vertex_features"][step*stepsize:(step+1)*stepsize]
+                                    y_edge = h5fr_2[f"/{self.config.edge_name}"][step*stepsize:(step+1)*stepsize]
+                                    y_vertex = h5fr_2[f"/{self.config.vertex_feat_name}"][step*stepsize:(step+1)*stepsize]
                                 array_dict_labels = {
-                                    f"Y_edge_{jet_type}_{jet_type_2}": np.full(shape=y_edge.shape, dtype=y_edge.dtype, fill_value=0),
-                                    f"Y_vertex_features_{jet_type}_{jet_type_2}": np.full(shape=y_vertex.shape, dtype=y_vertex.dtype, fill_value=-999.),
+                                    f"{self.config.edge_name}_{jet_type}_{jet_type_2}": np.full(shape=y_edge.shape, dtype=y_edge.dtype, fill_value=0),
+                                    f"{self.config.vertex_feat_name}_{jet_type}_{jet_type_2}": np.full(shape=y_vertex.shape, dtype=y_vertex.dtype, fill_value=-999.),
                                 }
                                 array_dict_labels_full.update(array_dict_labels)
                     # array_dict_comb_labels = {key: np.concatenate([array_dict_labels_full[f"{key}_{jet_type}_{jet_type_2}"] for jet_type_2 in jet_types]) for key in non_stack_keys}
