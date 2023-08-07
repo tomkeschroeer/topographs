@@ -24,12 +24,17 @@ input_jet_name: jets
 model_files:
   c: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_cjets
   b: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad
-  light: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b
+  light: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light/
 
 jet_types:
   - c
   - b
   - light
+
+small_net:
+  c: False
+  b: False
+  light: True
 
 tracks_name: "X_train_tracks"
 edge_name: "Y_edge"
@@ -69,46 +74,46 @@ evaluation:
     - 199
   n_samples: 1_000
   plot_efficiency:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_efficiency_zeros_only:
-    plot: False 
-    recalculate: False
+    plot: True 
+    recalculate: True
   plot_efficiency_ones_only:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_parameters:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_pt:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_eta:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_conf_matrix:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_loss: {}
   plot_preds_per_epoch:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_preds_scatter:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_saliency:
-    plot: False
+    plot: True
   plot_saliency_pertrack:
-    plot: False
+    plot: True
   plot_saliency_pervar:
-    plot: False
+    plot: True
   plot_n_tracks_per_jet:
-    plot: False
+    plot: True
   plot_target_input_corr:
-    plot: False
+    plot: True
   plot_linear_fit:
     plot: True
   plot_track_origin:
-    plot: False
+    plot: True
   plot_inputs:
-    plot: False
+    plot: True

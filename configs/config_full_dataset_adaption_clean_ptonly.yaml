@@ -60,10 +60,10 @@ tfrecords:
 
 evaluation:
   model_file_numbers:
-    - 1
-    - 45
-    - 90
-    - 145
+    # - 1
+    # - 45
+    # - 90
+    # - 145
     - 199
   n_samples: 1_000
   plot_efficiency:
@@ -105,8 +105,8 @@ evaluation:
   plot_target_input_corr:
     plot: False
   plot_linear_fit:
-    plot: False
-  plot_track_origin:
     plot: True
+  plot_track_origin:
+    plot: False
   plot_inputs:
     plot: False

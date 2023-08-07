@@ -339,6 +339,7 @@ class GetConfiguration:
             else:
                 raise KeyError(f"You need to specify {item} in your config file")
         self.small_net = self.conf.get("small_net", False)
+        self.train_jet_type = self.conf.get("train_jet_type", self.jet_types[0])
 
     def get_all_input_files(self):
         try:

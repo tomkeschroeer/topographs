@@ -44,6 +44,7 @@ def get_var_names(var, used_vertex_properties):
     vardict = {
         "pT": "log($p_T$)",
         "eta": "$\eta$",
+        "dr": "$\Delta R$"
     }
     if used_vertex_properties is None:
         varlist = np.array(list(vardict.keys()))[:]
@@ -139,6 +140,7 @@ def load_topomodel(
     nodes_weight=[20, 70, 70, 70, 1],
     nodes_vertex=[30, 50, 50, 50, 1],
     activation_name=None,
+    small_net={},
 ):
     if modelfiles is None:
         raise KeyError("Please provide vaild modelfiles.")
@@ -150,17 +152,21 @@ def load_topomodel(
                         nodes_weight=nodes_weight,
                         nodes_vertex=nodes_vertex,
                         activation_name=activation_name,
+                        tr_jet_type=jet_type,
+                        small_net=small_net
                     )
                     for jet_type, modelfile in modelfiles.items()}
     return topomodels
 
 
-def get_predictions_and_labels(models, dataset, jet_types):
+def get_predictions_and_labels(models, dataset, jet_types, small_net):
     preds, labels, grads = ({},{},{})
     for jet_type in jet_types:
-        preds[f"preds_v_{jet_type}"] = []
+        print(small_net[jet_type])
+        if not small_net[jet_type]:
+            preds[f"preds_v_{jet_type}"] = []
+            labels[f"labels_v_{jet_type}"] = [] 
         preds[f"preds_e_{jet_type}"] = []    
-        labels[f"labels_v_{jet_type}"] = [] 
         labels[f"labels_e_{jet_type}"] = []
         grads[f"grads_{jet_type}"] = []
     masks = []
@@ -174,30 +180,33 @@ def get_predictions_and_labels(models, dataset, jet_types):
             tmp_dict["output_v"], tmp_dict["output_e"] = models[jet_type].forward(inputs, mask)
             tmp_dict["output_e"].backward(gradient=ones_like(tmp_dict["output_e"]))
             preds[f"preds_e_{jet_type}"].append(tmp_dict["output_e"].detach().numpy())
-            preds[f"preds_v_{jet_type}"].append(tmp_dict["output_v"].detach().numpy())
             labels[f"labels_e_{jet_type}"].append(labels_dict[f"Y_edge_{jet_type}"].detach().numpy())
-            labels[f"labels_v_{jet_type}"].append(labels_dict[f"Y_vertex_features_{jet_type}"].detach().numpy())
+            if not small_net[jet_type]:
+                preds[f"preds_v_{jet_type}"].append(tmp_dict["output_v"].detach().numpy())
+                labels[f"labels_v_{jet_type}"].append(labels_dict[f"Y_vertex_features_{jet_type}"].detach().numpy())
             grad = inputs.grad.data
             grads[f"grads_{jet_type}"].append(grad.detach().numpy())
         masks.append(mask.detach().numpy())
     for jet_type in jet_types:
         shape_labels_e = np.array(labels[f"labels_e_{jet_type}"]).shape
-        shape_labels_v = np.array(labels[f"labels_v_{jet_type}"]).shape
         shape_preds_e = np.array(preds[f"preds_e_{jet_type}"]).shape
-        shape_preds_v = np.array(preds[f"preds_v_{jet_type}"]).shape
+        if not small_net[jet_type]:
+            shape_preds_v = np.array(preds[f"preds_v_{jet_type}"]).shape
+            shape_labels_v = np.array(labels[f"labels_v_{jet_type}"]).shape
         shape_grads = np.array(grads[f"grads_{jet_type}"]).shape
         preds[f"preds_e_{jet_type}"] = np.array(preds[f"preds_e_{jet_type}"]).reshape(
             shape_preds_e[0] * shape_preds_e[1], shape_preds_e[2]
         )  # ,*shape_preds_e[3:])
-        preds[f"preds_v_{jet_type}"] = np.array(preds[f"preds_v_{jet_type}"]).reshape(
-            shape_preds_v[0] * shape_preds_v[1], *shape_preds_v[2:]
-        )  # ,*shape_preds_v[3:])
         labels[f"labels_e_{jet_type}"] = np.array(labels[f"labels_e_{jet_type}"]).reshape(
             shape_labels_e[0] * shape_labels_e[1], shape_labels_e[2]
         )
-        labels[f"labels_v_{jet_type}"] = np.array(labels[f"labels_v_{jet_type}"]).reshape(
-            shape_labels_v[0] * shape_labels_v[1], *shape_labels_v[2:]
-        )
+        if not small_net[jet_type]:
+            preds[f"preds_v_{jet_type}"] = np.array(preds[f"preds_v_{jet_type}"]).reshape(
+                shape_preds_v[0] * shape_preds_v[1], *shape_preds_v[2:]
+            )  # ,*shape_preds_v[3:])
+            labels[f"labels_v_{jet_type}"] = np.array(labels[f"labels_v_{jet_type}"]).reshape(
+                shape_labels_v[0] * shape_labels_v[1], *shape_labels_v[2:]
+            )
         grads[f"grads_{jet_type}"] = np.array(grads[f"grads_{jet_type}"]).reshape(shape_grads[0] * shape_grads[1], *shape_grads[2:])
     shape_masks = np.array(masks).shape
     masks = np.array(masks).reshape(shape_masks[0] * shape_masks[1], *shape_masks[2:])
@@ -209,6 +218,7 @@ class Plotter:
         self.config = config
         self.cut_val = cut_val
         self.jet_types = config.jet_types
+        self.small_net = config.small_net
         self.global_config = GlobalConfig(alternative_conf=None)
         if cut_val is not None:
             self.cut_val = cut_val if cut_val <= 1 else cut_val / 100
@@ -466,16 +476,16 @@ class Plotter:
                         point_styles=get_point_styles(1),
                     )
 
-        if self.plot_pt:
+        if self.plot_pt and not self.small_net:
             self.logger.info(f"plotting pT...")
             self.plotting_regression_scatter(
                 model_file_numbers=self.model_file_numbers, var="pT"
             )
 
-        if self.plot_eta:
+        if self.plot_eta and not self.small_net:
             self.logger.info(f"plotting eta...")
             self.plotting_regression_scatter(
-                model_file_numbers=self.model_file_numbers, var="eta"
+                model_file_numbers=self.model_file_numbers, var="dr"
             )
 
         if self.plot_conf_matrix:
@@ -521,7 +531,7 @@ class Plotter:
         if self.plot_saliency_pervar:
             self.plotting_saliency_map_pervar(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_vertex_labels:
+        if self.plot_vertex_labels and not self.small_net:
             self.plotting_vertex_labels_per_epoch(
                 model_file_numbers=self.model_file_numbers
             )
@@ -529,7 +539,7 @@ class Plotter:
         if self.plot_weights:
             self.plotting_model_weights(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_target_input_corr:
+        if self.plot_target_input_corr and not self.small_net:
             self.plotting_target_input_correlation()
 
         if self.plot_n_tracks_per_jet:
@@ -544,10 +554,10 @@ class Plotter:
         if self.plot_roc_curves:
             self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_hadron_pt:
+        if self.plot_hadron_pt and not self.small_net:
             self.plotting_hadron_pt_from_tracks()
         
-        if self.plot_linear_fit:
+        if self.plot_linear_fit and not self.small_net:
             self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
 
     def get_all_values(self):
@@ -1794,6 +1804,7 @@ class GetEpochPrediction:
     def __init__(self, config, epoch, vars=None):
         self.config = config
         self.jet_types = config.jet_types
+        self.small_net = config.small_net
         self.epoch = epoch
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
@@ -1853,6 +1864,7 @@ class GetEpochPrediction:
             nodes_weight=edge_weight_nodes,
             nodes_vertex=vertex_network_nodes,
             activation_name=self.config.edge_weight_network.get("add_activation", None),
+            small_net=self.config.small_net,
         )
 
         # self.metadata_dict = {}
@@ -1867,7 +1879,7 @@ class GetEpochPrediction:
         #     ].shape
 
         preds, labels, masks, grads = get_predictions_and_labels(
-            models=topomodels, dataset=self.dataset_loader, jet_types=self.jet_types
+            models=topomodels, dataset=self.dataset_loader, jet_types=self.jet_types, small_net=self.small_net
         )
         # model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
@@ -1889,9 +1901,10 @@ class GetEpochPrediction:
         with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
             for jet_type in self.jet_types:
                 f.create_dataset(name=f"pred_edge_{jet_type}", data=preds[f"preds_e_{jet_type}"])
-                f.create_dataset(name=f"pred_vertex_features_{jet_type}", data=preds[f"preds_v_{jet_type}"])
                 f.create_dataset(name=f"labels_edge_{jet_type}", data=labels[f"labels_e_{jet_type}"])
-                f.create_dataset(name=f"labels_vertex_features_{jet_type}", data=labels[f"labels_v_{jet_type}"])
+                if not self.small_net[jet_type]:
+                    f.create_dataset(name=f"labels_vertex_features_{jet_type}", data=labels[f"labels_v_{jet_type}"])
+                    f.create_dataset(name=f"pred_vertex_features_{jet_type}", data=preds[f"preds_v_{jet_type}"])
                 f.create_dataset(name=f"gradients_{jet_type}", data=grads[f"grads_{jet_type}"])
             f.create_dataset(name="mask", data=masks)
             # f.create_dataset(name="gradients_pertrack", data=grads_pertrack.data)
