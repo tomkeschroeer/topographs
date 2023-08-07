@@ -45,7 +45,7 @@ class TopographModel(pl.LightningModule):
         loss_fac_edge: float = 100,
         loss_fac_vert: float = 1,
         tr_jet_type: str = "b",
-        small_net: bool = False
+        small_net: dict = {}
     ):
         """
         Init of TopographModel class
@@ -124,7 +124,7 @@ class TopographModel(pl.LightningModule):
         if wandb.run:
             wandb.define_metric("train/edge", summary="min")
             wandb.define_metric("valid/edge", summary="min")
-            if not self.small_net:
+            if not self.small_net[self.tr_jet_type]:
                 wandb.define_metric("train/total", summary="min")
                 wandb.define_metric("train/vertex", summary="min")
                 wandb.define_metric("valid/total", summary="min")
@@ -148,7 +148,7 @@ class TopographModel(pl.LightningModule):
         """
         edge_wt_out = self.edge_layer(inputs)
         edge_feat_out = self.feat_layer(inputs)
-        if self.small_net: return None, edge_wt_out
+        if self.small_net[self.tr_jet_type]: return None, edge_wt_out
         if self.activation_name is not None:
             add_activation = self.add_activation(edge_wt_out)
             dt_product = self.dot_product(edge_feat_out, add_activation, mask)
@@ -161,7 +161,7 @@ class TopographModel(pl.LightningModule):
         inputs, labels, mask, mask_vertex = sample
         labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
         sample_weights = labels[f"sample_weights_{self.tr_jet_type}"]
-        if not self.small_net:
+        if not self.small_net[self.tr_jet_type]:
             labels_vertex =  labels[f"Y_vertex_features_{self.tr_jet_type}"]
 
         labels_shape = labels_edge.size()
@@ -183,7 +183,7 @@ class TopographModel(pl.LightningModule):
         loss_edge_cal = binary_cross_entropy_with_logits(
             edge_out, labels_edge, sample_weights
         )
-        if self.small_net: return loss_edge_cal, None, None
+        if self.small_net[self.tr_jet_type]: return loss_edge_cal, None, None
         loss_vertex_cal = self.loss_fn_vertex(
             vertex_out[mask_vertex], labels_vertex[mask_vertex]
         )
@@ -196,7 +196,7 @@ class TopographModel(pl.LightningModule):
     def training_step(self, sample: tuple, _batch_idx: int):
         loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
         self.log("train/edge", loss_edge_cal)
-        if self.small_net: return loss_edge_cal
+        if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("train/total", total)
         self.log("train/vertex", loss_vertex_cal)
         return total
@@ -206,7 +206,7 @@ class TopographModel(pl.LightningModule):
             sample, _batch_idx, save=False
         )
         self.log("valid/edge", loss_edge_cal)
-        if self.small_net: return loss_edge_cal
+        if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
         return total
