@@ -124,7 +124,7 @@ class TopographModel(pl.LightningModule):
         if wandb.run:
             wandb.define_metric("train/edge", summary="min")
             wandb.define_metric("valid/edge", summary="min")
-            if not self.small_net:
+            if not self.small_net[self.tr_jet_type]:
                 wandb.define_metric("train/total", summary="min")
                 wandb.define_metric("train/vertex", summary="min")
                 wandb.define_metric("valid/total", summary="min")
@@ -161,7 +161,7 @@ class TopographModel(pl.LightningModule):
         inputs, labels, mask, mask_vertex = sample
         labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
         sample_weights = labels[f"sample_weights_{self.tr_jet_type}"]
-        if not self.small_net:
+        if not self.small_net[self.tr_jet_type]:
             labels_vertex =  labels[f"Y_vertex_features_{self.tr_jet_type}"]
 
         labels_shape = labels_edge.size()
