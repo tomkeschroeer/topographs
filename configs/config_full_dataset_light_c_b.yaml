@@ -6,7 +6,7 @@ output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_trai
 model_name: model_lightbcjets
 
 one_file_name: topograph_ttbar_inputfiles_combined.h5
-preprocessing_file_name: preprocessed_f_ttbar_topograph.h5
+preprocessing_file_name: preprocessed_ttbar_topograph.h5
 scale_dict: scale_dict_ttbar.json
 
 training_file_name: training_ttbar_topographs.h5
@@ -74,46 +74,46 @@ evaluation:
     - 199
   n_samples: 1_000
   plot_efficiency:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_efficiency_zeros_only:
-    plot: True 
-    recalculate: True
+    plot: False 
+    recalculate: False
   plot_efficiency_ones_only:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_parameters:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_pt:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_eta:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_conf_matrix:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_loss: {}
   plot_preds_per_epoch:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_preds_scatter:
-    plot: True
-    recalculate: True
+    plot: False
+    recalculate: False
   plot_saliency:
-    plot: True
+    plot: False
   plot_saliency_pertrack:
-    plot: True
+    plot: False
   plot_saliency_pervar:
-    plot: True
+    plot: False
   plot_n_tracks_per_jet:
-    plot: True
+    plot: False
   plot_target_input_corr:
-    plot: True
+    plot: False
   plot_linear_fit:
-    plot: True
+    plot: False
   plot_track_origin:
-    plot: True
+    plot: False
   plot_inputs:
-    plot: True
+    plot: False

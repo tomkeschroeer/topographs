@@ -63,13 +63,7 @@ class calculate_binary_preds:
         self.cut_val = get_cut_val()
 
     def __call__(self):
-        preds_bin = list(map(self.convert_preds_to_bin, self.preds))
-        return preds_bin
-
-    def convert_preds_to_bin(self, pred):
-        pred = 1 if pred >= self.cut_val else 0
-        return pred
-
+        return (self.preds > self.cut_val).astype(int)
 
 class calculate_pT_diff:
     def __init__(self, pred, label):

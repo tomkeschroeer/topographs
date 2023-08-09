@@ -381,7 +381,7 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
             self.reco_dtypes = self.reco.dtype
-            self.reco_jets = f["jets"].fields("pt")[
+            self.reco_jets = f["jets"].fields(["pt", "eventNumber"])[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
@@ -393,7 +393,7 @@ class DatasetCreater:
             # self.edge_features = f["/edge_features"][ConeExclFinalLabels
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
-            self.trackExtra= f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
+            self.trackExtra = f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
 

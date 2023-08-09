@@ -24,6 +24,7 @@ class Apply_Scaler:
             self.config.validation_file_name: self.config.njets_val,
             self.config.testing_file_name: self.config.njets_test,
         }
+        self.njets = self.config.njets + self.config.njets_val + self.config.njets_test
         self.out_file = None
 
     def Run(self):
@@ -56,54 +57,88 @@ class Apply_Scaler:
 
         logger.info("Applying scaling and shifting.")
         dict_names = scale_dict.keys()
-        for file_name, njets_per_file in self.file_names.items():
-            self.out_file = f"{self.config.output}/{file_name}".replace(".h5.h5", ".h5")
-            logger.info(f"Save scaled inputs in file {self.out_file}")
-            with File(self.out_file, "w") as h5file:
-                for keyname in dict_names:
-                    scale_generator = self.scale_generator(
-                        input_file=input_file,
-                        nJets=njets_per_file,
-                        keyname=keyname,
-                        scale_dict=scale_dict[keyname],
-                        chunk_size=chunk_size,
+        # for file_name, njets_per_file in self.file_names.items():
+        self.out_file = input_file.replace(".h5", "_scaled.h5")
+        logger.info(f"Save scaled inputs in file {self.out_file}")
+        with File(self.out_file, "w") as h5file:
+            for keyname in dict_names:
+                scale_generator = self.scale_generator(
+                    input_file=input_file,
+                    nJets=self.njets,
+                    keyname=keyname,
+                    scale_dict=scale_dict[keyname],
+                    chunk_size=chunk_size,
+                )
+                # Set up chunk counter and start looping
+                chunk_counter = 0
+                for chunk_counter in range(n_chunks):
+                    logger.info(
+                        f"Applying scales for chunk {chunk_counter+1} of"
+                        f" {n_chunks}."
                     )
-                    # Set up chunk counter and start looping
-                    chunk_counter = 0
-                    for chunk_counter in range(n_chunks):
-                        logger.info(
-                            f"Applying scales for chunk {chunk_counter+1} of"
-                            f" {n_chunks}."
-                        )
-                        try:
-                            data = next(scale_generator)
+                    try:
+                        data = next(scale_generator)
 
-                            if chunk_counter == 0:
-                                h5file.create_dataset(
-                                    keyname,
-                                    data=data[0],
-                                    #  compression="lzf",
-                                    chunks=((100,) + data[0].shape[1:]),
-                                    maxshape=(
-                                        None,
-                                        *(data[0].shape[1:]),
-                                    ),
-                                )
+                        if chunk_counter == 0:
+                            h5file.create_dataset(
+                                keyname,
+                                data=data[0],
+                                #  compression="lzf",
+                                chunks=((100,) + data[0].shape[1:]),
+                                maxshape=(
+                                    None,
+                                    *(data[0].shape[1:]),
+                                ),
+                            )
 
-                            else:
-                                h5file[keyname].resize(
-                                    (h5file[keyname].shape[0] + data[0].shape[0]),
-                                    axis=0,
-                                )
+                        else:
+                            h5file[keyname].resize(
+                                (h5file[keyname].shape[0] + data[0].shape[0]),
+                                axis=0,
+                            )
 
-                                h5file[keyname][-data[0].shape[0] :] = data[0]
+                            h5file[keyname][-data[0].shape[0] :] = data[0]
 
-                        except StopIteration:
-                            break
+                    except StopIteration:
+                        break
 
-                        chunk_counter += 1
+                    chunk_counter += 1
 
-            self.save_remaining_dt(logger, input_file, n_entries_total=njets_per_file)
+        self.save_remaining_dt(logger, input_file, n_entries_total=self.njets)
+        chunk_size= 870
+        starting_point = 0
+        for file_name, njets in self.file_names.items():
+            input_file = (
+                f"{self.config.output}/{file_name}".replace(
+                    ".h5", ""
+                )
+                + ".h5"
+            )
+            nsteps = int(njets//chunk_size)
+            if njets%chunk_size: nsteps += 1
+            # starting_point = 0
+            inds = np.array([[(step*chunk_size + starting_point), ((step+1)*chunk_size + starting_point)] for step in range(nsteps)], dtype=int)
+            if inds[-1,1] > njets: inds[-1,1] = njets + starting_point
+            starting_point = inds[-1,1]
+            create_file = True
+            with File(self.out_file, "r") as o:
+                keys=o.keys()
+                print(self.out_file)
+                print(keys)
+                with File(input_file, "w") as f:
+                    for ind in inds:
+                        if create_file:
+                            for key in keys:
+                                data_chunk = o[key][ind[0]:ind[1]]
+                                shape = data_chunk.shape
+                                shape = (None,) if len(shape) == 1 else (None, *shape[1:])
+                                f.create_dataset(key, data=data_chunk, chunks=True, maxshape=shape)
+                            create_file = False
+                        else:
+                            for key in keys:
+                                njets = ind[1]-ind[0]
+                                f[key].resize((f[key].shape[0] + njets), axis=0)                                # print(o[key][ind[0]:ind[1]])
+                                f[key][-njets:] = o[key][ind[0]:ind[1]]
 
     def scale_generator(
         self,
@@ -262,6 +297,8 @@ class Apply_Scaler:
                             del o["unscaled_pt"]
                         if "jet_pt" in o.keys():
                             del o["jet_pt"]
+                        if "jet_type" in o.keys():
+                            del o["jet_type"]
                         for jet_type in self.config.jet_types:
                             edges = f[f"{self.config.edge_name}_{jet_type}"][indices[0] : indices[1]]
                             o.create_dataset(
@@ -277,6 +314,7 @@ class Apply_Scaler:
                         ]
                         unscaled_pt = f["unscaled_pt"][indices[0] : indices[1]]
                         jet_pt = f["jet_pt"][indices[0] : indices[1]]
+                        jet_type = f["jet_type"][indices[0] : indices[1]]
                         o.create_dataset(
                             data=edge_origin,
                             name="edge_origin",
@@ -304,6 +342,12 @@ class Apply_Scaler:
                         o.create_dataset(
                             data=jet_pt,
                             name="jet_pt",
+                            chunks=True,
+                            maxshape=(None,),
+                        )
+                        o.create_dataset(
+                            data=jet_type,
+                            name="jet_type",
                             chunks=True,
                             maxshape=(None,),
                         )
@@ -342,5 +386,7 @@ class Apply_Scaler:
                         ]
                         o["jet_pt"].resize((o["jet_pt"].shape[0] + n_entries), axis=0)
                         o["jet_pt"][-n_entries:] = f["jet_pt"][indices[0] : indices[1]]
+                        o["jet_type"].resize((o["jet_type"].shape[0] + n_entries), axis=0)
+                        o["jet_type"][-n_entries:] = f["jet_type"][indices[0] : indices[1]]
 
         logger.info("Appending done.")

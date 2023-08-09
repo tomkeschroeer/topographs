@@ -30,15 +30,17 @@ class Merge:
         array_full={}
         array_dict_labels_full={}
         array_dict_comb_labels_full = {}
+        njets_dict = {jet_type: len(File(f"{output_file}_{jet_type}.h5", "r")[self.config.edge_name]) for jet_type in jet_types}
         non_stack_keys = [self.config.edge_name, self.config.vertex_feat_name]
         keys = [key for key in File(f"{output_file}_{jet_types[0]}.h5").keys() if key not in non_stack_keys]
         with File(
             f"{output_file}.h5", "w"
         ) as h5fw:
             for step in range(n_steps):
-                for jet_type in jet_types:
+                for i, jet_type in enumerate(jet_types):
                     with File(f"{output_file}_{jet_type}.h5", "r") as h5fr:
                         array_dict = {f"{key}_{jet_type}": h5fr[f"/{key}"][step*stepsize:(step+1)*stepsize] for key in keys}
+                        array_dict[f"jet_type_{jet_type}"] = np.full(shape=(len(array_dict[f"{keys[0]}_{jet_type}"])), fill_value=i)
                         array_full.update(array_dict)
                         for jet_type_2 in jet_types:
                             if jet_type_2 == jet_type:
@@ -58,12 +60,19 @@ class Merge:
                     for key in non_stack_keys:
                         array_dict_comb_labels[f"{key}_{jet_type}"] = np.concatenate([array_dict_labels_full[f"{key}_{jet_type}_{jet_type_2}"] for jet_type_2 in jet_types])
                     array_dict_comb_labels_full.update(array_dict_comb_labels)
-                array_dict_comb = {key: np.concatenate([array_full[f"{key}_{jet_type}"] for jet_type in jet_types]) for key in list(keys)}
+                print(array_full)
+                print(njets_dict)
+                # for jet_type in jet_types:
+                #     array_full[f"jet_type_{jet_types}"] = np.full(shape=(array_full[f"{key}_{jet_type}"]))
+                array_dict_comb = {key: np.concatenate([array_full[f"{key}_{jet_type}"] for jet_type in jet_types]) for key in list(keys)+ ["jet_type"]}
                 array_dict_comb.update(array_dict_comb_labels_full)
+                
                 nentries = len(next(iter(array_dict_comb.values())))
                 indices = np.linspace(0, nentries-1, nentries).astype(int)
                 scary_shuffle(indices)
+
                 for key in array_dict_comb.keys():
+                    print(key)
                     array_dict_comb[key] = array_dict_comb[key][indices]
                     shape = array_dict_comb[key].shape
                     maxshape = (None,) if len(shape) == 1 else (None, *shape[1:])
