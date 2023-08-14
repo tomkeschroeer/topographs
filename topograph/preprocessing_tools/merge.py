@@ -20,6 +20,12 @@ class Merge:
         jet_types = self.config.jet_types
         if len(jet_types) == 1:
             logger.info("no need to merge, only one jet type is used.")
+            with File(
+                f"{output_file}.h5", "a"
+            ) as f:
+                if "jet_type" not in f.keys():
+                    f.create_dataset("jet_type", data=np.full(shape=(len(f[f"{self.config.edge_name}_{jet_types[0]}"])), fill_value=0))
+            exit()
         njets = int((
             self.dataset_types[""]["njets"]
             + self.dataset_types["_val"]["njets"]
@@ -30,9 +36,10 @@ class Merge:
         array_full={}
         array_dict_labels_full={}
         array_dict_comb_labels_full = {}
-        njets_dict = {jet_type: len(File(f"{output_file}_{jet_type}.h5", "r")[self.config.edge_name]) for jet_type in jet_types}
+        njets_dict = {jet_type: len(File(f"{output_file}_{jet_type}.h5", "r")[f"{self.config.edge_name}_{jet_type}"]) for jet_type in jet_types}
         non_stack_keys = [self.config.edge_name, self.config.vertex_feat_name]
-        keys = [key for key in File(f"{output_file}_{jet_types[0]}.h5").keys() if key not in non_stack_keys]
+        non_stack_keys_for_check = [f"{self.config.edge_name}_{jet_types[0]}", f"{self.config.vertex_feat_name}_{jet_types[0]}"]
+        keys = [key for key in File(f"{output_file}_{jet_types[0]}.h5").keys() if key not in non_stack_keys_for_check]
         with File(
             f"{output_file}.h5", "w"
         ) as h5fw:
@@ -44,12 +51,12 @@ class Merge:
                         array_full.update(array_dict)
                         for jet_type_2 in jet_types:
                             if jet_type_2 == jet_type:
-                                array_dict_labels = {f"{key}_{jet_type}_{jet_type_2}": h5fr[f"/{key}"][step*stepsize:(step+1)*stepsize] for key in non_stack_keys}
+                                array_dict_labels = {f"{key}_{jet_type}_{jet_type_2}": h5fr[f"/{key}_{jet_type}"][step*stepsize:(step+1)*stepsize] for key in non_stack_keys}
                                 array_dict_labels_full.update(array_dict_labels)
                             else:
                                 with File(f"{output_file}_{jet_type_2}.h5", "r") as h5fr_2:
-                                    y_edge = h5fr_2[f"/{self.config.edge_name}"][step*stepsize:(step+1)*stepsize]
-                                    y_vertex = h5fr_2[f"/{self.config.vertex_feat_name}"][step*stepsize:(step+1)*stepsize]
+                                    y_edge = h5fr_2[f"/{self.config.edge_name}_{jet_type_2}"][step*stepsize:(step+1)*stepsize]
+                                    y_vertex = h5fr_2[f"/{self.config.vertex_feat_name}_{jet_type_2}"][step*stepsize:(step+1)*stepsize]
                                 array_dict_labels = {
                                     f"{self.config.edge_name}_{jet_type}_{jet_type_2}": np.full(shape=y_edge.shape, dtype=y_edge.dtype, fill_value=0),
                                     f"{self.config.vertex_feat_name}_{jet_type}_{jet_type_2}": np.full(shape=y_vertex.shape, dtype=y_vertex.dtype, fill_value=-999.),
@@ -60,8 +67,6 @@ class Merge:
                     for key in non_stack_keys:
                         array_dict_comb_labels[f"{key}_{jet_type}"] = np.concatenate([array_dict_labels_full[f"{key}_{jet_type}_{jet_type_2}"] for jet_type_2 in jet_types])
                     array_dict_comb_labels_full.update(array_dict_comb_labels)
-                print(array_full)
-                print(njets_dict)
                 # for jet_type in jet_types:
                 #     array_full[f"jet_type_{jet_types}"] = np.full(shape=(array_full[f"{key}_{jet_type}"]))
                 array_dict_comb = {key: np.concatenate([array_full[f"{key}_{jet_type}"] for jet_type in jet_types]) for key in list(keys)+ ["jet_type"]}
@@ -72,7 +77,6 @@ class Merge:
                 scary_shuffle(indices)
 
                 for key in array_dict_comb.keys():
-                    print(key)
                     array_dict_comb[key] = array_dict_comb[key][indices]
                     shape = array_dict_comb[key].shape
                     maxshape = (None,) if len(shape) == 1 else (None, *shape[1:])
