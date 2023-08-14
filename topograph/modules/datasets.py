@@ -16,9 +16,9 @@ from torch.utils.data import Dataset, IterableDataset, TensorDataset, get_worker
 from topograph.modules.tools import get_sample_weights
 
 class Topographs_dataset(IterableDataset):
-    def __init__(self, filename, batch_size, n_samples, jet_types):
+    def __init__(self, filename, n_samples, jet_types, batch_size=50_000):
         IterableDataset.__init__(self)
-        self.batch_size = 50_000
+        self.batch_size = min(batch_size, n_samples)
         self.filename = filename
         # self.batch_size = batch_size
         self.n_samples = n_samples

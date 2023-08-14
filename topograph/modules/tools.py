@@ -309,33 +309,54 @@ class GetConfiguration:
             self.conf = yaml.load(conf_file, Loader=yaml.FullLoader)
 
     def getParameters(self):
-        # config_items = [
-        #     "input",
-        #     "output",
-        #     "stepsize",
-        #     "lr",
-        #     "njets",
-        #     "tracks_name",
-        #     "input_tracks_name",
-        #     "input_jet_name",
-        #     "input_truth_name",
-        #     "epochs",
-        #     "steps_per_epoch",
-        #     "edge_feature_network",
-        #     "edge_weight_network",
-        #     self.vertex_network_layer_name,
-        #     "preprocessing_file_name",
-        #     "one_file_name",
-        #     "scale_dict",
-        #     "training_file_name",
-        #     "edge_feat_name",
-        #     "edge_name",
-        #     "vertex_feat_name",
-        # ]
+        config_items = [
+            "input",
+            "output",
+            "output_training",
+            "model_name",
+            "preprocessing_file_name",
+            "scale_dict",
+            "training_file_name",
+            "validation_file_name",
+            "testing_file_name",
+            "njets",
+            "njets_val",
+            "njets_test",
+            "input_tracks_name",
+            "input_truth_name",
+            "input_jet_name",
+            "model_files",
+            "jet_types",
+            "small_net",
+            "file_formats",
+            "tracks_name",
+            "edge_name",
+            "edge_feat_name",
+            "vertex_feat_name",
+            "epochs",
+            "stepsize",
+            "lr",
+            "use_sample_weights",
+            "loss_fac_edge",
+            "loss_fac_vert",
+            "edge_feature_network",
+            "edge_weight_network",
+            "vertex_network",
+            "evaluation",
+        ]
 
-        for item in self.conf.keys():  # config_items:
+        req_items = [
+            "input",
+            "output",
+            "output_training",
+            "model_name",
+        ]
+
+        for item in config_items:
             if item in self.conf:
                 setattr(self, item, self.conf[item])
+            elif item not in req_items:
+                self.set_default(item)
             else:
                 raise KeyError(f"You need to specify {item} in your config file")
         self.small_net = self.conf.get("small_net", False)
@@ -346,6 +367,39 @@ class GetConfiguration:
             return glob(self.input)
         except KeyError:
             raise KeyError("No input file defined.")
+    
+    def set_default(self, item):
+        {   
+            "preprocessing_file_name": "preprocessed_ttbar_topograph.h5",
+            "scale_dict": "scale_dict_ttbar.json",
+            "training_file_name": "training_ttbar_topographs.h5",
+            "validation_file_name": "validation_ttbar_topographs.h5",
+            "testing_file_name": "testing_ttbar_topographs.h5",
+            "njets": 1_000_000,
+            "njets_val": 500_000,
+            "njets_test": 50_000,
+            "input_tracks_name": "tracks_loose",
+            "input_truth_name": "truth_hadrons",
+            "input_jet_name": "jets",
+            "model_files": None,
+            "jet_types": ["b"],
+            "small_net": {"b": False},
+            "file_formats": ["pdf"],
+            "tracks_name": "X_train_tracks",
+            "edge_name": "Y_edge",
+            "edge_feat_name": "Y_edge_features",
+            "vertex_feat_name": "Y_vertex_features",
+            "epochs": 200,
+            "stepsize": 10_000,
+            "lr": 0.01,
+            "use_sample_weights": True,
+            "loss_fac_edge": 1,
+            "loss_fac_vert": 1,
+            "edge_feature_network": {"nodes": [21, 20, 20, 30], "n_tracks_name": "tracks"},
+            "edge_weight_network": {"nodes": [21, 20, 20, 30], "n_tracks_name": "tracks", "add_activation": None},
+            "vertex_network": {"nodes": [30, 30, 30, 30, 1]},
+            "evaluation": {"model_file_numbers": [199]}
+        }
 
 
 class DatasetCreater:
