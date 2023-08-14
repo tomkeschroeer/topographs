@@ -266,6 +266,7 @@ class Plotter:
         ).get("plot", False)
         self.plot_pt = self.config.evaluation.get("plot_pt", {}).get("plot", False)
         self.plot_eta = self.config.evaluation.get("plot_eta", {}).get("plot", False)
+        self.plot_dr = self.config.evaluation.get("plot_dr", {}).get("plot", False)
         self.plot_loss = self.config.evaluation.get("plot_loss", {}).get("plot", False)
 
         self.plot_conf_matrix = self.config.evaluation.get("plot_conf_matrix", {}).get(
@@ -476,14 +477,20 @@ class Plotter:
                         point_styles=get_point_styles(1),
                     )
 
-        if self.plot_pt and not self.small_net:
+        if self.plot_pt and not self.small_net[jet_type]:
             self.logger.info(f"plotting pT...")
             self.plotting_regression_scatter(
                 model_file_numbers=self.model_file_numbers, var="pT"
             )
 
-        if self.plot_eta and not self.small_net:
+        if self.plot_eta and not self.small_net[jet_type]:
             self.logger.info(f"plotting eta...")
+            self.plotting_regression_scatter(
+                model_file_numbers=self.model_file_numbers, var="eta"
+            )
+
+        if self.plot_dr and not self.small_net[jet_type]:
+            self.logger.info(f"plotting dr...")
             self.plotting_regression_scatter(
                 model_file_numbers=self.model_file_numbers, var="dr"
             )
@@ -531,7 +538,7 @@ class Plotter:
         if self.plot_saliency_pervar:
             self.plotting_saliency_map_pervar(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_vertex_labels and not self.small_net:
+        if self.plot_vertex_labels and not self.small_net[jet_type]:
             self.plotting_vertex_labels_per_epoch(
                 model_file_numbers=self.model_file_numbers
             )
@@ -539,7 +546,7 @@ class Plotter:
         if self.plot_weights:
             self.plotting_model_weights(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_target_input_corr and not self.small_net:
+        if self.plot_target_input_corr and not self.small_net[jet_type]:
             self.plotting_target_input_correlation()
 
         if self.plot_n_tracks_per_jet:
@@ -554,10 +561,10 @@ class Plotter:
         if self.plot_roc_curves:
             self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_hadron_pt and not self.small_net:
+        if self.plot_hadron_pt and not self.small_net[jet_type]:
             self.plotting_hadron_pt_from_tracks()
         
-        if self.plot_linear_fit and not self.small_net:
+        if self.plot_linear_fit and not self.small_net[jet_type]:
             self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
 
     def get_all_values(self):
@@ -701,10 +708,12 @@ class Plotter:
                 var_max = np.max(labels[~np.isnan(labels)])
                 var_min_pred = np.min(preds[~np.isnan(preds)])
                 var_max_pred = np.max(preds[~np.isnan(preds)])
+                min_lim = min(var_min, var_min_pred)
+                max_lim = max(var_max, var_max_pred)
                 bins = np.linspace(
-                    min(var_min, var_min_pred), max(var_max, var_max_pred), 20
+                    min_lim, max_lim-0.5*(max_lim-min_lim), 60
                 )
-                bins = np.linspace(-2, 2, 60)
+                # bins = np.linspace(-2, 2, 60)
                 hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
                 self.plotting_scatter_vals(
                     ylabel=f"true {var_str}",
