@@ -27,7 +27,8 @@ class Prepare:
             + self.dataset_types["_val"]["njets"]
             + self.dataset_types["_test"]["njets"]
         )/len(jet_types))
-        stepsize = min(500_000, int(njets / 2))
+        stepsize = min(50_000, int(njets / 2))
+
         # stepsize = 200
         # input_file = f"{output_dir}/{self.config.one_file_name}.h5".replace(".h5.h5",".h5").replace("//","/")
         updated_filelist = glob(self.config.input)
@@ -64,9 +65,9 @@ class Prepare:
                         with File(output_file_jettype, "w") as train_file:
                             n_tracks = track_inputs.shape[1]
                             if vertex_feat is not None:
-                                train_file.create_dataset(f"{self.config.vertex_feat_name}_{jet_type}", data = vertex_feat, chunks=True, maxshape=(None,)) #len(global_conf.vertex_features))) # dtype=datasets.vertex_feat_dtypes
+                                train_file.create_dataset(f"{self.config.vertex_feat_name}", data = vertex_feat, chunks=True, maxshape=(None,)) #len(global_conf.vertex_features))) # dtype=datasets.vertex_feat_dtypes
                             # train_file.create_dataset(self.config.edge_feat_name, data = datasets.get_edge_feat_y(), chunks=True, maxshape=(None,40,len(global_conf.edge_features)))
-                            train_file.create_dataset(f"{self.config.edge_name}_{jet_type}", data = edge_y, chunks=True, maxshape=(None,n_tracks,))
+                            train_file.create_dataset(f"{self.config.edge_name}", data = edge_y, chunks=True, maxshape=(None,n_tracks,))
                             train_file.create_dataset("edge_origin", data = edge_origin, chunks=True, maxshape=(None,n_tracks,))
                             train_file.create_dataset(self.config.tracks_name, data = np.array(track_inputs , dtype=datasets.reco_dtypes), chunks=True, maxshape=(None,n_tracks))
                             train_file.create_dataset("track_extra", data = tracks_extra, chunks=True, maxshape=(None,n_tracks,))
@@ -82,26 +83,26 @@ class Prepare:
                         if njets_step > 0:
                             with File(output_file_jettype, "a") as train_file:
                                 if vertex_feat is not None:
-                                    train_file[f"{self.config.vertex_feat_name}_{jet_type}"].resize(
+                                    train_file[f"{self.config.vertex_feat_name}"].resize(
                                         (
-                                            train_file[f"{self.config.vertex_feat_name}_{jet_type}"].shape[0]
+                                            train_file[f"{self.config.vertex_feat_name}"].shape[0]
                                             + njets_step
                                         ),
                                         axis=0,
                                     )
-                                    train_file[f"{self.config.vertex_feat_name}_{jet_type}"][
+                                    train_file[f"{self.config.vertex_feat_name}"][
                                         -njets_step:
                                     ] = vertex_feat
                                 # train_file[self.config.edge_feat_name].resize((train_file[self.config.edge_feat_name].shape[0] + njets_step), axis=0)
                                 # train_file[self.config.edge_feat_name][-njets_step:] = datasets.get_edge_feat_y()
-                                train_file[f"{self.config.edge_name}_{jet_type}"].resize(
+                                train_file[f"{self.config.edge_name}"].resize(
                                     (
-                                        train_file[f"{self.config.edge_name}_{jet_type}"].shape[0]
+                                        train_file[f"{self.config.edge_name}"].shape[0]
                                         + njets_step
                                     ),
                                     axis=0,
                                 )
-                                train_file[f"{self.config.edge_name}_{jet_type}"][
+                                train_file[f"{self.config.edge_name}"][
                                     -njets_step:
                                 ] = edge_y
                                 train_file["edge_origin"].resize(

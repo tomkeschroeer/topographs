@@ -67,8 +67,8 @@ evaluation:
     - 199
   n_samples: 1_000
   plot_efficiency:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_efficiency_zeros_only:
     plot: False 
     recalculate: False
