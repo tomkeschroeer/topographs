@@ -123,8 +123,6 @@ class Apply_Scaler:
             create_file = True
             with File(self.out_file, "r") as o:
                 keys=o.keys()
-                print(self.out_file)
-                print(keys)
                 with File(input_file, "w") as f:
                     for ind in inds:
                         if create_file:
@@ -137,7 +135,7 @@ class Apply_Scaler:
                         else:
                             for key in keys:
                                 njets = ind[1]-ind[0]
-                                f[key].resize((f[key].shape[0] + njets), axis=0)                                # print(o[key][ind[0]:ind[1]])
+                                f[key].resize((f[key].shape[0] + njets), axis=0)
                                 f[key][-njets:] = o[key][ind[0]:ind[1]]
 
     def scale_generator(
