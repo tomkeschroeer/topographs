@@ -328,7 +328,6 @@ class GetConfiguration:
             "model_files",
             "jet_types",
             "small_net",
-            "file_formats",
             "tracks_name",
             "edge_name",
             "edge_feat_name",
@@ -369,7 +368,7 @@ class GetConfiguration:
             raise KeyError("No input file defined.")
     
     def set_default(self, item):
-        {   
+        defaults = {   
             "preprocessing_file_name": "preprocessed_ttbar_topograph.h5",
             "scale_dict": "scale_dict_ttbar.json",
             "training_file_name": "training_ttbar_topographs.h5",
@@ -384,7 +383,6 @@ class GetConfiguration:
             "model_files": None,
             "jet_types": ["b"],
             "small_net": {"b": False},
-            "file_formats": ["pdf"],
             "tracks_name": "X_train_tracks",
             "edge_name": "Y_edge",
             "edge_feat_name": "Y_edge_features",
@@ -400,6 +398,7 @@ class GetConfiguration:
             "vertex_network": {"nodes": [30, 30, 30, 30, 1]},
             "evaluation": {"model_file_numbers": [199]}
         }
+        setattr(self, item, defaults[item])
 
 
 class DatasetCreater:
