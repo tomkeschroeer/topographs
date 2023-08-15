@@ -228,7 +228,6 @@ class Plotter:
         )
         self.njet_test = self.config.njets_test
         self.njet_test = 500
-        self.file_formats = [self.config.file_formats] if isinstance(self.config.file_formats, str) else self.config.file_formats
         datafilename = (
             "plotting_data_tr.h5"
             if (self.cut_val is None)
@@ -256,7 +255,8 @@ class Plotter:
             "add_activation", None
         )
         self.model_file_numbers = self.config.evaluation.get("model_file_numbers", [1])
-
+        file_formats = self.config.evaluation.get("file_formats", ["pdf"])
+        self.file_formats = [file_formats] if isinstance(file_formats, str) else file_formats
         self.plot_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "plot", False
         )
