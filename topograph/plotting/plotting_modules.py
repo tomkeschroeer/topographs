@@ -44,7 +44,8 @@ def get_var_names(var, used_vertex_properties):
     vardict = {
         "pT": "log($p_T$)",
         "eta": "$\eta$",
-        "dr": "$\Delta R$"
+        "dr": "$\Delta R$",
+        "Lxy": "$L_{xy}$",
     }
     if used_vertex_properties is None:
         varlist = np.array(list(vardict.keys()))[:]
