@@ -51,6 +51,7 @@ def get_var_names(var, used_vertex_properties):
         varlist = np.array(list(vardict.keys()))[:]
     else:
         varlist = np.array(list(vardict.keys()))[used_vertex_properties]
+    print(varlist)
     varlist = list([varlist]) if isinstance(varlist, str) else list(varlist)
     try:
         ind = varlist.index(var)
@@ -227,7 +228,7 @@ class Plotter:
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
         self.njet_test = self.config.njets_test
-        self.njet_test = 500
+        # self.njet_test = 500
         datafilename = (
             "plotting_data_tr.h5"
             if (self.cut_val is None)
@@ -269,6 +270,7 @@ class Plotter:
         self.plot_pt = self.config.evaluation.get("plot_pt", {}).get("plot", False)
         self.plot_eta = self.config.evaluation.get("plot_eta", {}).get("plot", False)
         self.plot_dr = self.config.evaluation.get("plot_dr", {}).get("plot", False)
+        self.plot_lxy = self.config.evaluation.get("plot_lxy", {}).get("plot", False)
         self.plot_loss = self.config.evaluation.get("plot_loss", {}).get("plot", False)
 
         self.plot_conf_matrix = self.config.evaluation.get("plot_conf_matrix", {}).get(
@@ -533,6 +535,12 @@ class Plotter:
             self.logger.info(f"plotting dr...")
             self.plotting_regression_scatter(
                 model_file_numbers=self.model_file_numbers, var="dr"
+            )
+
+        if self.plot_lxy and not self.small_net[jet_type]:
+            self.logger.info(f"plotting Lxy...")
+            self.plotting_regression_scatter(
+                model_file_numbers=self.model_file_numbers, var="Lxy"
             )
 
         if self.plot_conf_matrix:
@@ -813,24 +821,24 @@ class Plotter:
                     y_ticklabels=None,
                     swap_inputs=True,
                 )
-                mask_non = (jet_type_per_jet != jet_type_int)
-                preds_non_masked = preds[mask_non]
-                print(preds_non_masked)
-                self.plot_hist(
-                    ylabel="number of jets",
-                    xlabel="log $p_T$",
-                    plot_name=f"{var}_model_{model_file_number}_{jet_type}_only_non-{jet_type}_jets",
-                    vals=[preds_non_masked],
-                    labels="",
-                    colours=get_colours(1),
-                    nbins=50,
-                    title=f"non-{jet_type} jets",
-                    logy=False,
-                    norm=False,
-                    y_ticklabels=None,
-                    x_ticklabels=None,
-                    binrange=None,
-                )
+                if len(self.jet_types) > 1:
+                    mask_non = (jet_type_per_jet != jet_type_int)
+                    preds_non_masked = preds[mask_non]
+                    self.plot_hist(
+                        ylabel="number of jets",
+                        xlabel="log $p_T$",
+                        plot_name=f"{var}_model_{model_file_number}_{jet_type}_only_non-{jet_type}_jets",
+                        vals=[preds_non_masked],
+                        labels="",
+                        colours=get_colours(1),
+                        nbins=50,
+                        title=f"non-{jet_type} jets",
+                        logy=False,
+                        norm=False,
+                        y_ticklabels=None,
+                        x_ticklabels=None,
+                        binrange=None,
+                    )
 
 
     def plotting_input(self, model_file_numbers):
@@ -1191,50 +1199,53 @@ class Plotter:
                 )
 
     def plotting_non_jet_tracks_pred(self, model_file_numbers):
-        with File(self.test_file, "r") as f:
-            jet_type_per_jet = f["jet_type"][:self.njet_test]
-        point_styles = ["b_","r_", "g_", "c_", "m_"]
-        for model_file_number in model_file_numbers:
-            for jet_type in self.jet_types:
-                jet_type_int = self.jet_types.index(jet_type)
-                self.logger.info(
-                    f"plotting track predictions for non-{jet_type} tracks for model {model_file_number}."
-                )
-                with File(
-                    f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-                ) as f:
-                    preds = f[f"pred_edge_{jet_type}"][:self.njet_test]
-                    labels = f[f"labels_edge_{jet_type}"][:self.njet_test]
-                    nbins = len(preds[0])
-                    ntracks = len(preds)
-                    binrange=(0,nbins)
-                vals = []
-                legend_labels = []
-                for pred_jet_type in self.jet_types:
-                    if pred_jet_type != jet_type:
-                        pred_jet_type_int = self.jet_types.index(pred_jet_type)
-                        preds_j = np.stack(
-                            calculate_binary_preds(
-                                preds=preds[jet_type_per_jet==pred_jet_type_int]
-                            )(),
-                            axis=1
-                        )
-                        preds_j = np.sum(preds_j, axis = 1).astype(float)
-                        preds_j /= ntracks
-                        vals.append(preds_j)
-                        legend_labels.append(f"{pred_jet_type}-jets")
-                self.plot_vals(
-                    ylabel="normalised number of unblocked tracks",
-                    xlabel="track number",
-                    vals=vals,
-                    labels=legend_labels,
-                    # colours=get_colours(len(legend_labels)),
-                    title=f"non {jet_type}-jets predictions for epoch {model_file_number}",
-                    # nbins=nbins,
-                    # binrange=binrange,
-                    plot_name=f"non_jet_track_plots_model_{model_file_number}_{jet_type}",
-                    point_styles=point_styles[:len(legend_labels)],
-                )
+        if len(self.jet_types) == 1:
+            self.logger.info("only one jet type defined, can't plot non-jet track's predictions")
+        else:
+            with File(self.test_file, "r") as f:
+                jet_type_per_jet = f["jet_type"][:self.njet_test]
+            point_styles = ["b_","r_", "g_", "c_", "m_"]
+            for model_file_number in model_file_numbers:
+                for jet_type in self.jet_types:
+                    jet_type_int = self.jet_types.index(jet_type)
+                    self.logger.info(
+                        f"plotting track predictions for non-{jet_type} tracks for model {model_file_number}."
+                    )
+                    with File(
+                        f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+                    ) as f:
+                        preds = f[f"pred_edge_{jet_type}"][:self.njet_test]
+                        labels = f[f"labels_edge_{jet_type}"][:self.njet_test]
+                        nbins = len(preds[0])
+                        ntracks = len(preds)
+                        binrange=(0,nbins)
+                    vals = []
+                    legend_labels = []
+                    for pred_jet_type in self.jet_types:
+                        if pred_jet_type != jet_type:
+                            pred_jet_type_int = self.jet_types.index(pred_jet_type)
+                            preds_j = np.stack(
+                                calculate_binary_preds(
+                                    preds=preds[jet_type_per_jet==pred_jet_type_int]
+                                )(),
+                                axis=1
+                            )
+                            preds_j = np.sum(preds_j, axis = 1).astype(float)
+                            preds_j /= ntracks
+                            vals.append(preds_j)
+                            legend_labels.append(f"{pred_jet_type}-jets")
+                    self.plot_vals(
+                        ylabel="normalised number of unblocked tracks",
+                        xlabel="track number",
+                        vals=vals,
+                        labels=legend_labels,
+                        # colours=get_colours(len(legend_labels)),
+                        title=f"non {jet_type}-jets predictions for epoch {model_file_number}",
+                        # nbins=nbins,
+                        # binrange=binrange,
+                        plot_name=f"non_jet_track_plots_model_{model_file_number}_{jet_type}",
+                        point_styles=point_styles[:len(legend_labels)],
+                    )
 
     def plotting_vertex_labels_per_epoch(self, model_file_numbers):
         for model_file_number in model_file_numbers:
@@ -1998,8 +2009,7 @@ class Plotter:
         y_ticklabels=None,
         x_ticklabels=None,
         binrange=None,
-    ):
-        print("plot_hisy")
+    ):  
         if binrange is None:
             minimum_glob = min(vals[0])
             maximum_glob = max(vals[0])
@@ -2010,7 +2020,6 @@ class Plotter:
                     minimum_glob = min_tmp if min_tmp < minimum_glob else minimum_glob
                     maximum_glob = max_tmp if max_tmp > maximum_glob else maximum_glob
             binrange = (minimum_glob, maximum_glob)
-        print(binrange)
 
         plot_histo = HistogramPlot(
             n_ratio_panels=0,
@@ -2068,6 +2077,7 @@ class GetEpochPrediction:
             batch_size=min(njets_test, 1024),
             n_samples=njets_test,
             jet_types=self.jet_types,
+            test=True,
         )
         self.dataset_loader = DataLoader(
             self.dataset,
