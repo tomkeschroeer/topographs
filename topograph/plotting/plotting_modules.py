@@ -1,6 +1,7 @@
 import time
 from glob import glob
 from os import makedirs
+import json
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -225,6 +226,9 @@ class Plotter:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
+        self.scale_dict = json.load((
+            f"{self.config.output}/{self.config.scale_dict}".replace("//", "/")
+        ))
         self.njet_test = self.config.njets_test
         self.njet_test = 500
         datafilename = (
@@ -356,11 +360,10 @@ class Plotter:
         self.n_modelfiles = 0
         # self.effs, self.effs_zeros, self.effs_ones = [],[],[]
 
+
     def Run(self):
         nbins_scatter = 100
         self.n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
-
-        # 
         with File(self.test_file, "r") as f:
             jet_type_per_jet = f["/jet_type"][:self.njet_test]
         for jet_type in self.jet_types:
@@ -742,9 +745,10 @@ class Plotter:
                 self.logger.warning(f"Skipping plotting of {var}, not used in training")
                 break
             for jet_type in self.jet_types:
-                if self.small_net[jet_type]: 
+                if self.small_net[jet_type]:
                     self.logger.warning(f"Skipping plotting of {jet_type}-network, no regression trained.")
                     continue
+                other_jet_types = self.jet_types.copy().remove(jet_type)
                 self.logger.info(f"plotting {var} regression for model {model_file_number} for {jet_type}-jets...")
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
@@ -805,6 +809,7 @@ class Plotter:
                     y_ticklabels=None,
                     swap_inputs=True,
                 )
+                if len(other_jet_types) > 0:
                 mask_non = (jet_type_per_jet != jet_type_int)
                 preds_non_masked = preds[mask_non]
                 print(preds_non_masked)
@@ -822,6 +827,29 @@ class Plotter:
                     y_ticklabels=None,
                     x_ticklabels=None,
                     binrange=None,
+                )
+                shift = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["shift"])
+                scale = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["scale"])
+                preds_unscaled_jettype = scale*preds[mask] - shift
+                labels_unscaled_jettype = scale*labels[mask] - shift
+                var_min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
+                var_max = np.max(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
+                var_min_pred = np.min(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
+                var_max_pred = np.max(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
+                bins = np.linspace(
+                    min(var_min, var_min_pred), max(var_max, var_max_pred), 60
+                )
+                hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
+                self.plotting_scatter_vals(
+                    ylabel=f"true {var_str}",
+                    xlabel=f"predicted {var_str}",
+                    plot_name=f"{var}_regression_model_{model_file_number}_{jet_type}_only_{jet_type}_jets_unscaled",
+                    xvals=bins,
+                    yvals=bins,
+                    zvals=hist,
+                    title=None,
+                    y_ticklabels=None,
+                    swap_inputs=True,
                 )
 
 
@@ -959,12 +987,9 @@ class Plotter:
 
 
     def plotting_track_origin(self):
-        test_file = f"{self.config.output}/{self.config.testing_file_name}".replace(
-            "//", "/"
-        )
         for jet_type in self.jet_types:
             self.logger.info(f"plot the origin of tracks for {jet_type}-jets...")
-            with File(test_file, "r") as test:
+            with File(self.test_file, "r") as test:
                 edge_origin = test["edge_origin"][: self.config.njets_test]
                 edge_label = test[f"Y_edge_{jet_type}"][: self.config.njets_test]
             track_origin = [
