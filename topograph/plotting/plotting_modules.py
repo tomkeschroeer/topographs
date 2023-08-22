@@ -41,12 +41,14 @@ def create_figure(plot):
     return plot
 
 
-def get_var_names(var, used_vertex_properties):
+def get_var_names(var, used_vertex_properties=None, only_label=False):
+    var = var.lower()
     vardict = {
-        "pT": "log($p_T$)",
+        "pt": "log($p_T$)",
         "eta": "$\eta$",
         "dr": "$\Delta R$"
     }
+    if only_label: return vardict[var]
     if used_vertex_properties is None:
         varlist = np.array(list(vardict.keys()))[:]
     else:
@@ -123,10 +125,10 @@ def get_colours(N):
         "#ff7f0e",
         "#2ca02c",
         "#7c5295",
-        "#1f77b4",
+        "#ff0000",
         "#012F51",
         "#ff7f0e",
-        "#1f77b4",
+        "#cccc33",
         "#B45F06",
         "#A300A3",
         "#38761D",
@@ -226,11 +228,10 @@ class Plotter:
         self.test_file = (
             f"{self.config.output}/{self.config.testing_file_name}".replace("//", "/")
         )
-        self.scale_dict = json.load((
-            f"{self.config.output}/{self.config.scale_dict}".replace("//", "/")
-        ))
+        with open(f"{self.config.output}/{self.config.scale_dict}".replace("//", "/"), "r") as scale_dict:
+            self.scale_dict = json.load(scale_dict)
         self.njet_test = self.config.njets_test
-        self.njet_test = 500
+        # self.njet_test = 500
         datafilename = (
             "plotting_data_tr.h5"
             if (self.cut_val is None)
@@ -294,7 +295,7 @@ class Plotter:
         self.plot_n_tracks_per_jet = self.config.evaluation.get(
             "plot_n_tracks_per_jet", {}
         ).get("plot", False)
-        self.plot_vertex_labels = self.config.evaluation.get("vertex_labels", {}).get(
+        self.plot_vertex_labels = self.config.evaluation.get("plot_vertex_labels", {}).get(
             "plot", False
         )
         self.plot_weights = self.config.evaluation.get("weights", {}).get("plot", False)
@@ -314,6 +315,9 @@ class Plotter:
             "plot", False
         )
         self.plot_linear_fit = self.config.evaluation.get("plot_linear_fit", {}).get(
+            "plot", False
+        )
+        self.plot_non_jet_tracks = self.config.evaluation.get("plot_non_jet_tracks", {}).get(
             "plot", False
         )
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
@@ -364,17 +368,20 @@ class Plotter:
     def Run(self):
         nbins_scatter = 100
         self.n_modelfiles = len(glob(f"{self.model_pred_folder}/epoch_pred_*"))
+        self.ntracks = self.config.evaluation.get("ntracks", 40)
         with File(self.test_file, "r") as f:
             jet_type_per_jet = f["/jet_type"][:self.njet_test]
         for jet_type in self.jet_types:
+            other_jet_types = self.jet_types.copy()
+            other_jet_types.remove(jet_type)
             self.get_all_values()
             if self.check_if_recalculate():
                 for i in range(self.n_modelfiles):
                     with File(
                         f"{self.model_pred_folder}/epoch_pred_{i:03d}.h5", "r"
                     ) as model_data:
-                        preds = model_data[f"pred_edge_{jet_type}"][:self.njet_test]
-                        labels = model_data[f"labels_edge_{jet_type}"][:self.njet_test]
+                        preds = model_data[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]
+                        labels = model_data[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]
                         # grads = model_data["grads"][:self.njet_test]
                         slope, shift, c1, c2 = None, None, None, None
                         if self.add_activation == "shifted_relu":
@@ -408,17 +415,24 @@ class Plotter:
                             c2=c2,
                             pos=i,
                         )
+                        self.logger.info(
+                            f"getting efficiency, zeros only, for model model_epoch{i:03d}"
+                        )
+                        
                         if len(self.jet_types)>1:
-                            self.effs_only_zero_labels = self.get_efficiency(
-                                preds=preds[jet_type_per_jet != self.jet_types.index(jet_type)],
-                                labels=labels[jet_type_per_jet != self.jet_types.index(jet_type)],
-                                effs=self.effs_only_zero_labels,
-                                slope=slope,
-                                shift=shift,
-                                c1=c1,
-                                c2=c2,
-                                pos=i,
-                            )
+                            for other_jet_type in self.jet_types:
+                                other_jet_type_int = self.jet_types.index(other_jet_type)
+                                self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"] = self.get_efficiency(
+                                        preds=preds[jet_type_per_jet == other_jet_type_int],
+                                        labels=labels[jet_type_per_jet == other_jet_type_int],
+                                        effs=self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"],
+                                        slope=slope,
+                                        shift=shift,
+                                        c1=c1,
+                                        c2=c2,
+                                        pos=i,
+                                        zeros_only=True
+                                    )
                             self.effs_only_ones_labels = self.get_efficiency(
                                 preds=preds[jet_type_per_jet == self.jet_types.index(jet_type)],
                                 labels=labels[jet_type_per_jet == self.jet_types.index(jet_type)],
@@ -428,100 +442,41 @@ class Plotter:
                                 c1=c1,
                                 c2=c2,
                                 pos=i,
-                            )
-
-
-                    if self.recalculate_effs_ones:
-                        self.logger.info(
-                            f"getting efficiency, ones only, for model model_epoch{i:03d}"
-                        )
-                        self.effs_ones = self.get_efficiency(
-                            preds=preds,
-                            labels=labels,
-                            effs=self.effs_ones,
-                            slope=slope,
-                            shift=shift,
-                            c1=c1,
-                            c2=c2,
-                            pos=i,
-                            ones_only=True,
-                        )
-
-                    if self.recalculate_effs_zeros:
-                        self.logger.info(
-                            f"getting efficiency, zeros only, for model model_epoch{i:03d}"
-                        )
-                        self.effs_zeros = self.get_efficiency(
-                            preds=preds,
-                            labels=labels,
-                            effs=self.effs_zeros,
-                            slope=slope,
-                            shift=shift,
-                            c1=c1,
-                            c2=c2,
-                            pos=i,
-                            zeros_only=True,
-                        )
-
-                if self.plot_effs:
-                    self.logger.info(f"plotting efficiencies...")
-                    if self.effs is not None:
-                        if len(self.jet_types) > 1:
-                            self.plot_vals(
-                                ylabel="efficiency",
-                                xlabel="epoch",
-                                plot_name=f"eff_per_epoch_{jet_type}"
-                                if self.cut_val is None
-                                else f"eff_per_epoch_cutval={self.cut_val}",
-                                vals=[self.effs, self.effs_only_zero_labels, self.effs_only_ones_labels],
-                                labels=["all tracks", f"only non-{jet_type} tracks", f"only {jet_type} tracks"],
-                                point_styles=get_point_styles(3),
+                                ones_only=True
                             )
                         else:
-                            self.plot_vals(
-                                ylabel="efficiency",
-                                xlabel="epoch",
-                                plot_name=f"eff_per_epoch_{jet_type}"
-                                if self.cut_val is None
-                                else f"eff_per_epoch_cutval={self.cut_val}",
-                                vals=[self.effs],
-                                labels=["all tracks"],
-                                point_styles=get_point_styles(1),
+                            self.effs_zeros = self.get_efficiency(
+                                preds=preds,
+                                labels=labels,
+                                effs=self.effs_zeros,
+                                slope=slope,
+                                shift=shift,
+                                c1=c1,
+                                c2=c2,
+                                pos=i,
+                                zeros_only=True,
+                            )
+                            self.effs_ones = self.get_efficiency(
+                                preds=preds,
+                                labels=labels,
+                                effs=self.effs_ones,
+                                slope=slope,
+                                shift=shift,
+                                c1=c1,
+                                c2=c2,
+                                pos=i,
+                                ones_only=True,
                             )
 
-                if self.plot_effs_ones:
-                    self.logger.info(f"plotting efficiencies, ones only...")
-                    if self.effs_ones is not None:
-                        self.plot_vals(
-                            ylabel="efficiency",
-                            xlabel="epoch",
-                            plot_name=f"eff_per_epoch_ones_{jet_type}"
-                            if self.cut_val is None
-                            else f"eff_per_epoch_ones_cutval={self.cut_val}",
-                            vals=[self.effs_ones],
-                            labels=[""],
-                            point_styles=get_point_styles(1),
-                        )
-
-                if self.plot_effs_zeros:
-                    self.logger.info(f"plotting efficiencies, zeros only...")
-                    if self.effs_zeros is not None:
-                        self.plot_vals(
-                            ylabel="efficiency",
-                            xlabel="epoch",
-                            plot_name=f"eff_per_epoch_zeros_{jet_type}"
-                            if self.cut_val is None
-                            else f"eff_per_epoch_zeros_cutval={self.cut_val}",
-                            vals=[self.effs_zeros],
-                            labels=[""],
-                            point_styles=get_point_styles(1),
-                        )
-                    # effs_onlys_non
+            if self.plot_effs:
+                self.logger.info(f"plotting efficiencies for {jet_type}-jets ...")
+                self.plotting_efficiencies(jet_type=jet_type, other_jet_types=other_jet_types)
+                
 
         if self.plot_pt:
             self.logger.info(f"plotting pT...")
             self.plotting_regression_scatter(
-                model_file_numbers=self.model_file_numbers, var="pT"
+                model_file_numbers=self.model_file_numbers, var="pt"
             )
 
         if self.plot_eta:
@@ -573,7 +528,7 @@ class Plotter:
         if self.plot_saliency_pervar:
             self.plotting_saliency_map_pervar(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_vertex_labels and not self.small_net:
+        if self.plot_vertex_labels:
             self.plotting_vertex_labels_per_epoch(
                 model_file_numbers=self.model_file_numbers
             )
@@ -596,19 +551,30 @@ class Plotter:
         if self.plot_roc_curves:
             self.plotting_roc_curves(model_file_numbers=self.model_file_numbers)
 
-        if self.plot_hadron_pt and not self.small_net:
+        if self.plot_hadron_pt:
             self.plotting_hadron_pt_from_tracks()
         
-        if self.plot_linear_fit and not self.small_net:
+        if self.plot_linear_fit:
             self.plotting_linear_fit(model_file_numbers=self.model_file_numbers)
 
-        self.plotting_non_jet_tracks_pred(model_file_numbers=self.model_file_numbers)
+        if self.plot_non_jet_tracks:
+            self.plotting_non_jet_tracks_pred(model_file_numbers=self.model_file_numbers)
 
     def get_all_values(self):
         if self.recalculate_effs is False and self.plot_effs:
             try:
                 with File(self.plot_file, "r+") as f:
-                    self.effs = f["efficiency"][:self.njet_test]
+                    self.effs = f["efficiency"][:]
+                    if len(self.jet_types)>1:
+                        for other_jet_type in self.jet_types:
+                            for jet_type in self.jet_types:
+                                self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"] = (
+                                    f[f"efficiency_{jet_type}_net_{other_jet_type}_jets"][:]
+                                )
+                            self.effs_only_ones_labels = f[f"efficiency_ones_only_{other_jet_type}"]
+                    else:
+                        self.effs_ones = f["efficiency_ones_only"][:]
+                        self.effs_zeros = f["efficiency_zeros_only"][:]
             except (KeyError, FileNotFoundError) as er:
                 self.logger.warn(
                     "No efficiencies found in file or file not found. Recalculate"
@@ -618,65 +584,23 @@ class Plotter:
                 self.effs = np.full(
                     shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
                 )
-                self.effs_only_zero_labels = np.full(
-                    shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-                )
-                self.effs_only_ones_labels = np.full(
-                    shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-                )
-        else:
-            self.effs = np.full(shape=(self.n_modelfiles), fill_value=-1.0, dtype=float)
-            self.effs_only_zero_labels = np.full(
-                    shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-                )
-            self.effs_only_ones_labels = np.full(
-                    shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-                )
-        if self.recalculate_effs_ones is False and self.plot_effs_ones:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    self.effs_ones = f["efficiency_ones_only"][:self.njet_test]
-            except (KeyError, FileNotFoundError) as er:
-                self.logger.warn(
-                    "No efficiencies (ones only) found in file or file not found."
-                    " Recalculate instead"
-                )
-                self.recalculate_effs_ones = True
-                self.effs_ones = np.full(
-                    shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-                )
-        else:
-            self.effs_ones = np.full(
-                shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-            )
-        if self.recalculate_effs_zeros is False and self.plot_effs_zeros:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    self.effs_zeros = f["efficiency_zeros_only"][:self.njet_test]
-            except (KeyError, FileNotFoundError) as er:
-                self.logger.warn(
-                    "No efficiencies (zeros only) found in file or file not found."
-                    " Recalculate instead"
-                )
-                self.recalculate_effs_zeros = True
-                self.effs_zeros = np.full(
-                    shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-                )
-        else:
-            self.effs_zeros = np.full(
-                shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
-            )
-        if self.recalculate_loss is False and self.plot_loss:
-            try:
-                with File(self.plot_file, "r+") as f:
-                    self.loss = f["loss"][:self.njet_test]
-            except (KeyError, FileNotFoundError) as er:
-                self.logger.warn(
-                    "No loss found in file or file not found. Recalculate instead"
-                )
-                self.recalculate_loss = True
-        else:
-            self.loss = []
+                if len(self.jet_types)>1:
+                    self.effs_only_zero_labels = {}
+                    for other_jet_type in self.jet_types:
+                        for jet_type in self.jet_types:
+                            self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"] = np.full(
+                                shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
+                            ) 
+                    self.effs_only_ones_labels = np.full(
+                            shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
+                        )
+                else:
+                    self.effs_ones = np.full(
+                        shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
+                    )
+                    self.effs_zeros = np.full(
+                        shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
+                    )
         if self.recalculate_preds_scatter is False and self.plot_preds_scatter:
             try:
                 with File(self.plot_file, "r+") as f:
@@ -719,7 +643,7 @@ class Plotter:
         zeros_only=False,
         ones_only=False,
     ):
-        Ntotal = self.metadata_dict["n_trks"] * len(preds)
+        Ntotal = self.ntracks* len(preds)
         # Ntotal = len(preds)
         eff = calculate_efficiency(
             preds,
@@ -736,6 +660,54 @@ class Plotter:
         effs[pos] = eff
         return effs
 
+    def plotting_efficiencies(self, jet_type, other_jet_types):
+        point_styles = ["b-","r-", "g-", "c-", "m-"]
+        if len(self.jet_types) > 1:
+            plot_labels = [
+                "all tracks",
+                f"{jet_type}-jet tracks (label = 1)",
+                f"{jet_type}-jet tracks (label = 0)",
+                *[f"{o_jet_type}-jet tracks (label = 0)" for o_jet_type in other_jet_types]
+            ]
+            self.plot_vals(
+                ylabel="efficiency",
+                xlabel="epoch",
+                # plot_name=f"eff_per_epoch_{jet_type}"
+                # if self.cut_val is None
+                # else f"eff_per_epoch_cutval={self.cut_val}",
+                plot_name = f"eff_per_epoch_{jet_type}"
+                if self.ntracks == 40
+                else f"eff_per_epoch_{jet_type}_{self.ntracks}_tracks",
+                vals=[
+                    self.effs,
+                    self.effs_only_ones_labels,
+                    self.effs_only_zero_labels[f"{jet_type}_net_{jet_type}_jets"],
+                    *[self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"] for other_jet_type in other_jet_types]
+                ],
+                labels=plot_labels,
+                point_styles=point_styles[:len(plot_labels)],
+            )
+        else:
+            plot_labels = [
+                "all tracks",
+                f"{jet_type}-jet tracks (label = 1)",
+                f"{jet_type}-jet tracks (label = 0)"
+            ]
+            self.plot_vals(
+                ylabel="efficiency",
+                xlabel="epoch",
+                plot_name=f"eff_per_epoch_{jet_type}"
+                if self.ntracks == 40
+                else f"eff_per_epoch_{jet_type}_{self.ntracks}_tracks",
+                vals=[
+                    self.effs,
+                    self.effs_ones,
+                    self.effs_zeros
+                ],
+                labels=plot_labels,
+                point_styles=point_styles[:len(plot_labels)],
+            )
+
     def plotting_regression_scatter(self, model_file_numbers, var):
         with File(self.test_file, "r") as f:
             jet_type_per_jet = f["jet_type"][:self.njet_test]
@@ -748,7 +720,6 @@ class Plotter:
                 if self.small_net[jet_type]:
                     self.logger.warning(f"Skipping plotting of {jet_type}-network, no regression trained.")
                     continue
-                other_jet_types = self.jet_types.copy().remove(jet_type)
                 self.logger.info(f"plotting {var} regression for model {model_file_number} for {jet_type}-jets...")
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
@@ -778,7 +749,9 @@ class Plotter:
                 self.plotting_scatter_vals(
                     ylabel=f"true {var_str}",
                     xlabel=f"predicted {var_str}",
-                    plot_name=f"{var}_regression_model_{model_file_number}_{jet_type}_only_{jet_type}_jets",
+                    plot_name=f"regression_model_{var}_{model_file_number}_{jet_type}_network_{jet_type}_jets"
+                    if self.ntracks == 40 else
+                    f"regression_model_{var}_{model_file_number}_{jet_type}_network_{jet_type}_jets_{self.ntracks}_tracks",
                     xvals=bins,
                     yvals=bins,
                     zvals=hist,
@@ -787,6 +760,34 @@ class Plotter:
                     swap_inputs=True,
                 )
 
+                ## plotting of unscaled targets and predictions for target
+                shift = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["shift"])
+                scale = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["scale"])
+                preds_unscaled_jettype = scale*preds[mask] - shift
+                labels_unscaled_jettype = scale*labels[mask] - shift
+                var_min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
+                var_max = np.max(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
+                var_min_pred = np.min(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
+                var_max_pred = np.max(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
+                bins = np.linspace(
+                    min(var_min, var_min_pred), max(var_max, var_max_pred), 60
+                )
+                hist = np.histogram2d(preds_unscaled_jettype, labels_unscaled_jettype, bins=[bins, bins])[0]
+                self.plotting_scatter_vals(
+                    ylabel=f"true {var_str}",
+                    xlabel=f"predicted {var_str}",
+                    plot_name=f"regression_model_{var}_{model_file_number}_{jet_type}_only_{jet_type}_jets_unscaled"
+                    if self.ntracks == 40
+                    else f"regression_model_{var}_{model_file_number}_{jet_type}_only_{jet_type}_jets_unscaled_{self.ntracks}_tracks",
+                    xvals=bins,
+                    yvals=bins,
+                    zvals=hist,
+                    title=None,
+                    y_ticklabels=None,
+                    swap_inputs=True,
+                )
+
+                ## plotting of difference in pT for jet type
                 regs = calculate_pT_diff(pred=preds_masked, label=labels_masked)()
                 var_min = np.min(regs)  # [~np.isnan(regs)])
                 var_max = np.max(regs)  # [~np.isnan(regs)])
@@ -810,92 +811,69 @@ class Plotter:
                     swap_inputs=True,
                 )
                 if len(other_jet_types) > 0:
-                mask_non = (jet_type_per_jet != jet_type_int)
-                preds_non_masked = preds[mask_non]
-                print(preds_non_masked)
-                self.plot_hist(
-                    ylabel="number of jets",
-                    xlabel="log $p_T$",
-                    plot_name=f"{var}_model_{model_file_number}_{jet_type}_only_non-{jet_type}_jets",
-                    vals=[preds_non_masked],
-                    labels="",
-                    colours=get_colours(1),
-                    nbins=50,
-                    title=f"non-{jet_type} jets",
-                    logy=False,
-                    norm=False,
-                    y_ticklabels=None,
-                    x_ticklabels=None,
-                    binrange=None,
-                )
-                shift = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["shift"])
-                scale = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["scale"])
-                preds_unscaled_jettype = scale*preds[mask] - shift
-                labels_unscaled_jettype = scale*labels[mask] - shift
-                var_min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
-                var_max = np.max(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
-                var_min_pred = np.min(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
-                var_max_pred = np.max(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
-                bins = np.linspace(
-                    min(var_min, var_min_pred), max(var_max, var_max_pred), 60
-                )
-                hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
-                self.plotting_scatter_vals(
-                    ylabel=f"true {var_str}",
-                    xlabel=f"predicted {var_str}",
-                    plot_name=f"{var}_regression_model_{model_file_number}_{jet_type}_only_{jet_type}_jets_unscaled",
-                    xvals=bins,
-                    yvals=bins,
-                    zvals=hist,
-                    title=None,
-                    y_ticklabels=None,
-                    swap_inputs=True,
-                )
+                    for other_jet_type in other_jet_types:
+                        other_jet_type_int = self.jet_types.index(other_jet_type)
+                        mask_non = (jet_type_per_jet == other_jet_type_int)
+                        preds_other_masked = preds[mask_non]
+                        self.plot_hist(
+                            ylabel="number of jets",
+                            xlabel="log $p_T$",
+                            plot_name=f"{var}_model_{model_file_number}_{jet_type}_network_{other_jet_type}_jets",
+                            vals=[preds_other_masked],
+                            labels=[""],
+                            colours=get_colours(1),
+                            nbins=50,
+                            title=f"{other_jet_type} jets",
+                            logy=False,
+                            norm=True,
+                            y_ticklabels=None,
+                            x_ticklabels=None,
+                            binrange=None,
+                        )
 
 
     def plotting_input(self, model_file_numbers):
+        with File(self.test_file, "r") as f:
+            inputs = f["X_train_tracks"][: self.njet_test, :self.ntracks]
+            jet_types = f["jet_type"][: self.njet_test]
+        dists = []
+        str_labels = []
+        with File(
+            f"{self.model_pred_folder}/epoch_pred_{model_file_numbers[0]:03d}.h5", "r"
+        ) as f:
+            mask = f["mask"][: self.njet_test]
         for jet_type in self.jet_types:
-            with File(
-                f"{self.model_pred_folder}/epoch_pred_{model_file_numbers[0]:03d}.h5", "r"
-            ) as f:
-                mask = f["mask"][: self.njet_test]
+            other_jet_types_int = self.jet_types.copy()
+            other_jet_types_int.remove(jet_type)
             with File(self.test_file, "r") as f:
-                inputs = f[f"X_train_tracks"][: self.njet_test]
                 labels = f[f"Y_edge_{jet_type}"][: self.njet_test]
-                jet_types = f["jet_type"][: self.njet_test]
-            inputs_jettype = inputs[np.logical_and(labels == 1, mask)]
-            inputs_nonjettype_all = inputs[np.logical_and(labels == 0, mask)]
-            if len(self.jet_types) > 1:
-                inputs_nonjettype_fromjettype = inputs[
-                    np.logical_and(
-                        np.logical_and(labels == 0, mask), 
-                        np.repeat((jet_types == self.jet_types.index(jet_type)).reshape(mask.shape[0], 1), mask.shape[1], axis = 1)
-                    )
-                ]
+            jet_type_mask = (jet_types == self.jet_types.index(jet_type))
+            inputs_jettype = inputs[jet_type_mask]
+            mask_jet = mask[jet_type_mask]
+            labels_jettype = labels[jet_type_mask]
+            inputs_jettype_ones = inputs_jettype[np.logical_and(labels_jettype == 1, mask_jet)]
+            inputs_jettype_zeros = inputs_jettype[np.logical_and(labels_jettype == 0, mask_jet)]
+            dists.append(inputs_jettype[np.logical_and(labels_jettype == 1, mask_jet)])
+            dists.append(inputs_jettype[np.logical_and(labels_jettype == 0, mask_jet)])
+            str_labels.append(f"{jet_type}-jets, track label = 1")
+            str_labels.append(f"{jet_type}-jets, track label = 0")
             input_vars = self.global_config.track_inputs
-            for i in range(0, len(input_vars)):
-                self.logger.info(f"plotting distribution for {input_vars[i]}")
-                dist_jettype = inputs_jettype[:, i]
-                dist_nonjettype_all = inputs_nonjettype_all[:, i]
-                dists = [dist_jettype, dist_nonjettype_all]
-                legend_labels = [f"{jet_type}-tracks", f"non-{jet_type} tracks"]
-                if len(self.jet_types) > 1:
-                    dist_nonjettype_fromjettype = inputs_nonjettype_fromjettype[:, i]
-                    dists.append(dist_nonjettype_fromjettype)
-                    legend_labels.append(f"non-{jet_type} tracks from {jet_type}-jets")
-                nbins, binrange, ticks = get_n_bins(dists=dists, var=input_vars[i])
-                self.plot_hist(
-                    ylabel="normalised number of tracks",
-                    xlabel=input_vars[i],
-                    plot_name=f"Distr_{input_vars[i]}_{jet_type}",
-                    colours=get_colours(len(legend_labels)),
-                    vals=dists,
-                    labels=legend_labels,
-                    nbins=nbins,
-                    binrange=binrange,
-                    x_ticklabels=ticks,
-                    logy=False,
-                )
+        for i in range(0, len(input_vars)):
+            self.logger.info(f"plotting distribution for {input_vars[i]}")
+            dists_var = [dist[:,i] for dist in dists]
+            nbins, binrange, ticks = get_n_bins(dists=dists_var, var=input_vars[i])
+            self.plot_hist(
+                ylabel="normalised number of tracks",
+                xlabel=input_vars[i],
+                plot_name=f"Distr_{input_vars[i]}",
+                colours=get_colours(len(str_labels)),
+                vals=dists_var,
+                labels=str_labels,
+                nbins=nbins,
+                binrange=binrange,
+                x_ticklabels=ticks,
+                logy=False,
+            )
 
     def plotting_roc_curves(self, model_file_numbers):
         self.logger.info("plotting roc curves...")
@@ -957,6 +935,9 @@ class Plotter:
     def plotting_linear_fit(self, model_file_numbers):
         for model_file_number in model_file_numbers:
             for jet_type in self.jet_types:
+                if self.small_net[jet_type]:
+                    self.logger.warning(f"Skipping fitting of {jet_type}-network, no regression trained.")
+                    continue
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
                 ) as f:
@@ -968,18 +949,18 @@ class Plotter:
                     labels_var = labels[:,i]
                     pred_var = pred_var[labels_var != -999.]
                     labels_var = labels_var[labels_var != -999.]
-                    bounds = min([-labels_var.min(), labels_var.max()])
-                    var_bins = np.linspace(-bounds,bounds, 11)
-                    slope, offset = np.polyfit(pred_var, labels_var, deg=1)
-                    dist = slope*var_bins+offset - var_bins
-                    slope_dist = np.round(dist[1]-dist[0]/(var_bins[1]-var_bins[0]),4)
-                    offset_dist = np.round(dist[0]-slope_dist*var_bins[0],4)
+                    var_bins = np.percentile(pred_var, [0,10,20,30,40,50,60,70,80,90,100]) 
+                    # slope, offset = np.polyfit(pred_var, labels_var, deg=1)
+                    slope, offset = 1, 0
+                    masks = np.array([np.logical_and(pred_var>=var_bins[i], pred_var<var_bins[i+1]) for i in range(len(var_bins)-1)])
+                    dists = [np.abs((slope*pred_var[mask] + offset)-(labels_var[mask])).mean() for mask in masks]
+                    var_label = get_var_names(self.global_config.vertex_features[i])
                     self.plot_vals(
-                        ylabel="mean of distance to linear fit",
-                        xlabel=f"true {jet_type}-hadron {self.global_config.vertex_features[i]}",
-                        plot_name=f"linear_fit_distance_model_{model_file_number}_{self.global_config.vertex_features[i]}_{jet_type}",
-                        vals=[[var_bins, dist]],
-                        labels=["$f(x^{true}) = $"+f"{slope_dist}" + "$x^{true} + $" + f"{offset_dist}"],
+                        ylabel="mean of distance to identity",
+                        xlabel=f"predicted {jet_type}-hadron {var_label}",
+                        plot_name=f"identity_distance_model_{model_file_number}_{self.global_config.vertex_features[i]}_{jet_type}",
+                        vals=[[var_bins[:-1] + (var_bins[1:]-var_bins[:-1])/2, dists]],
+                        labels=[""], #$f(x^{true}) = $"+f"{slope_dist}" + "$x^{true} + $" + f"{offset_dist}"],
                         point_styles=["bo"],
                         y_values_given=True,
                         legend_loc="lower right"
@@ -1021,60 +1002,6 @@ class Plotter:
                 colours=get_colours(2),
             )
 
-    def plotting_regression(self, model_file_numbers, var):
-        for model_file_number in model_file_numbers:
-            self.logger.info(f"plotting {var} regression for model {model_file_number}")
-            var_str, var_numb = get_var_names(var, self.used_vertex_properties)
-            if var_numb == -1:
-                self.logger.warning(f"Skipping plotting of {var}, not used in training")
-                break
-            with File(
-                f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-            ) as f:
-                try:
-                    preds = f["pred_vertex_features"][:, var_numb]
-                    labels = f["labels_vertex_features"][:, var_numb]
-                except ValueError:
-                    preds = f["pred_vertex_features"][:self.njet_test]
-                    labels = f["labels_vertex_features"][:self.njet_test]
-            var_min = np.min(labels[~np.isnan(labels)])
-            var_max = np.max(labels[~np.isnan(labels)])
-            var_min_pred = np.min(preds[~np.isnan(preds)])
-            var_max_pred = np.max(preds[~np.isnan(preds)])
-            plot_var = PlotBase(
-                ylabel=f"predicted {var_str}",
-                xlabel=f"true {var_str}",
-                n_ratio_panels=0,
-                logy=False,
-                ymin=var_min_pred,
-                ymax=var_max_pred,
-            )
-            plot_var.initialise_figure()
-            plot_var.axis_top.plot(labels, preds, "b.")
-            plot_var.axis_top.plot([var_min, var_max], [var_min, var_max], "r-")
-            plot_var.set_y_lim()
-            plot_var = create_figure(plot=plot_var)
-            for file_format in self.file_formats:
-                plot_var.savefig(
-                    f"{self.plot_dir}/{var}_regression_model_{model_file_number}.{file_format}"
-                )
-
-            plot_var_diff = PlotBase(
-                ylabel=f"Delta {var_str}",
-                xlabel=f"predicted {var_str}",
-                n_ratio_panels=0,
-                logy=False,
-            )
-
-            regs = calculate_pT_diff(pred=preds, label=labels)()
-            plot_var_diff.initialise_figure()
-            plot_var_diff.axis_top.plot(labels, regs, "b.")
-            plot_var_diff.axis_top.plot([var_min, var_max], [0, 0], "r-")
-            plot_var_diff = create_figure(plot=plot_var_diff)
-            for file_format in self.file_formats:
-                plot_var_diff.savefig(
-                    f"{self.plot_dir}/Delta_{var}_model_{model_file_number}.{file_format}"
-                )
 
     def plotting_n_tracks(self, model_file_numbers):
         with File(
@@ -1118,17 +1045,24 @@ class Plotter:
         for model_file_number in model_file_numbers:
             self.logger.info(f"plotting confusion matrix for model {model_file_number}")
             for jet_type in self.jet_types:
+                other_jet_types_int = self.jet_types.copy()
+                other_jet_types_int.remove(jet_type)
+                other_jet_types_int_dict = {}
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
                 ) as f:
-                    preds = f[f"pred_edge_{jet_type}"][:self.njet_test]
-                    labels = f[f"labels_edge_{jet_type}"][:self.njet_test]
+                    preds = f[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]
+                    labels = f[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]
                     if len(self.jet_types) > 1:
                         jet_type_int = self.jet_types.index(jet_type)
                         preds_ones = preds[jet_types_per_jet == jet_type_int].flatten()
                         labels_ones = labels[jet_types_per_jet == jet_type_int].flatten()
-                        preds_zeros = preds[jet_types_per_jet != jet_type_int].flatten()
-                        labels_zeros = labels[jet_types_per_jet != jet_type_int].flatten()
+                        for other_jet_type in other_jet_types_int:
+                            other_jet_type_int = self.jet_types.index(other_jet_type)
+                            preds_zeros = preds[jet_types_per_jet == other_jet_type_int].flatten()
+                            labels_zeros = labels[jet_types_per_jet == other_jet_type_int].flatten()
+                            other_jet_types_int_dict[f"preds_{other_jet_type}"] = preds_zeros
+                            other_jet_types_int_dict[f"labels_{other_jet_type}"] = labels_zeros
                     preds=preds.flatten()
                     labels=labels.flatten()
                 preds = calculate_binary_preds(
@@ -1138,9 +1072,11 @@ class Plotter:
                     preds_ones = calculate_binary_preds(
                         preds=preds_ones
                     )()
-                    preds_zeros = calculate_binary_preds(
-                        preds=preds_zeros
-                    )()
+                    for other_jet_type in other_jet_types_int:
+                        other_jet_types_int_dict[f"preds_{other_jet_type}"] = calculate_binary_preds(
+                            preds=other_jet_types_int_dict[f"preds_{other_jet_type}"]
+                        )()
+
                 conf_mat = confusion_matrix(labels, preds, binary=True)
                 plot_confusion_matrix(
                     conf_mat=conf_mat,
@@ -1166,20 +1102,27 @@ class Plotter:
                     for file_format in self.file_formats:
                         plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}_ones_{jet_type}.{file_format}")
                     plt.close()
-                    conf_mat_zeros = confusion_matrix(labels_zeros, preds_zeros, binary=True)
-                    plot_confusion_matrix(
-                        conf_mat=conf_mat_zeros,
-                        colorbar=True,
-                        show_normed=True,
-                        show_absolute=True,
-                        class_names=[0, 1],
-                    )
-                    plt.tight_layout()
-                    for file_format in self.file_formats:
-                        plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}_zeros_{jet_type}.{file_format}")
-                    plt.close()
+                    for other_jet_type in other_jet_types_int:
+                        conf_mat_zeros = confusion_matrix(
+                            other_jet_types_int_dict[f"labels_{other_jet_type}"], 
+                            other_jet_types_int_dict[f"preds_{other_jet_type}"], 
+                            binary=True
+                        )
+                        plot_confusion_matrix(
+                            conf_mat=conf_mat_zeros,
+                            colorbar=True,
+                            show_normed=True,
+                            show_absolute=True,
+                            class_names=[0, 1],
+                        )
+                        plt.tight_layout()
+                        for file_format in self.file_formats:
+                            plt.savefig(f"{self.plot_dir}/conf_matrix_model_{model_file_number}_{jet_type}_network_{other_jet_type}_jets.{file_format}")
+                        plt.close()
 
     def plotting_preds_per_epoch(self, model_file_numbers):
+        with File(self.test_file, "r") as f:
+            jet_types_per_jet = f["jet_type"][:self.njet_test]
         for model_file_number in model_file_numbers:
             for jet_type in self.jet_types:
                 self.logger.info(
@@ -1188,22 +1131,28 @@ class Plotter:
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
                 ) as f:
-                    preds = f[f"pred_edge_{jet_type}"][:self.njet_test].flatten()
-                    labels = f[f"labels_edge_{jet_type}"][:self.njet_test].flatten()
+                    preds = f[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]#.flatten()
+                    labels = f[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]#.flatten()
+                
                 nbins = 50
-                binrange = (min(labels), max(labels))
-                legend_labels = ["$b$ tracks", "non-$b$ tracks"]
-                preds_one = preds[labels == 1]
-                preds_zeros = preds[labels == 0]
+                legend_labels = [f"{jet_type}-jet tracks (label = 1)"]
+                preds_one = preds[labels == 1].flatten()
+                preds_zeros_all_jettypes = {}
+                for other_jet_type in self.jet_types:
+                    jet_type_int = self.jet_types.index(other_jet_type)
+                    labels_jettype = labels[jet_types_per_jet == jet_type_int].flatten()
+                    preds_zeros = preds[jet_types_per_jet == jet_type_int].flatten()
+                    preds_zeros_all_jettypes[other_jet_type] = preds_zeros[labels_jettype == 0]
+                    legend_labels.append(f"{other_jet_type}-jet tracks (label = 0)")
                 self.plot_hist(
                     ylabel="normalised number of tracks",
                     xlabel="prediction",
-                    vals=[preds_one, preds_zeros],
+                    vals=[preds_one, *[preds_zeros_all_jettypes[jt] for jt in self.jet_types]],
                     labels=legend_labels,
                     colours=get_colours(len(legend_labels)),
                     title=f"predictions for epoch {model_file_number}",
                     nbins=nbins,
-                    binrange=binrange,
+                    binrange=(0,1),
                     plot_name=f"predicitions_split_epoch_{model_file_number}_{jet_type}",
                 )
 
@@ -1220,10 +1169,10 @@ class Plotter:
                 with File(
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
                 ) as f:
-                    preds = f[f"pred_edge_{jet_type}"][:self.njet_test]
-                    labels = f[f"labels_edge_{jet_type}"][:self.njet_test]
-                    nbins = len(preds[0])
-                    ntracks = len(preds)
+                    preds = f[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]
+                    labels = f[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]
+                    nbins = self.ntracks
+                    total_ntracks = len(preds)
                     binrange=(0,nbins)
                 vals = []
                 legend_labels = []
@@ -1237,7 +1186,7 @@ class Plotter:
                             axis=1
                         )
                         preds_j = np.sum(preds_j, axis = 1).astype(float)
-                        preds_j /= ntracks
+                        preds_j /= total_ntracks
                         vals.append(preds_j)
                         legend_labels.append(f"{pred_jet_type}-jets")
                 self.plot_vals(
@@ -1265,9 +1214,10 @@ class Plotter:
                     labels = f[f"labels_vertex_features_{jet_type}"][:self.njet_test].flatten()
                 nbins = 50
                 binrange = (min(labels), max(labels))
+                # var_label = get_var_label()
                 self.plot_hist(
                     ylabel="normalised number of tracks",
-                    xlabel="prediction",
+                    xlabel="",
                     vals=[labels],
                     labels=[""],
                     colours=get_colours(1),
@@ -2016,7 +1966,6 @@ class Plotter:
         x_ticklabels=None,
         binrange=None,
     ):
-        print("plot_hisy")
         if binrange is None:
             minimum_glob = min(vals[0])
             maximum_glob = max(vals[0])
@@ -2027,8 +1976,6 @@ class Plotter:
                     minimum_glob = min_tmp if min_tmp < minimum_glob else minimum_glob
                     maximum_glob = max_tmp if max_tmp > maximum_glob else maximum_glob
             binrange = (minimum_glob, maximum_glob)
-        print(binrange)
-
         plot_histo = HistogramPlot(
             n_ratio_panels=0,
             ylabel=ylabel,
@@ -2052,7 +1999,6 @@ class Plotter:
             else:
                 # plot_histo.axis_top.set_xticks(x_ticklabels, x_ticklabels)
                 plot_histo.axis_top.set_xticklabels(x_ticklabels)
-
         for val, label, col in zip(vals, labels, colours):
             plot_histo.add(Histogram(val, label=label, colour=col))
         plot_histo.draw()
