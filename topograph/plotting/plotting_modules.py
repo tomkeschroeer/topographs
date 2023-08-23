@@ -694,6 +694,7 @@ class Plotter:
                 f"{jet_type}-jet tracks (label = 1)",
                 f"{jet_type}-jet tracks (label = 0)"
             ]
+            print(self.ntracks)
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
@@ -718,8 +719,8 @@ class Plotter:
                 self.logger.warning(f"Skipping plotting of {var}, not used in training")
                 break
             for jet_type in self.jet_types:
-                other_jet_types_int = self.jet_types.copy()
-                other_jet_types_int.remove(jet_type)
+                other_jet_types = self.jet_types.copy()
+                other_jet_types.remove(jet_type)
                 if self.small_net[jet_type]:
                     self.logger.warning(f"Skipping plotting of {jet_type}-network, no regression trained.")
                     continue
@@ -766,14 +767,14 @@ class Plotter:
                 ## plotting of unscaled targets and predictions for target
                 shift = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["shift"])
                 scale = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["scale"])
-                preds_unscaled_jettype = scale*preds[mask] - shift
-                labels_unscaled_jettype = scale*labels[mask] - shift
+                preds_unscaled_jettype = scale*preds[mask] + shift
+                labels_unscaled_jettype = scale*labels[mask] + shift
                 va__min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
                 var_max = np.max(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
                 var_min_pred = np.min(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
                 var_max_pred = np.max(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
                 bins = np.linspace(
-                    min(var_min, var_min_pred), max(var_max, var_max_pred), 60
+                    var_min_pred, var_max_pred, 60
                 )
                 hist = np.histogram2d(preds_unscaled_jettype, labels_unscaled_jettype, bins=[bins, bins])[0]
                 self.plotting_scatter_vals(
