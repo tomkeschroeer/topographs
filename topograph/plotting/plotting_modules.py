@@ -581,6 +581,7 @@ class Plotter:
                     " instead"
                 )
                 self.recalculate_effs = True
+        if self.recalculate_effs is True and self.plot_effs:
                 self.effs = np.full(
                     shape=(self.n_modelfiles), fill_value=-1.0, dtype=float
                 )
@@ -717,6 +718,8 @@ class Plotter:
                 self.logger.warning(f"Skipping plotting of {var}, not used in training")
                 break
             for jet_type in self.jet_types:
+                other_jet_types_int = self.jet_types.copy()
+                other_jet_types_int.remove(jet_type)
                 if self.small_net[jet_type]:
                     self.logger.warning(f"Skipping plotting of {jet_type}-network, no regression trained.")
                     continue
@@ -765,7 +768,7 @@ class Plotter:
                 scale = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["scale"])
                 preds_unscaled_jettype = scale*preds[mask] - shift
                 labels_unscaled_jettype = scale*labels[mask] - shift
-                var_min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
+                va__min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
                 var_max = np.max(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
                 var_min_pred = np.min(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
                 var_max_pred = np.max(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
