@@ -13,17 +13,21 @@ from h5py import File
 from torch.utils.data import IterableDataset
 
 
-def get_sample_weights(x):
-    x = x.flatten()
-    length = len(x)
+def get_sample_weights(x_n_mask):
+    x = x_n_mask[0]
+    mask = x_n_mask[1].astype(bool)
+    shape = np.array(x).shape
+    x_masked = x[mask]
+    x_masked = x_masked.flatten()
+    n_total = len(x_masked)
     n_b = sum(x)
-    n_nonb = length - n_b
-    fac_b = length / (n_b + 1e-5)
-    fac_nonb = length / (n_nonb + 1e-5)
+    n_nonb = n_total - n_b
+    fac_b = n_total / (n_b + 1e-5)
+    fac_nonb = n_total / (n_nonb + 1e-5)
     weights = np.ones(len(x))
     weights[x == 1] = fac_b
     weights[x == 0] = fac_nonb
-    return weights.reshape((length))
+    return weights.reshape((shape[0]))
 
 
 def step_activation(x):

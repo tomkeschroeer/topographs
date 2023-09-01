@@ -181,8 +181,9 @@ class TopographModel(pl.LightningModule):
 
         vertex_out, edge_out = self.forward(inputs=inputs, mask=mask)
         loss_edge_cal = binary_cross_entropy_with_logits(
-            edge_out, labels_edge, sample_weights
-        )
+            edge_out, labels_edge, sample_weights, reduction='none',
+        )[mask].mean()
+
         if self.small_net[self.tr_jet_type]: return loss_edge_cal, None, None
         loss_vertex_cal = self.loss_fn_vertex(
             vertex_out[mask_vertex], labels_vertex[mask_vertex]

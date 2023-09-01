@@ -54,7 +54,7 @@ class Topographs_dataset(IterableDataset):
                 self.labels[f"Y_edge_{jet_type}"] = self.labels_open[f"Y_edge_{jet_type}"][inds[0] : inds[1]].astype(np.float32)
                 self.labels[f"Y_vertex_features_{jet_type}"] = self.labels_open[f"Y_vertex_features_{jet_type}"][inds[0] : inds[1]].astype(np.float32)
                 self.labels[f"sample_weights_{jet_type}"] = np.array(
-                    list(map(get_sample_weights, self.labels[f"Y_edge_{jet_type}"])), dtype=np.float32
+                    list(map(get_sample_weights, np.stack((self.labels[f"Y_edge_{jet_type}"], self.mask_batch), axis=1))), dtype=np.float32
                 )
             yield self.tracks_batch, self.labels, self.mask_batch, None
 
