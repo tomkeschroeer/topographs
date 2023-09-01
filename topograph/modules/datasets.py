@@ -47,6 +47,7 @@ class Topographs_dataset(IterableDataset):
         indices = self.get_indeces()
         self.open()
         self.labels = {}
+        self.vertex_masks = {}
         for inds in indices:
             self.tracks_batch = self.tracks[inds[0] : inds[1]].astype(np.float32)
             self.mask_batch = ~np.all(self.tracks_batch[..., :3] == 0, axis=-1)
@@ -56,7 +57,8 @@ class Topographs_dataset(IterableDataset):
                 self.labels[f"sample_weights_{jet_type}"] = np.array(
                     list(map(get_sample_weights, self.labels[f"Y_edge_{jet_type}"])), dtype=np.float32
                 )
-            yield self.tracks_batch, self.labels, self.mask_batch, None
+                self.vertex_masks[f"vertex_mask_{jet_type}"] = (self.labels[f"Y_vertex_features_{jet_type}"] != -999.0)
+            yield self.tracks_batch, self.labels, self.mask_batch, self.vertex_masks
 
     def __len__(self) -> int:
         num_sampels = self.n_samples if self.n_samples != -1 else len(self.tracks)

@@ -162,9 +162,11 @@ def load_topomodel(
     return topomodels
 
 
-def get_predictions_and_labels(models, dataset, jet_types, small_net):
+def get_predictions_and_labels(models, dataset, jet_types, small_net, train_together=[]):
     preds, labels, grads = ({},{},{})
-    for jet_type in jet_types:
+    jet_types_all = jet_types.copy()
+    jet_types = np.array(jet_types)[[jet_type not in train_together for jet_type in jet_types]]
+    for jet_type in jet_types_all:
         if not small_net[jet_type]:
             preds[f"preds_v_{jet_type}"] = []
             labels[f"labels_v_{jet_type}"] = [] 
@@ -176,6 +178,22 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net):
         models[jet_type].eval()
     for sample in dataset:
         inputs, labels_dict, mask, _ = sample
+        if len(train_together) > 0:
+            # jet_types.remove(jet_type)
+            tmp_dict = {}
+            model_outputs = models[train_together[0]].forward(inputs, mask)
+            n_jettypes = int(len(model_outputs)/2)
+            tmp_dict["output_v"], tmp_dict["output_e"] = model_outputs[:n_jettypes], model_outputs[n_jettypes:]
+            for i, train_jet_type in enumerate(train_together):
+                inputs.requires_grad_()
+                tmp_dict["output_e"][i].backward(gradient=ones_like(tmp_dict["output_e"][i]))
+                preds[f"preds_e_{train_jet_type}"].append(tmp_dict["output_e"][i].detach().numpy())
+                labels[f"labels_e_{train_jet_type}"].append(labels_dict[f"Y_edge_{train_jet_type}"].detach().numpy())
+                if not small_net[train_jet_type]:
+                    preds[f"preds_v_{train_jet_type}"].append(tmp_dict["output_v"][i].detach().numpy())
+                    labels[f"labels_v_{train_jet_type}"].append(labels_dict[f"Y_vertex_features_{train_jet_type}"].detach().numpy())
+                # grad = inputs.grad.data
+                # grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
         for jet_type in jet_types:
             tmp_dict = {}
             inputs.requires_grad_()
@@ -189,7 +207,7 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net):
             grad = inputs.grad.data
             grads[f"grads_{jet_type}"].append(grad.detach().numpy())
         masks.append(mask.detach().numpy())
-    for jet_type in jet_types:
+    for jet_type in jet_types_all:
         shape_labels_e = np.array(labels[f"labels_e_{jet_type}"]).shape
         shape_preds_e = np.array(preds[f"preds_e_{jet_type}"]).shape
         if not small_net[jet_type]:
@@ -209,7 +227,7 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net):
             labels[f"labels_v_{jet_type}"] = np.array(labels[f"labels_v_{jet_type}"]).reshape(
                 shape_labels_v[0] * shape_labels_v[1], *shape_labels_v[2:]
             )
-        grads[f"grads_{jet_type}"] = np.array(grads[f"grads_{jet_type}"]).reshape(shape_grads[0] * shape_grads[1], *shape_grads[2:])
+        # grads[f"grads_{jet_type}"] = np.array(grads[f"grads_{jet_type}"]).reshape(shape_grads[0] * shape_grads[1], *shape_grads[2:])
     shape_masks = np.array(masks).shape
     masks = np.array(masks).reshape(shape_masks[0] * shape_masks[1], *shape_masks[2:])
     return preds, labels, masks, grads
@@ -421,7 +439,7 @@ class Plotter:
                         
                         if len(self.jet_types)>1:
                             for other_jet_type in self.jet_types:
-                                other_jet_type_int = self.jet_types.index(other_jet_type)
+                                other_jet_type_int = self.get_jettype_index(other_jet_type)
                                 self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"] = self.get_efficiency(
                                         preds=preds[jet_type_per_jet == other_jet_type_int],
                                         labels=labels[jet_type_per_jet == other_jet_type_int],
@@ -434,8 +452,8 @@ class Plotter:
                                         zeros_only=True
                                     )
                             self.effs_only_ones_labels = self.get_efficiency(
-                                preds=preds[jet_type_per_jet == self.jet_types.index(jet_type)],
-                                labels=labels[jet_type_per_jet == self.jet_types.index(jet_type)],
+                                preds=preds[jet_type_per_jet == self.get_jettype_index(jet_type)],
+                                labels=labels[jet_type_per_jet == self.get_jettype_index(jet_type)],
                                 effs=self.effs_only_ones_labels,
                                 slope=slope,
                                 shift=shift,
@@ -694,7 +712,6 @@ class Plotter:
                 f"{jet_type}-jet tracks (label = 1)",
                 f"{jet_type}-jet tracks (label = 0)"
             ]
-            print(self.ntracks)
             self.plot_vals(
                 ylabel="efficiency",
                 xlabel="epoch",
@@ -736,11 +753,13 @@ class Plotter:
                         labels = f[f"labels_vertex_features_{jet_type}"][:self.njet_test, var_numb]
                     except ValueError:
                         labels = f[f"labels_vertex_features_{jet_type}"][:self.njet_test]
-                jet_type_int = self.jet_types.index(jet_type)
+                jet_type_int = self.get_jettype_index(jet_type)
                 mask = (jet_type_per_jet == jet_type_int)
                 plot_names = [f"{jet_type}_jets", f"non-{jet_type}_jets"]
                 preds_masked = preds[mask]
                 labels_masked = labels[mask]
+                print(preds_masked)
+                print(labels_masked)
                 var_min = np.min(labels_masked[~np.isnan(labels_masked)])
                 var_max = np.max(labels_masked[~np.isnan(labels_masked)])
                 var_min_pred = np.min(preds_masked[~np.isnan(preds_masked)])
@@ -748,7 +767,7 @@ class Plotter:
                 bins = np.linspace(
                     min(var_min, var_min_pred), max(var_max, var_max_pred), 60
                 )
-                bins = np.linspace(-2, 2, 60)
+                # bins = np.linspace(-2, 2, 60)
                 hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
                 self.plotting_scatter_vals(
                     ylabel=f"true {var_str}",
@@ -769,7 +788,7 @@ class Plotter:
                 scale = np.float32(self.scale_dict[f"{self.config.vertex_feat_name}_{jet_type}"][var]["scale"])
                 preds_unscaled_jettype = scale*preds[mask] + shift
                 labels_unscaled_jettype = scale*labels[mask] + shift
-                va__min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
+                var_min = np.min(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
                 var_max = np.max(labels_unscaled_jettype[~np.isnan(labels_unscaled_jettype)])
                 var_min_pred = np.min(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
                 var_max_pred = np.max(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
@@ -816,7 +835,7 @@ class Plotter:
                 )
                 if len(other_jet_types) > 0:
                     for other_jet_type in other_jet_types:
-                        other_jet_type_int = self.jet_types.index(other_jet_type)
+                        other_jet_type_int = self.get_jettype_index(other_jet_type)
                         mask_non = (jet_type_per_jet == other_jet_type_int)
                         preds_other_masked = preds[mask_non]
                         self.plot_hist(
@@ -851,7 +870,7 @@ class Plotter:
             other_jet_types_int.remove(jet_type)
             with File(self.test_file, "r") as f:
                 labels = f[f"Y_edge_{jet_type}"][: self.njet_test]
-            jet_type_mask = (jet_types == self.jet_types.index(jet_type))
+            jet_type_mask = (jet_types == self.get_jettype_index(jet_type))
             inputs_jettype = inputs[jet_type_mask]
             mask_jet = mask[jet_type_mask]
             labels_jettype = labels[jet_type_mask]
@@ -1019,7 +1038,7 @@ class Plotter:
             self.logger.info(f"plotting number of tracks, {jet_type}-jets...")
             with File(self.test_file, "r") as f:
                 labels_e = f[f"Y_edge_{jet_type}"][: self.njet_test]
-                mask_jettype = f["jet_type"][:self.njet_test] == self.jet_types.index(jet_type)
+                mask_jettype = f["jet_type"][:self.njet_test] == self.get_jettype_index(jet_type)
                 # tracks_extra = tracks_extra_all[mask_jettype]
                 # edge_origin = edge_origin_all[mask_jettype]
                 labels_e = labels_e[mask_jettype]
@@ -1058,11 +1077,11 @@ class Plotter:
                     preds = f[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]
                     labels = f[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]
                     if len(self.jet_types) > 1:
-                        jet_type_int = self.jet_types.index(jet_type)
+                        jet_type_int = self.get_jettype_index(jet_type)
                         preds_ones = preds[jet_types_per_jet == jet_type_int].flatten()
                         labels_ones = labels[jet_types_per_jet == jet_type_int].flatten()
                         for other_jet_type in other_jet_types_int:
-                            other_jet_type_int = self.jet_types.index(other_jet_type)
+                            other_jet_type_int = self.get_jettype_index(other_jet_type)
                             preds_zeros = preds[jet_types_per_jet == other_jet_type_int].flatten()
                             labels_zeros = labels[jet_types_per_jet == other_jet_type_int].flatten()
                             other_jet_types_int_dict[f"preds_{other_jet_type}"] = preds_zeros
@@ -1143,7 +1162,7 @@ class Plotter:
                 preds_one = preds[labels == 1].flatten()
                 preds_zeros_all_jettypes = {}
                 for other_jet_type in self.jet_types:
-                    jet_type_int = self.jet_types.index(other_jet_type)
+                    jet_type_int = self.get_jettype_index(other_jet_type)
                     labels_jettype = labels[jet_types_per_jet == jet_type_int].flatten()
                     preds_zeros = preds[jet_types_per_jet == jet_type_int].flatten()
                     preds_zeros_all_jettypes[other_jet_type] = preds_zeros[labels_jettype == 0]
@@ -1166,7 +1185,7 @@ class Plotter:
         point_styles = ["b_","r_", "g_", "c_", "m_"]
         for model_file_number in model_file_numbers:
             for jet_type in self.jet_types:
-                jet_type_int = self.jet_types.index(jet_type)
+                jet_type_int = self.get_jettype_index(jet_type)
                 self.logger.info(
                     f"plotting track predictions for non-{jet_type} tracks for model {model_file_number}."
                 )
@@ -1182,7 +1201,7 @@ class Plotter:
                 legend_labels = []
                 for pred_jet_type in self.jet_types:
                     if pred_jet_type != jet_type:
-                        pred_jet_type_int = self.jet_types.index(pred_jet_type)
+                        pred_jet_type_int = self.get_jettype_index(pred_jet_type)
                         preds_j = np.stack(
                             calculate_binary_preds(
                                 preds=preds[jet_type_per_jet==pred_jet_type_int]
@@ -1272,7 +1291,7 @@ class Plotter:
                     grads_jettype = ma.array(grads, mask=~rep_grad_mask_jettype).mean(axis=1)
                     grads_nonjettype = ma.array(grads, mask=~rep_grad_mask_nonjettype).mean(axis=1)
 
-                    jettype_mask = (jet_types == self.jet_types.index(jet_type))
+                    jettype_mask = (jet_types == self.get_jettype_index(jet_type))
                     grads_nonjettype_shape = grads_nonjettype.shape
                     grads_nonjettype_onlyjetttype = grads[jettype_mask]
                     grads_onlyjettype_mask = grads_mask[jettype_mask]
@@ -2014,7 +2033,12 @@ class Plotter:
             if dataset_name in f.keys():
                 del f[dataset_name]
             f.create_dataset(dataset_name, data=data)
-
+    
+    def get_jettype_index(self, jettype):
+        if jettype in self.jet_types:
+            return self.jet_types.index(jettype)
+        if jettype == "bc":
+            return 12
 
 class GetEpochPrediction:
     def __init__(self, config, epoch, vars=None):
@@ -2032,7 +2056,7 @@ class GetEpochPrediction:
         njets_test = -1 if njets_test is None else njets_test
         self.dataset = Topographs_dataset(
             filename=self.test_file,
-            batch_size=min(njets_test, 1024),
+            # batch_size=min(njets_test, 1024),
             n_samples=njets_test,
             jet_types=self.jet_types,
         )
@@ -2095,7 +2119,7 @@ class GetEpochPrediction:
         #     ].shape
 
         preds, labels, masks, grads = get_predictions_and_labels(
-            models=topomodels, dataset=self.dataset_loader, jet_types=self.jet_types, small_net=self.small_net
+            models=topomodels, dataset=self.dataset_loader, jet_types=self.jet_types, small_net=self.small_net, train_together=self.config.train_together
         )
         # model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
         self.output_folder = f"{self.training_output_folder}/model_predictions".replace(

@@ -44,10 +44,10 @@ flavour:
 
 truthOriginLabel:
   b: [3,4]
-  c: 5
+  c: [5,4]
   light: 2
 
 HadronConeExclLabel:
-  b: 5
-  c: 4
+  b: [5, 54, 55]
+  c: [54, 44, 4]
   light: 0

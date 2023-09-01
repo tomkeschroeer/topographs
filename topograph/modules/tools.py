@@ -343,6 +343,7 @@ class GetConfiguration:
             "edge_weight_network",
             "vertex_network",
             "evaluation",
+            "train_together",
         ]
 
         req_items = [
@@ -398,7 +399,8 @@ class GetConfiguration:
             "edge_feature_network": {"nodes": [21, 20, 20, 30], "n_tracks_name": "tracks"},
             "edge_weight_network": {"nodes": [21, 20, 20, 30], "n_tracks_name": "tracks", "add_activation": None},
             "vertex_network": {"nodes": [30, 30, 30, 30, 1]},
-            "evaluation": {"model_file_numbers": [199]}
+            "evaluation": {"model_file_numbers": [199]},
+            "train_together": [],
         }
         setattr(self, item, defaults[item])
 
@@ -419,6 +421,10 @@ class DatasetCreater:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
+            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][
+                "HadronConeExclExtendedTruthLabelID"
+            ][self.step * self.stepsize : (self.step + 1) * self.stepsize]
+
             # dt = self.truth.dtype
             self.vertex_feat_dtypes = np.array(
                 self.truth[self.global_conf.vertex_features].dtype
@@ -429,9 +435,7 @@ class DatasetCreater:
             # self.vertex_feat_dtypes = np.stack(self.vertex_feat_dtypes)
             # self.vertex_feat_dtypes = np.dtype(list(zip(self.vertex_feat_dtypes.names, self.vertex_feat_dtypes["formats"])))
             # self.vertex_feat_dtypes = zip(self.vertex_feat_dtypes["names"], self.vertex_feat_dtypes["formats"])
-            self.HadrConeTruth = f[f"/{self.config.input_jet_name}"][
-                "HadronConeExclExtendedTruthLabelID"
-            ][self.step * self.stepsize : (self.step + 1) * self.stepsize]
+            
             self.reco = f[f"/{self.config.input_tracks_name}"].fields(self.global_conf.track_inputs)[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
@@ -442,9 +446,9 @@ class DatasetCreater:
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
-            self.trackExtraTruth = f["ConeExclFinalLabels"].fields(["pt", "phi"])[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize
-            ]
+            # self.trackExtraTruth = 
+            # f["ConeExclFinalLabels"].fields(["pt", "phi"])[
+              #
             # self.edge_features = f["/edge_features"][ConeExclFinalLabels
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
@@ -457,7 +461,6 @@ class DatasetCreater:
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
         self.trackExtra = self.trackExtra[self.ind_truthflav]
-        self.trackExtraTruth = self.trackExtraTruth[self.ind_truthflav]
         self.reco_jets = self.reco_jets[self.ind_truthflav]
         # self.edge_features = self.edge_features[self.ind_truthflav]
 
@@ -501,7 +504,7 @@ class DatasetCreater:
         return self.trackExtra
 
     def get_extra_track_truth(self):
-        return self.trackExtraTruth
+        return self.truth["flavour"] #self.trackExtraTruth
 
     def get_unscaled_pt(self):
         flavour = self.truth["flavour"]
