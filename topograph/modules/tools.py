@@ -347,6 +347,7 @@ class GetConfiguration:
             "edge_weight_network",
             "vertex_network",
             "evaluation",
+            "test_files"
         ]
 
         req_items = [
@@ -402,7 +403,8 @@ class GetConfiguration:
             "edge_feature_network": {"nodes": [21, 20, 20, 30], "n_tracks_name": "tracks"},
             "edge_weight_network": {"nodes": [21, 20, 20, 30], "n_tracks_name": "tracks", "add_activation": None},
             "vertex_network": {"nodes": [30, 30, 30, 30, 1]},
-            "evaluation": {"model_file_numbers": [199]}
+            "evaluation": {"model_file_numbers": [199]},
+            "test_files": {},
         }
         setattr(self, item, defaults[item])
 

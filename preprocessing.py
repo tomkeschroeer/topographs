@@ -6,6 +6,7 @@ from topograph.preprocessing_tools import (  # H5toTfrecordsConverter,
     Merge,
     Prepare,
     Scaler,
+    MergeTestFile
 )
 
 
@@ -34,6 +35,7 @@ def get_parser():
     )
     parser.add_argument("--prepare", "-p", action="store_true", help="prepares samples")
     parser.add_argument("--merge", "-m", action="store_true", help="merge samples")
+    parser.add_argument("--merge_test_files", "-mtf", action="store_true", help="merge test files")
     parser.add_argument("--to_records", "-r", action="store_true", help="merge samples")
 
     args = parser.parse_args()
@@ -70,3 +72,6 @@ if __name__ == "__main__":
     if args.apply_scales:
         apply_scales = Apply_Scaler(config, dataset_types)
         apply_scales.Run()
+    if args.merge_test_files:
+        merge_test_file = MergeTestFile(config, dataset_types)
+        merge_test_file.Run()
