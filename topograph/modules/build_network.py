@@ -45,7 +45,8 @@ class TopographModel(pl.LightningModule):
         loss_fac_edge: float = 100,
         loss_fac_vert: float = 1,
         tr_jet_type: str = "b",
-        small_net: dict = {}
+        small_net: dict = {},
+        jet_types: list = ["b", "c", "light"]
     ):
         """
         Init of TopographModel class
@@ -78,6 +79,7 @@ class TopographModel(pl.LightningModule):
         self.loss_fac_vert = loss_fac_vert
         self.tr_jet_type = tr_jet_type
         self.small_net = small_net
+        self.jet_types = jet_types
 
         self.nodes_feat = nodes_feat
         self.nodes_weight = nodes_weight
@@ -169,16 +171,17 @@ class TopographModel(pl.LightningModule):
         return dense_vertex_out_b, dense_vertex_out_c, edge_wt_out_b, edge_wt_out_c
 
     def basis_step(self, sample, _batch_idx):
-        inputs, labels, mask, mask_vertex = sample
+        inputs, labels, mask, mask_vertex, jet_type = sample
+        jet_type_mask = (jet_type == self.jet_types.index(self.tr_jet_type))
         # labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
-        labels_edge_b = labels[f"Y_edge_b"]
-        labels_edge_c = labels[f"Y_edge_c"]
-        sample_weights_b = labels[f"sample_weights_b"]
-        sample_weights_c = labels[f"sample_weights_c"]
+        mask = mask[jet_type_mask]
+        labels_edge_b = labels[f"Y_edge_b"][jet_type_mask]
+        labels_edge_c = labels[f"Y_edge_c"][jet_type_mask]
+        sample_weights_b = labels[f"sample_weights_b"][jet_type_mask]
+        sample_weights_c = labels[f"sample_weights_c"][jet_type_mask]
         # if not self.small_net[self.tr_jet_type]:
-        labels_vertex_b =  labels[f"Y_vertex_features_b"]
-        labels_vertex_c =  labels[f"Y_vertex_features_c"]
-
+        labels_vertex_b =  labels[f"Y_vertex_features_b"][jet_type_mask]
+        labels_vertex_c =  labels[f"Y_vertex_features_c"][jet_type_mask]
         labels_shape_c = labels_edge_c.size()
         labels_edge_c = labels_edge_c.reshape(labels_shape_c[0], labels_shape_c[1], 1)
         sample_weight_shape_c = sample_weights_c.size()

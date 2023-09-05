@@ -177,7 +177,7 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net, train_toge
     for jet_type in jet_types:
         models[jet_type].eval()
     for sample in dataset:
-        inputs, labels_dict, mask, _ = sample
+        inputs, labels_dict, mask, _, _= sample
         if len(train_together) > 0:
             # jet_types.remove(jet_type)
             tmp_dict = {}
@@ -194,16 +194,6 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net, train_toge
                     labels[f"labels_v_{train_jet_type}"].append(labels_dict[f"Y_vertex_features_{train_jet_type}"].detach().numpy())
                 # grad = inputs.grad.data
                 # grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
-        for jet_type in jet_types:
-            tmp_dict = {}
-            inputs.requires_grad_()
-            tmp_dict["output_v"], tmp_dict["output_e"] = models[jet_type].forward(inputs, mask)
-            tmp_dict["output_e"].backward(gradient=ones_like(tmp_dict["output_e"]))
-            preds[f"preds_e_{jet_type}"].append(tmp_dict["output_e"].detach().numpy())
-            labels[f"labels_e_{jet_type}"].append(labels_dict[f"Y_edge_{jet_type}"].detach().numpy())
-            if not small_net[jet_type]:
-                preds[f"preds_v_{jet_type}"].append(tmp_dict["output_v"].detach().numpy())
-                labels[f"labels_v_{jet_type}"].append(labels_dict[f"Y_vertex_features_{jet_type}"].detach().numpy())
             grad = inputs.grad.data
             grads[f"grads_{jet_type}"].append(grad.detach().numpy())
         masks.append(mask.detach().numpy())
@@ -287,6 +277,9 @@ class Plotter:
         ).get("plot", False)
         self.plot_effs_ones = self.config.evaluation.get(
             "plot_efficiency_ones_only", {}
+        ).get("plot", False)
+        self.plot_effs_per_pt = self.config.evaluation.get(
+            "plot_effs_per_pt", {}
         ).get("plot", False)
         self.plot_pt = self.config.evaluation.get("plot_pt", {}).get("plot", False)
         self.plot_eta = self.config.evaluation.get("plot_eta", {}).get("plot", False)
@@ -400,14 +393,8 @@ class Plotter:
                     ) as model_data:
                         preds = model_data[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]
                         labels = model_data[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]
+                        mask = model_data["/mask"][:self.njet_test, :self.ntracks]
                         # grads = model_data["grads"][:self.njet_test]
-                        slope, shift, c1, c2 = None, None, None, None
-                        if self.add_activation == "shifted_relu":
-                            slope = model_data["slope"][()]
-                            shift = model_data["shift"][()]
-                        elif self.add_activation == "sigmoid":
-                            c1 = model_data["c1"][()]
-                            c2 = model_data["c2"][()]
 
                     if self.plot_preds_scatter and self.recalculate_preds_scatter:
                         self.logger.info(
@@ -424,64 +411,61 @@ class Plotter:
                     if self.recalculate_effs:
                         self.logger.info(f"getting efficiency for model model_epoch{i:03d}")
                         self.effs = self.get_efficiency(
-                            preds=preds,
-                            labels=labels,
+                            preds=preds[mask],
+                            labels=labels[mask],
                             effs=self.effs,
-                            slope=slope,
-                            shift=shift,
-                            c1=c1,
-                            c2=c2,
                             pos=i,
                         )
+                        print(f"{jet_type} all")
+                        print(self.effs[-1])
                         self.logger.info(
                             f"getting efficiency, zeros only, for model model_epoch{i:03d}"
                         )
                         
                         if len(self.jet_types)>1:
                             for other_jet_type in self.jet_types:
+<<<<<<< HEAD
                                 other_jet_type_int = self.get_jettype_index(other_jet_type)
+=======
+                                other_jet_type_int = self.jet_types.index(other_jet_type)
+                                mask_oj = mask[jet_type_per_jet == other_jet_type_int]
+>>>>>>> 83f0bbe6a337afb1213ff02d60193b837e6c2a36
                                 self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"] = self.get_efficiency(
-                                        preds=preds[jet_type_per_jet == other_jet_type_int],
-                                        labels=labels[jet_type_per_jet == other_jet_type_int],
+                                        preds=preds[jet_type_per_jet == other_jet_type_int][mask_oj],
+                                        labels=labels[jet_type_per_jet == other_jet_type_int][mask_oj],
                                         effs=self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"],
-                                        slope=slope,
-                                        shift=shift,
-                                        c1=c1,
-                                        c2=c2,
                                         pos=i,
                                         zeros_only=True
                                     )
+                                print(f"eff zero {other_jet_type}")
+                                print(self.effs_only_zero_labels[f"{jet_type}_net_{other_jet_type}_jets"][-1])
+                            mask_j = mask[jet_type_per_jet == self.jet_types.index(jet_type)]
                             self.effs_only_ones_labels = self.get_efficiency(
+<<<<<<< HEAD
                                 preds=preds[jet_type_per_jet == self.get_jettype_index(jet_type)],
                                 labels=labels[jet_type_per_jet == self.get_jettype_index(jet_type)],
+=======
+                                preds=preds[jet_type_per_jet == self.jet_types.index(jet_type)][mask_j],
+                                labels=labels[jet_type_per_jet == self.jet_types.index(jet_type)][mask_j],
+>>>>>>> 83f0bbe6a337afb1213ff02d60193b837e6c2a36
                                 effs=self.effs_only_ones_labels,
-                                slope=slope,
-                                shift=shift,
-                                c1=c1,
-                                c2=c2,
                                 pos=i,
                                 ones_only=True
                             )
+                            print(f"{jet_type} ones")
+                            print(self.effs_only_ones_labels[-1])
                         else:
                             self.effs_zeros = self.get_efficiency(
-                                preds=preds,
-                                labels=labels,
+                                preds=preds[mask],
+                                labels=labels[mask],
                                 effs=self.effs_zeros,
-                                slope=slope,
-                                shift=shift,
-                                c1=c1,
-                                c2=c2,
                                 pos=i,
                                 zeros_only=True,
                             )
                             self.effs_ones = self.get_efficiency(
-                                preds=preds,
-                                labels=labels,
+                                preds=preds[mask],
+                                labels=labels[mask],
                                 effs=self.effs_ones,
-                                slope=slope,
-                                shift=shift,
-                                c1=c1,
-                                c2=c2,
                                 pos=i,
                                 ones_only=True,
                             )
@@ -548,6 +532,11 @@ class Plotter:
 
         if self.plot_vertex_labels:
             self.plotting_vertex_labels_per_epoch(
+                model_file_numbers=self.model_file_numbers
+            )
+
+        if self.plot_effs_per_pt:
+            self.plotting_efficiencies_per_pt(
                 model_file_numbers=self.model_file_numbers
             )
 
@@ -655,10 +644,6 @@ class Plotter:
         labels,
         effs,
         pos,
-        slope=None,
-        shift=None,
-        c1=None,
-        c2=None,
         zeros_only=False,
         ones_only=False,
     ):
@@ -668,10 +653,6 @@ class Plotter:
             preds,
             labels,
             Ntotal,
-            slope,
-            shift,
-            c1,
-            c2,
             zeros_only=zeros_only,
             ones_only=ones_only,
             cut_val=self.cut_val,
@@ -726,6 +707,88 @@ class Plotter:
                 labels=plot_labels,
                 point_styles=point_styles[:len(plot_labels)],
             )
+
+    def plotting_efficiencies_per_pt(self, model_file_numbers):
+        point_styles = ["bo","ro", "go", "co", "mo"]
+        with File(self.test_file, "r") as f:
+            jet_type_per_jet = f["jet_type"][:self.njet_test]
+            track_pt = f["track_extra"].fields("pt")[:self.njet_test, :self.ntracks]
+        for jet_type in self.jet_types:
+            other_jet_types = self.jet_types.copy()
+            other_jet_types.remove(jet_type)
+            for model_file_number in model_file_numbers:
+                with File(
+                        f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+                    ) as f:
+                        preds_edge = f[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]
+                        labels_edge = f[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]
+                jet_type_mask = (jet_type_per_jet == self.jet_types.index(jet_type))
+                pt_parts = np.percentile(track_pt[~np.isnan(track_pt)], [n*10 for n in range(11)])
+                preds_edge_jettype = preds_edge[jet_type_mask]
+                labels_edge_jettype = labels_edge[jet_type_mask]
+                track_pt_jettype = track_pt[jet_type_mask]
+
+                preds_edge_label_1 = preds_edge_jettype[labels_edge_jettype == 1]
+                labels_edge_label_1 = labels_edge_jettype[labels_edge_jettype == 1]
+                track_pt_jettype_label_1 = track_pt_jettype[labels_edge_jettype == 1]
+                track_pt_fl_label_1 = track_pt_jettype_label_1.flatten()
+
+                preds_edge_label_0 = preds_edge_jettype[labels_edge_jettype == 0]
+                labels_edge_label_0 = labels_edge_jettype[labels_edge_jettype == 0]
+                track_pt_jettype_label_0 = track_pt_jettype[labels_edge_jettype == 0]
+                track_pt_fl_label_0 = track_pt_jettype_label_0.flatten()
+
+                effs_label_1, bins_label_1 = self.get_effs(pt_parts,track_pt_fl_label_1,preds_edge_label_1,labels_edge_label_1, ones_only=True)
+                effs_label_0, bins_label_0 = self.get_effs(pt_parts,track_pt_fl_label_0,preds_edge_label_0,labels_edge_label_0, zeros_only=True)
+
+                eff_other_jets = {}
+                bins_other_jets = {}
+                for other_jet in other_jet_types:
+                    jet_type_mask = (jet_type_per_jet == self.jet_types.index(other_jet))
+                    preds_edge_jettype = preds_edge[jet_type_mask]
+                    labels_edge_jettype = labels_edge[jet_type_mask]
+                    track_pt_jettype = track_pt[jet_type_mask]
+                    track_pt_fl_jettype = track_pt_jettype[labels_edge_jettype==0]
+                    eff_other_jets[other_jet], bins_other_jets[other_jet] = self.get_effs(
+                        pt_parts,
+                        track_pt_fl_jettype,
+                        preds_edge_jettype[labels_edge_jettype==0],
+                        labels_edge_jettype[labels_edge_jettype==0],
+                        zeros_only=True,
+                        ones_only=False,
+                    )
+
+                self.plot_vals(
+                    xlabel="$p_T$",
+                    ylabel="efficiency",
+                    plot_name=f"eff_per_pt_{jet_type}_model_{model_file_number}",
+                    vals=[[bins_label_1, effs_label_1], [bins_label_0, effs_label_0], *[[bins_other_jets[other_jet], eff_other_jets[other_jet]] for other_jet in other_jet_types]],
+                    labels=[f"{jet_type}-jets, label = 1", f"{jet_type}-jets, label = 0", *[f"{other_jet}-jets, label = 0" for other_jet in other_jet_types]],
+                    point_styles=point_styles[:2+len(other_jet_types)],
+                    title=None,
+                    y_values_given=True,
+                    # x_ticklabels=bins_str,
+                    return_plot=False,
+                    legend_loc="best"
+                )
+
+    def get_effs(self,pt_parts,track_pt_fl,preds_edge,labels_edge,zeros_only=False,ones_only=False,):
+        effs=[]
+        for i in range(len(pt_parts)-1):
+            mask = np.array(np.logical_and(pt_parts[i]<track_pt_fl, pt_parts[i+1]>track_pt_fl))
+            pred_pt_part = preds_edge[mask]
+            labels_pt_part = labels_edge[mask]
+            effs.append(calculate_efficiency(
+                pred=pred_pt_part,#pred_pt_part,
+                label=labels_pt_part,#labels_pt_part, 
+                Ntotal=len(pred_pt_part.flatten()), # len(pred_pt_part.flatten())
+                zeros_only=zeros_only,
+                ones_only=ones_only,
+            )())
+        bins = pt_parts[:-1]+(pt_parts[1:]-pt_parts[:-1])/2
+        bins[-1] = pt_parts[-2] + (pt_parts[-2]-pt_parts[-3])/2
+        return effs, bins
+
 
     def plotting_regression_scatter(self, model_file_numbers, var):
         with File(self.test_file, "r") as f:
@@ -1156,14 +1219,24 @@ class Plotter:
                 ) as f:
                     preds = f[f"pred_edge_{jet_type}"][:self.njet_test, :self.ntracks]#.flatten()
                     labels = f[f"labels_edge_{jet_type}"][:self.njet_test, :self.ntracks]#.flatten()
-                
+                    mask = f["mask"][:self.njet_test, :self.ntracks]
                 nbins = 50
                 legend_labels = [f"{jet_type}-jet tracks (label = 1)"]
-                preds_one = preds[labels == 1].flatten()
+                labels_j = labels[mask]
+                preds_j = preds[mask]
+                # preds_one = preds_j[labels_j == 1].flatten()
+                preds_one = preds[labels == 1]
                 preds_zeros_all_jettypes = {}
                 for other_jet_type in self.jet_types:
+<<<<<<< HEAD
                     jet_type_int = self.get_jettype_index(other_jet_type)
+=======
+                    jet_type_int = self.jet_types.index(other_jet_type)
+                    mask_j = mask[jet_types_per_jet == jet_type_int]
+                    labels_jettype = labels[jet_types_per_jet == jet_type_int][mask_j].flatten()
+>>>>>>> 83f0bbe6a337afb1213ff02d60193b837e6c2a36
                     labels_jettype = labels[jet_types_per_jet == jet_type_int].flatten()
+                    # preds_zeros = preds[jet_types_per_jet == jet_type_int][mask_j].flatten()
                     preds_zeros = preds[jet_types_per_jet == jet_type_int].flatten()
                     preds_zeros_all_jettypes[other_jet_type] = preds_zeros[labels_jettype == 0]
                     legend_labels.append(f"{other_jet_type}-jet tracks (label = 0)")
@@ -1177,6 +1250,7 @@ class Plotter:
                     nbins=nbins,
                     binrange=(0,1),
                     plot_name=f"predicitions_split_epoch_{model_file_number}_{jet_type}",
+                    logy=True
                 )
 
     def plotting_non_jet_tracks_pred(self, model_file_numbers):
@@ -1923,6 +1997,7 @@ class Plotter:
         title=None,
         y_values_given=False,
         y_ticklabels=None,
+        x_ticklabels=None,
         return_plot=False,
         legend_loc="best"
     ):
@@ -1930,9 +2005,9 @@ class Plotter:
             ymax = max(vals[0][1])
             ymin = min(vals[0][1])
             if len(vals) > 1:
-                for val in vals[1:][1]:
-                    ymax_tmp = max(val)
-                    ymin_tmp = min(val)
+                for val in vals[1:]:
+                    ymax_tmp = max(val[1])
+                    ymin_tmp = min(val[1])
                     ymax = ymax_tmp if ymax < ymax_tmp else ymax
                     ymin = ymin_tmp if ymin > ymin_tmp else ymin
         else:
@@ -1944,7 +2019,6 @@ class Plotter:
                     ymin_tmp = min(val)
                     ymax = ymax_tmp if ymax < ymax_tmp else ymax
                     ymin = ymin_tmp if ymin > ymin_tmp else ymin
-
         band = (ymax - ymin) / 30
         plot = PlotBase(
             ylabel=ylabel,
@@ -1960,11 +2034,17 @@ class Plotter:
         for val, label, point_style in zip(vals, labels, point_styles):
             if y_values_given:
                 plot.axis_top.plot(val[0], val[1], point_style, label=label)
+                # plot.axis_top.hist(val[1], bins = val[0])
             else:
                 plot.axis_top.plot(val, point_style, label=label)
+                # plot.axis_top.bar(val[0], val[1])#, point_style, label=label)
+                # plot.axis_top.show()
             if y_ticklabels is not None:
                 plot.axis_top.set_yticks(list(range(len(y_ticklabels))))
                 plot.axis_top.set_yticklabels(y_ticklabels)
+            # if x_ticklabels is not None:
+            #     plot.axis_top.set_xticks(list(range(len(x_ticklabels))))
+            #     plot.axis_top.set_xticklabels(x_ticklabels)
         plot.axis_top.legend(loc=legend_loc)
         plot = create_figure(plot=plot)
         if return_plot:
@@ -1972,6 +2052,7 @@ class Plotter:
         else:
             for file_format in self.file_formats:
                 plot.savefig(f"{self.plot_dir}/{plot_name}.{file_format}")
+        plot.fig.clear()
 
     def plot_hist(
         self,
@@ -2059,6 +2140,7 @@ class GetEpochPrediction:
             # batch_size=min(njets_test, 1024),
             n_samples=njets_test,
             jet_types=self.jet_types,
+            train=False,
         )
         self.dataset_loader = DataLoader(
             self.dataset,

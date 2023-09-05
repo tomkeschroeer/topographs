@@ -348,6 +348,7 @@ class GetConfiguration:
             "vertex_network",
             "evaluation",
             "train_together",
+            "file_dirs"
         ]
 
         req_items = [
@@ -405,6 +406,7 @@ class GetConfiguration:
             "vertex_network": {"nodes": [30, 30, 30, 30, 1]},
             "evaluation": {"model_file_numbers": [199]},
             "train_together": [],
+            "file_dirs": {},
         }
         setattr(self, item, defaults[item])
 

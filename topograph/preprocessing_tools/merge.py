@@ -21,7 +21,7 @@ class Merge:
         if len(jet_types) == 1:
             logger.info("no need to merge, only one jet type is used.")
             with File(
-                f"{output_file}.h5", "a"
+                f"{output_file}_{jet_types[0]}.h5", "a"
             ) as f:
                 if "jet_type" not in f.keys():
                     f.create_dataset("jet_type", data=np.full(shape=(len(f[f"{self.config.edge_name}_{jet_types[0]}"])), fill_value=0))
@@ -31,7 +31,7 @@ class Merge:
             + self.dataset_types["_val"]["njets"]
             + self.dataset_types["_test"]["njets"]
         )/len(jet_types))
-        stepsize = min(500_000, int(njets / 2))
+        stepsize = min(50_000, int(njets / 2))
         n_steps = njets // stepsize + 1
         array_full={}
         array_dict_labels_full={}
@@ -46,7 +46,9 @@ class Merge:
             f"{output_file}.h5", "w"
         ) as h5fw:
             for step in range(n_steps):
+                logger.info(f"merging in process, step {step} from {n_steps}")
                 for i, jet_type in enumerate(jet_types):
+                    logger.info(f"getting data for {jet_type}-jets...")
                     with File(f"{output_file}_{jet_type}.h5", "r") as h5fr:
                         truthorigin = h5fr["/track_extra_truth"][step*stepsize:(step+1)*stepsize]
                         inputs = h5fr["/X_train_tracks"][step*stepsize:(step+1)*stepsize]

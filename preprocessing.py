@@ -6,8 +6,11 @@ from topograph.preprocessing_tools import (  # H5toTfrecordsConverter,
     Merge,
     Prepare,
     Scaler,
+    MergeTestFile
 )
-
+from topograph.modules import (
+    get_logger
+)
 
 def get_parser():
     """
@@ -33,7 +36,9 @@ def get_parser():
         "--apply_scales", "-a", action="store_true", help="apply scales"
     )
     parser.add_argument("--prepare", "-p", action="store_true", help="prepares samples")
+    parser.add_argument("--jet_type", "-j", default=None, help="select jet type")
     parser.add_argument("--merge", "-m", action="store_true", help="merge samples")
+    parser.add_argument("--merge_test_files", "-mtf", action="store_true", help="merge test files")
     parser.add_argument("--to_records", "-r", action="store_true", help="merge samples")
 
     args = parser.parse_args()
@@ -41,6 +46,7 @@ def get_parser():
 
 
 if __name__ == "__main__":
+    logger = get_logger()
     args = get_parser()
     config = GetConfiguration(args.config)
     output_dir = f"{config.output}"
@@ -58,15 +64,21 @@ if __name__ == "__main__":
             "final_filename": f"{output_dir}/{config.testing_file_name}",
         },
     }
-    if args.prepare:
-        prepare = Prepare(config, dataset_types)
+    if (args.prepare and args.jet_type is not None):
+        prepare = Prepare(config, dataset_types, args.jet_type)
         prepare.Run()
+    elif args.prepare:
+        logger.warnung("You need to specify a jet type when using prepare")
     if args.scale:
         scale = Scaler(config)
         scale.Run()
     if args.merge:
+        print("run")
         merge = Merge(config, dataset_types)
         merge.Run()
     if args.apply_scales:
         apply_scales = Apply_Scaler(config, dataset_types)
         apply_scales.Run()
+    if args.merge_test_files:
+        merge_test_file = MergeTestFile(config, dataset_types)
+        merge_test_file.Run()
