@@ -175,11 +175,12 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net):
     for jet_type in jet_types:
         models[jet_type].eval()
     for sample in dataset:
-        inputs, labels_dict, mask, _ = sample
+        inputs, labels_dict, mask, _, _ = sample
         for jet_type in jet_types:
             tmp_dict = {}
             inputs.requires_grad_()
             tmp_dict["output_v"], tmp_dict["output_e"] = models[jet_type].forward(inputs, mask)
+            # print(tmp_dict["output_e"].shape)
             tmp_dict["output_e"].backward(gradient=ones_like(tmp_dict["output_e"]))
             preds[f"preds_e_{jet_type}"].append(tmp_dict["output_e"].detach().numpy())
             labels[f"labels_e_{jet_type}"].append(labels_dict[f"Y_edge_{jet_type}"].detach().numpy())
@@ -379,7 +380,7 @@ class Plotter:
             other_jet_types.remove(jet_type)
             self.get_all_values()
             if self.check_if_recalculate():
-                for i in [199]: # range(self.n_modelfiles):
+                for i in range(self.n_modelfiles):
                     with File(
                         f"{self.model_pred_folder}/epoch_pred_{i:03d}.h5", "r"
                     ) as model_data:
@@ -2112,6 +2113,7 @@ class GetEpochPrediction:
             batch_size=min(njets_test, 1024),
             n_samples=njets_test,
             jet_types=self.jet_types,
+            train=False,
         )
         self.dataset_loader = DataLoader(
             self.dataset,

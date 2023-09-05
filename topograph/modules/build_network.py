@@ -45,7 +45,8 @@ class TopographModel(pl.LightningModule):
         loss_fac_edge: float = 100,
         loss_fac_vert: float = 1,
         tr_jet_type: str = "b",
-        small_net: dict = {}
+        small_net: dict = {},
+        jet_types: list = ["b", "c", "light"]
     ):
         """
         Init of TopographModel class
@@ -78,6 +79,7 @@ class TopographModel(pl.LightningModule):
         self.loss_fac_vert = loss_fac_vert
         self.tr_jet_type = tr_jet_type
         self.small_net = small_net
+        self.jet_types = jet_types
 
         self.nodes_feat = nodes_feat
         self.nodes_weight = nodes_weight
@@ -158,11 +160,14 @@ class TopographModel(pl.LightningModule):
         return dense_vertex_out, edge_wt_out
 
     def basis_step(self, sample, _batch_idx, save=False):
-        inputs, labels, mask, mask_vertex = sample
-        labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
-        sample_weights = labels[f"sample_weights_{self.tr_jet_type}"]
+        inputs, labels, mask, mask_vertex, jet_type = sample
+        jet_type_mask = (jet_type == self.jet_types.index(self.tr_jet_type))
+        mask = mask[jet_type_mask]
+        inputs = inputs[jet_type_mask]
+        labels_edge = labels[f"Y_edge_{self.tr_jet_type}"][jet_type_mask]
+        sample_weights = labels[f"sample_weights_{self.tr_jet_type}"][jet_type_mask]
         if not self.small_net[self.tr_jet_type]:
-            labels_vertex =  labels[f"Y_vertex_features_{self.tr_jet_type}"]
+            labels_vertex =  labels[f"Y_vertex_features_{self.tr_jet_type}"][jet_type_mask]
 
         labels_shape = labels_edge.size()
         labels_edge = labels_edge.reshape(labels_shape[0], labels_shape[1], 1)

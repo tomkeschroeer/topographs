@@ -181,7 +181,7 @@ if __name__ == "__main__":
         filename=training_file,
         batch_size=min(njets, 1024),
         n_samples=njets,
-        jet_types=config.jet_types
+        jet_types=config.jet_types,
     )
 
     tracks_loader = DataLoader(tracks_dataset, batch_size=None)
