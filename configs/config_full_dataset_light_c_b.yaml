@@ -2,8 +2,8 @@ input: /srv/beegfs/scratch/groups/dpnc/atlas/FTag/samples/r22/ttbar_zprime_fullt
 #/home/users/s/schroeer/scratch/PhD/Umami_Training/Samples_Preprocessed/DIPS_comp/20220607_samples_DIPS_comp/PFlow-hybrid-resampled_scaled_shuffled.h5
 
 output: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_topographs/Output_ttbar_light_c_b/
-output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b
-model_name: model_lightbcjets
+output_training: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b_sim
+model_name: model_lightbcjets_sim
 
 one_file_name: topograph_ttbar_inputfiles_combined.h5
 preprocessing_file_name: preprocessed_ttbar_topograph.h5
@@ -22,11 +22,16 @@ input_truth_name: truth_hadrons
 input_jet_name: jets
 
 model_files:
-  c: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_cjets
-  b: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_clean_pt_datasetad
-  light: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light/
+  c:  /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b_sim
+  b:  /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b_sim
+  light: /home/users/s/schroeer/scratch/PhD/Topograph_repos/Outputs_train_topographs_light_c_b_sim
 
 jet_types:
+  - c
+  - b
+  - light
+
+train_together:
   - c
   - b
   - light
@@ -35,6 +40,10 @@ small_net:
   c: False
   b: False
   light: True
+
+file_formats: 
+  - pdf
+  - png
 
 tracks_name: "X_train_tracks"
 edge_name: "Y_edge"
@@ -45,7 +54,7 @@ epochs: 200
 stepsize: 10_000
 lr: 0.01
 use_sample_weights: False
-loss_fac_edge: 100
+loss_fac_edge: 1
 loss_fac_vert: 1
 
 edge_feature_network:
@@ -68,26 +77,24 @@ tfrecords:
 evaluation:
   model_file_numbers:
     # - 1
-    # - 45
-    # - 90
-    # - 145
+    - 45
+    - 90
+    - 145
     - 199
   n_samples: 1_000
+  ntracks: 40
+  file_formats:
+    - png
+    - pdf
   plot_efficiency:
-    plot: False
-    recalculate: False
-  plot_efficiency_zeros_only:
-    plot: False 
-    recalculate: False
-  plot_efficiency_ones_only:
     plot: False
     recalculate: False
   plot_parameters:
     plot: False
     recalculate: False
   plot_pt:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_eta:
     plot: False
     recalculate: False
@@ -116,4 +123,8 @@ evaluation:
   plot_track_origin:
     plot: False
   plot_inputs:
+    plot: False
+  plot_non_jet_tracks:
+    plot: False
+  plot_vertex_labels:
     plot: False

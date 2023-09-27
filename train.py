@@ -138,6 +138,7 @@ if __name__ == "__main__":
         loss_fac_vert=loss_fac_vert,
         tr_jet_type=config.train_jet_type,
         small_net=config.small_net,
+        jet_types=config.jet_types,
     )
 
     makedirs(f"{training_output_folder}/modelfiles", exist_ok=True)

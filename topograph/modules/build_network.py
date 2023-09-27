@@ -11,7 +11,7 @@ import torch.optim as optim
 import wandb
 from h5py import File
 from torch.autograd import grad
-from torch.nn import BCELoss, BCEWithLogitsLoss, Module, MSELoss, Softplus
+from torch.nn import BCELoss, BCEWithLogitsLoss, Module, MSELoss, Softplus, ModuleList
 from torch.nn.functional import binary_cross_entropy_with_logits
 
 from topograph.modules.layers import (
@@ -83,49 +83,37 @@ class TopographModel(pl.LightningModule):
 
         self.nodes_feat = nodes_feat
         self.nodes_weight = nodes_weight
+        self.nodes_feat_prime = nodes_feat.copy()
+        self.nodes_weight_prime = nodes_weight.copy()
+        self.nodes_feat_prime[0] = self.nodes_feat_prime[0] + self.nodes_feat_prime[-1]
+        self.nodes_weight_prime[0] = self.nodes_weight_prime[0] + self.nodes_feat_prime[-1]
+
         self.nodes_vertex = nodes_vertex
 
-        self.feat_layer_b = FeatLayers(nodes=self.nodes_feat)
-        self.edge_layer_b = EdgeLayers(nodes=self.nodes_weight)
-        self.feat_layer_c = FeatLayers(nodes=self.nodes_feat)
-        self.edge_layer_c = EdgeLayers(nodes=self.nodes_weight)
+        self.feat_layers = ModuleList()
+        self.edge_layers = ModuleList()
+        self.dot_products = ModuleList()
 
-        if self.activation_name == "shifted_relu":
-            self.add_activation = ShiftRelu()
-        elif self.activation_name == "sigmoid":
-            self.add_activation = Sigmoid()
-        elif self.activation_name == "softplus":
-            norm = T.tensor(np.log(1 + np.exp(1)))
-            self.add_activation = Softplus_norm(norm=norm)
-        elif self.activation_name is None:
-            self.add_activation = False
-        else:
-            raise KeyError(
-                f"Undefined additional actrivation: {self.activation_name}. Please"
-                ' select one of the following: ["shifted_relu", "sigmoid", "softplus"]'
-                " or leave empty/remove option."
-            )
-        self.dot_product_c = DotProduct()
-        self.dot_product_b = DotProduct()
-        self.vertex_network_c = VertexNetwork(nodes=self.nodes_vertex)
-        self.vertex_network_b = VertexNetwork(nodes=self.nodes_vertex)
+        self.feat_layers_prime = ModuleList()
+        self.edge_layers_prime = ModuleList()
+        self.dot_products_prime = ModuleList()
+
+        self.vertex_networks = ModuleList()
+
+        for jet_type in self.jet_types:
+            if self.small_net[jet_type]:
+                self.vertex_networks.append(None)
+                self.feat_layers_prime.append(None)
+            else:
+                self.vertex_networks.append(VertexNetwork(nodes=self.nodes_vertex))
+                self.feat_layers_prime.append(FeatLayers(nodes=self.nodes_feat))
+            self.feat_layers.append(FeatLayers(nodes=self.nodes_feat))
+            self.edge_layers.append(EdgeLayers(nodes=self.nodes_weight))
+            self.dot_products.append(DotProduct())
+            self.edge_layers_prime.append(EdgeLayers(nodes=self.nodes_weight_prime))
+            self.dot_products_prime.append(DotProduct())
         # Define the loss funcitons
         self.loss_fn_vertex = MSELoss(reduction='none')  # MultipleMSELoss()
-
-        if save:
-            with File(
-                "/home/users/s/schroeer/scratch/PhD/Topograph_repos/output/inputs.h5",
-                "w",
-            ) as inputs_file:
-                inputs_file.create_dataset(
-                    name="inputs",
-                    shape=(0, 40, 20),
-                    chunks=True,
-                    maxshape=(None, 40, 20),
-                )
-                inputs_file.create_dataset(
-                    name="labels", shape=(0, 40, 1), chunks=True, maxshape=(None, 40, 1)
-                )
 
     def on_fit_start(self):
         if wandb.run:
@@ -153,47 +141,65 @@ class TopographModel(pl.LightningModule):
         model
             topograph model ready to be trained.
         """
-        edge_wt_out_b = self.edge_layer_b(inputs)
-        edge_feat_out_b = self.feat_layer_b(inputs)
-        edge_wt_out_c = self.edge_layer_c(inputs)
-        edge_feat_out_c = self.feat_layer_c(inputs)
-        if self.small_net[self.tr_jet_type]: return None, None, edge_wt_out_b, edge_wt_out_c
-        if self.activation_name is not None:
-            add_activation_b = self.add_activation(edge_wt_out_b)
-            dt_product_b = self.dot_product(edge_feat_out_b, add_activation_b, mask)
-            add_activation_c = self.add_activation(edge_wt_out_c)
-            dt_product_c = self.dot_product(edge_feat_out_c, add_activation_c, mask)
-        else:
-            dt_product_b = self.dot_product_b(edge_feat_out_b, edge_wt_out_b, mask)
-            dt_product_c = self.dot_product_c(edge_feat_out_c, edge_wt_out_c, mask)
-        dense_vertex_out_b = self.vertex_network_b(dt_product_b)
-        dense_vertex_out_c = self.vertex_network_c(dt_product_c)
-        return dense_vertex_out_b, dense_vertex_out_c, edge_wt_out_b, edge_wt_out_c
+        edge_wt_outs = {}
+        edge_feat_outs = {}
+        edge_wt_outs_prime = {}
+        edge_feat_outs_prime = {}
+        dot_products = {}
+        dot_products_prime = {}
+        dense_vertex_outs = {}
+        for i, jet_type in enumerate(self.jet_types):
+            edge_wt_outs[jet_type] = self.edge_layers[i](inputs)
+            edge_feat_outs[jet_type] = self.feat_layers[i](inputs)
+            dot_products[jet_type] = self.dot_products[i](edge_wt_outs[jet_type], edge_feat_outs[jet_type], mask)
+            dt_shape = dot_products[jet_type].size()
+            inputs_shape = inputs.size()
+            input_to_concat = dot_products[jet_type].reshape(dt_shape[0], 1, dt_shape[1])
+            input_to_concat = input_to_concat.expand(dt_shape[0],inputs_shape[1], dt_shape[1])
+            concat_inputs = T.cat((inputs, input_to_concat), axis = -1)
+            edge_wt_outs_prime[jet_type] = self.edge_layers_prime[i](concat_inputs)
+            if self.small_net[jet_type]:
+                dense_vertex_outs[jet_type] = None
+            else:
+                edge_feat_outs_prime[jet_type] = self.edge_layers_prime[i](concat_inputs)
+                dot_products_prime[jet_type] = self.dot_products_prime[i](edge_wt_outs_prime[jet_type], edge_feat_outs_prime[jet_type], mask)
+                dense_vertex_outs[jet_type] = self.vertex_networks[i](dot_products[jet_type])
+        return dense_vertex_outs, edge_wt_outs
 
     def basis_step(self, sample, _batch_idx):
-        inputs, labels, mask, mask_vertex, jet_type = sample
-        jet_type_mask = (jet_type == self.jet_types.index(self.tr_jet_type))
-        # labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
-        mask = mask[jet_type_mask]
-        labels_edge_b = labels[f"Y_edge_b"][jet_type_mask]
-        labels_edge_c = labels[f"Y_edge_c"][jet_type_mask]
-        sample_weights_b = labels[f"sample_weights_b"][jet_type_mask]
-        sample_weights_c = labels[f"sample_weights_c"][jet_type_mask]
-        # if not self.small_net[self.tr_jet_type]:
-        labels_vertex_b =  labels[f"Y_vertex_features_b"][jet_type_mask]
-        labels_vertex_c =  labels[f"Y_vertex_features_c"][jet_type_mask]
-        labels_shape_c = labels_edge_c.size()
-        labels_edge_c = labels_edge_c.reshape(labels_shape_c[0], labels_shape_c[1], 1)
-        sample_weight_shape_c = sample_weights_c.size()
-        sample_weights_c = sample_weights_c.reshape(
-            sample_weight_shape_c[0], sample_weight_shape_c[1], 1
-        )
-        labels_shape_b = labels_edge_b.size()
-        labels_edge_b = labels_edge_b.reshape(labels_shape_b[0], labels_shape_b[1], 1)
-        sample_weight_shape_b = sample_weights_b.size()
-        sample_weights_b = sample_weights_b.reshape(
-            sample_weight_shape_b[0], sample_weight_shape_b[1], 1
-        )
+        inputs, labels, mask, mask_vertex, jet_type_per_jet = sample
+        cal_loss_edge_start = True
+        cal_loss_vertex_start = True
+        loss_vertex_cal = None
+        for jet_type in self.jet_types:
+            vertex_outs, edge_outs = self.forward(inputs=inputs, mask=mask)
+            labels_edge = labels[f"Y_edge_{jet_type}"]
+            sample_weights = labels[f"sample_weights_{jet_type}"]
+            if not self.small_net[jet_type]:
+                labels_vertex =  labels[f"Y_vertex_features_{jet_type}"]
+            labels_shape = labels_edge.size()
+            labels_edge = labels_edge.reshape(labels_shape[0], labels_shape[1], 1)
+            sample_weight_shape = sample_weights.size()
+            sample_weights = sample_weights.reshape(
+                sample_weight_shape[0], sample_weight_shape[1], 1
+            )
+            mask_vert = mask_vertex[f"vertex_mask_{jet_type}"]
+            # jet_type_mask = (jet_type_per_jet == self.jet_types.index(jet_type))
+            # labels_edge = labels[f"Y_edge_{self.tr_jet_type}"]
+            # mask_jt = mask[jet_type_mask]
+            # input_jt = inputs[jet_type_mask]
+            # vertex_outs, edge_outs = self.forward(inputs=input_jt, mask=mask_jt)
+            # labels_edge = labels[f"Y_edge_{jet_type}"][jet_type_mask]
+            # sample_weights = labels[f"sample_weights_{jet_type}"][jet_type_mask]
+            # if not self.small_net[jet_type]:
+            #     labels_vertex =  labels[f"Y_vertex_features_{jet_type}"][jet_type_mask]
+            # labels_shape = labels_edge.size()
+            # labels_edge = labels_edge.reshape(labels_shape[0], labels_shape[1], 1)
+            # sample_weight_shape = sample_weights.size()
+            # sample_weights = sample_weights.reshape(
+            #     sample_weight_shape[0], sample_weight_shape[1], 1
+            # )
+            # mask_vert = mask_vertex[f"vertex_mask_{jet_type}"]
         # labels_vertex_shape = labels_vertex.size()
         # labels_vertex = labels_vertex.reshape(labels_vertex_shape[1], labels_vertex_shape[2])
         # inputs_shape = inputs.size()
@@ -203,29 +209,38 @@ class TopographModel(pl.LightningModule):
         # mask_vertex_shape = mask_vertex.size()
         # mask_vertex = mask_vertex.reshape(mask_vertex_shape[1])
 
-        vertex_out_b, vertex_out_c, edge_out_b, edge_out_c = self.forward(inputs=inputs, mask=mask)
-        loss_edge_cal = binary_cross_entropy_with_logits(
-            edge_out_c, labels_edge_c, sample_weights_c, reduction='none',
-        )[mask].mean() + binary_cross_entropy_with_logits(
-            edge_out_b, labels_edge_b, sample_weights_b, reduction='none',
-        )[mask].mean()
-
-        if self.small_net[self.tr_jet_type]: return loss_edge_cal, None, None
-        loss_vertex_cal = self.loss_fn_vertex(
-            vertex_out_b, labels_vertex_b
-        )[mask_vertex[f"vertex_mask_b"]].mean() + self.loss_fn_vertex(
-            vertex_out_c, labels_vertex_c
-        )[mask_vertex[f"vertex_mask_c"]].mean()
-        total = (
-            self.loss_fac_edge * loss_edge_cal + self.loss_fac_vert * loss_vertex_cal
-        )
+            if cal_loss_edge_start:
+                loss_edge_cal = binary_cross_entropy_with_logits(
+                    edge_outs[jet_type], labels_edge, sample_weights, reduction='none',
+                )[mask].mean()
+                cal_loss_edge_start = False
+            else:
+                loss_edge_cal = loss_edge_cal + binary_cross_entropy_with_logits(
+                    edge_outs[jet_type], labels_edge, sample_weights, reduction='none',
+                )[mask].mean()
+            if cal_loss_vertex_start and not self.small_net[jet_type]:
+                loss_vertex_cal = self.loss_fn_vertex(
+                    vertex_outs[jet_type], labels_vertex
+                )[mask_vert].mean()
+                cal_loss_vertex_start = False
+            elif not cal_loss_vertex_start and not self.small_net[jet_type]:
+                loss_vertex_cal = loss_vertex_cal + self.loss_fn_vertex(
+                    vertex_outs[jet_type], labels_vertex
+                )[mask_vert].mean()
+        
+        if loss_vertex_cal is not None:
+            total = (
+                self.loss_fac_edge * loss_edge_cal + self.loss_fac_vert * loss_vertex_cal
+            )
+        else:
+            total = loss_edge_cal
         # total = loss_edge_cal
         return loss_edge_cal, loss_vertex_cal, total
 
     def training_step(self, sample: tuple, _batch_idx: int):
         loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
         self.log("train/edge", loss_edge_cal)
-        if self.small_net[self.tr_jet_type]: return loss_edge_cal
+        # if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("train/total", total)
         self.log("train/vertex", loss_vertex_cal)
         return total

@@ -412,7 +412,7 @@ class GetConfiguration:
 
 
 class DatasetCreater:
-    def __init__(self, config, input_file, step, stepsize, replace_invalid=False, jet_type="b"):
+    def __init__(self, config, input_file, step, stepsize, replace_invalid=False, jet_types=["b"], small_net={"b":False}, load_jet_types=["b"]):
         self.global_conf = GlobalConfig()
         self.config = config
         self.input_file = input_file
@@ -422,7 +422,9 @@ class DatasetCreater:
         self.replace_invalid = replace_invalid
         self.vertex_features = self.global_conf.vertex_features
         self.ntracks = 40
-        self.jet_type = jet_type
+        self.jet_types = jet_types
+        self.load_jet_types = load_jet_types
+        self.small_net = small_net
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -462,23 +464,31 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
 
-        self.ind_truthflav = self.get_indeces()
+        self.jet_types_to_save = np.full(shape=self.HadrConeTruth.shape, fill_value=-1)
+        self.ind_truthflav_dict = {jet_type: self.get_indeces(jet_type) for jet_type in self.load_jet_types}
+        self.ind_truthflav = self.ind_truthflav_dict[self.load_jet_types[0]]
+        self.jet_types_to_save[self.ind_truthflav_dict[self.load_jet_types[0]]] = self.jet_types.index(self.jet_types[0])
+        if len(self.load_jet_types)>1:
+            for jet_type in self.load_jet_types[1:]:
+                self.ind_truthflav = np.logical_or(self.ind_truthflav, self.ind_truthflav_dict[jet_type])
+                self.jet_types_to_save[self.ind_truthflav_dict[jet_type]] = self.jet_types.index(jet_type)
+        self.jet_types_to_save = self.jet_types_to_save[self.ind_truthflav]
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
         self.trackExtra = self.trackExtra[self.ind_truthflav]
         self.reco_jets = self.reco_jets[self.ind_truthflav]
-        # self.edge_features = self.edge_features[self.ind_truthflav]
+        self.HadrConeTruth = self.HadrConeTruth[self.ind_truthflav]
 
-    def get_indeces(self):
+    def get_indeces(self, jet_type):
         hadronflavour = self.truth["flavour"]
         hadrconemask = self.check_cases_and_return(
             self.HadrConeTruth,
-            self.global_conf.hadron_cone_excl_label[self.jet_type],
+            self.global_conf.hadron_cone_excl_label[jet_type],
         )
         hflavourmask = [self.check_cases_and_return(
             hf,
-            self.global_conf.flavour[self.jet_type],
+            self.global_conf.flavour[jet_type],
         ) for hf in hadronflavour]
         if None in hflavourmask[0]:
             return hadrconemask
@@ -489,16 +499,24 @@ class DatasetCreater:
     def get_n_valid_jets(self):
         return sum(self.ind_truthflav)
 
+    def get_jet_types_to_save(self):
+        return self.jet_types_to_save
+
+    def get_n_valid_jets_type(self, jet_type):
+        try:
+            return sum(self.ind_truthflav_dict[jet_type])
+        except KeyError:
+            return 0
+
     def get_edge_y(self):
         truthOriginLabel = self.truthOriginLabel
-        return self.check_cases_and_return(truthOriginLabel,self.global_conf.truthOriginLabel[self.jet_type]).astype(int)
-        # if self.jet_type == "b":
-        #     return np.logical_or(truthOriginLabel == 3, truthOriginLabel == 4).astype(int) #FromBC FromB
-        # if self.jet_type == "c":
-        #     return (truthOriginLabel == 5).astype(int) #FromC
-        # if self.jet_type == "light":
-        #     return (truthOriginLabel == 2).astype(int) #Primary
-            
+        edges = {}
+        for jet_type in self.jet_types:
+            edges[jet_type] = self.check_cases_and_return(truthOriginLabel,self.global_conf.truthOriginLabel[jet_type]).astype(int)
+        return edges
+    
+    def get_HadrLabel(self):
+        return self.HadrConeTruth
 
     def get_edge_origin(self):
         return self.truthOriginLabel
@@ -533,20 +551,38 @@ class DatasetCreater:
     def get_vertex_feat_y(self):
         flavour = self.truth["flavour"]
         vertex_feat = self.truth[self.vertex_features]
+        vertex_shape = vertex_feat.shape
+        if len(self.vertex_features) > 1:
+            shape = vertex_shape[:2]
+        else:
+            shape = (vertex_shape[0],)
         vert_dtype = vertex_feat.dtype
-        mask = self.check_cases_and_return(
-            flavour,
-            self.global_conf.flavour[self.jet_type],
-        )
-        if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
-        vertex_feat = vertex_feat[mask]
-        for key in self.vertex_features:
-            if self.global_conf.vertex_feat_dict[key]["log"]:
-                vertex_feat[key] = np.log(vertex_feat[key])
-        return np.array(vertex_feat, dtype=vert_dtype)
+        vertex_feat_jet_types = {}
+        for jet_type in self.jet_types:
+            vertex_feat_jet_types[jet_type] = np.full(shape=shape, fill_value=-999., dtype=vert_dtype)
+            if not self.small_net[jet_type]:
+                mask = self.check_cases_and_return(
+                    flavour,
+                    self.global_conf.flavour[jet_type],
+                )
+                jet_mask = np.sum(mask, axis=1)==1
+                mask[~jet_mask] = np.full(shape=mask.shape[1], fill_value=False)
+                vertex_feat_jet_types[jet_type] = np.full(shape=shape, fill_value=-999., dtype=vert_dtype)
+
+                vertex_feat_jet_types[jet_type][jet_mask] = vertex_feat[mask]
+                if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
+                for key in self.vertex_features:
+                    if self.global_conf.vertex_feat_dict[key]["log"]:
+                        print(vertex_feat_jet_types)
+                        vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
+                        print(vertex_feat_jet_types)
+        return vertex_feat_jet_types
 
     def get_track_input(self):
         return self.reco
+    
+    def get_overall_inds(self):
+        return self.overall_inds
 
     def check_cases_and_return(self, data, jettype_inf):
         if isinstance(jettype_inf, int):

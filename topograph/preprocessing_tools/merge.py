@@ -78,41 +78,41 @@ class Merge:
                 #     array_full[f"jet_type_{jet_types}"] = np.full(shape=(array_full[f"{key}_{jet_type}"]))
                 array_dict_comb = {key: np.concatenate([array_full[f"{key}_{jet_type}"] for jet_type in jet_types]) for key in list(keys)+ ["jet_type", "truthorigin"]}
                 array_dict_comb.update(array_dict_comb_labels_full)
-                if "b" in jet_types and "c" in jet_types:
-                    mask_b = array_dict_comb["jet_type"] == jet_types.index("b")
-                    mask_c = array_dict_comb["jet_type"] == jet_types.index("c")
-                    _, comm_b, comm_c  = np.intersect1d(
-                        array_dict_comb["jet_pt"]["eventNumber"][mask_b],
-                        array_dict_comb["jet_pt"]["eventNumber"][mask_c],
-                        return_indices=True
-                    )
-                    index_add_c = 0
-                    index_add_b = 0
+                # for jet_type in self.jet_types:
+                #     mask_b = array_dict_comb["jet_type"] == jet_types.index("b")
+                #     mask_c = array_dict_comb["jet_type"] == jet_types.index("c")
+                #     _, comm_b, comm_c  = np.intersect1d(
+                #         array_dict_comb["jet_pt"]["eventNumber"][mask_b],
+                #         array_dict_comb["jet_pt"]["eventNumber"][mask_c],
+                #         return_indices=True
+                #     )
+                #     index_add_c = 0
+                #     index_add_b = 0
                     
-                    for jet_type in jet_types:
-                        if jet_types.index(jet_type) < jet_types.index("c"):
-                            index_add_c += sum(array_dict_comb["jet_type"] == jet_types.index(jet_type))
-                        if jet_types.index(jet_type) < jet_types.index("b"):
-                            index_add_b += sum(array_dict_comb["jet_type"] == jet_types.index(jet_type))
-                    comm_b += index_add_b
-                    comm_c += index_add_c
+                #     for jet_type in jet_types:
+                #         if jet_types.index(jet_type) < jet_types.index("c"):
+                #             index_add_c += sum(array_dict_comb["jet_type"] == jet_types.index(jet_type))
+                #         if jet_types.index(jet_type) < jet_types.index("b"):
+                #             index_add_b += sum(array_dict_comb["jet_type"] == jet_types.index(jet_type))
+                #     comm_b += index_add_b
+                #     comm_c += index_add_c
 
-                    inputs_b = array_dict_comb[self.config.tracks_name][comm_b]
-                    inputs_c = array_dict_comb[self.config.tracks_name][comm_c]
+                #     inputs_b = array_dict_comb[self.config.tracks_name][comm_b]
+                #     inputs_c = array_dict_comb[self.config.tracks_name][comm_c]
 
-                    eq = [np.array_equal(i_b[:1], i_c[:1]) for i_b, i_c in zip(inputs_b, inputs_c)]
-                    comm_b = comm_b[eq]
-                    comm_c = comm_c[eq]
+                #     eq = [np.array_equal(i_b[:1], i_c[:1]) for i_b, i_c in zip(inputs_b, inputs_c)]
+                #     comm_b = comm_b[eq]
+                #     comm_c = comm_c[eq]
 
-                    Y_edge_c = array_dict_comb["Y_edge_c"]
-                    Y_vertex_feat_c = array_dict_comb["Y_vertex_features_c"]
+                #     Y_edge_c = array_dict_comb["Y_edge_c"]
+                #     Y_vertex_feat_c = array_dict_comb["Y_vertex_features_c"]
 
-                    array_dict_comb["Y_edge_c"][comm_b] = Y_edge_c[comm_c]
-                    array_dict_comb["Y_vertex_features_c"][comm_b] = Y_vertex_feat_c[comm_c]
-                    array_dict_comb["jet_type"][comm_b] = 12
+                #     array_dict_comb["Y_edge_c"][comm_b] = Y_edge_c[comm_c]
+                #     array_dict_comb["Y_vertex_features_c"][comm_b] = Y_vertex_feat_c[comm_c]
+                #     array_dict_comb["jet_type"][comm_b] = 12
  
-                    for key in array_dict_comb.keys():
-                        array_dict_comb[key] = np.delete(array_dict_comb[key],comm_c, axis=0)
+                #     for key in array_dict_comb.keys():
+                #         array_dict_comb[key] = np.delete(array_dict_comb[key],comm_c, axis=0)
                 nentries = len(next(iter(array_dict_comb.values())))
                 indices = np.linspace(0, nentries-1, nentries).astype(int)
                 scary_shuffle(indices)

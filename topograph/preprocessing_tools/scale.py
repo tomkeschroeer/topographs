@@ -20,70 +20,70 @@ class Scaler:
 
         # Extract the correct variables
         chunk_size = 1e5
-
-        file_name = (
-            f"{self.config.output}/{self.config.preprocessing_file_name}".replace(
-                ".h5", ""
-            )
-            + ".h5"
-        )
-        self.scale_dict_path = (
-            f"{self.config.output}/{self.config.scale_dict}".replace(".json", "")
-            + ".json"
-        )
-        # Get the file_length
-        file_length = len(File(file_name, "r")[f"/{self.config.tracks_name}"])
-
-        # Get the number of chunks we need to load
-        n_chunks = int(np.ceil(file_length / chunk_size))
-        if n_chunks == 0:
-            n_chunks = 1
-            chunk_size = file_length
-
-        logger.info("Calculating scaling and shifting values for the track variables")
-
-        # Init a empty scale dict for the tracks
         scale_dict_trk = {}
-
-        # Loop over all tracks selections
         scale_dict_trk_selection = {}
-        # Load generator
-        scaling_generator = self.get_scaling_generator(
-            input_file=file_name,
-            nJets=file_length,
-            tracks_name=self.config.tracks_name,
-            vert_prop_name=self.config.vertex_feat_name,
-            chunk_size=chunk_size,
-        )
-
-        # Loop over chunks
-        for chunk_counter in range(n_chunks):
-            logger.info(f"Using chunk {chunk_counter+1} from {n_chunks}")
-            # Check if this is the first time loading from the generator
-            if chunk_counter == 0:
-                # Get the first chunk of scales from the generator
-                scale_dict_selection, nEntries_loaded = next(scaling_generator)
-            else:
-                # Get the next chunk of scales from the generator
-                tmp_dict, tmp_nEntries_loaded = next(scaling_generator)
-
-                # Combine the scale dicts coming from the generator
-                (scale_dict_selection, nEntries_loaded,) = self.join_scale_dicts_trks(
-                    first_scale_dict=scale_dict_selection,
-                    second_scale_dict=tmp_dict,
-                    first_ns=nEntries_loaded,
-                    second_ns=tmp_nEntries_loaded,
+        for i, jet_type in enumerate(self.config.jet_types):
+            print(jet_type)
+            file_name = (
+                f"{self.config.output}/{self.config.preprocessing_file_name}_{jet_type}".replace(
+                # f"{self.config.output}/{self.config.preprocessing_file_name}_{jet_type}".replace(
+                    ".h5", ""
                 )
+                + ".h5"
+            )
+            self.scale_dict_path = (
+                f"{self.config.output}/{self.config.scale_dict}".replace(".json", "")
+                f"{self.config.output}/{self.config.scale_dict}_{jet_type}".replace(".json", "")
+                + ".json"
+            )
+            # Get the file_length
+            file_length = len(File(file_name, "r")[f"/{self.config.tracks_name}"])
 
-        scale_dict_trk.update({self.config.input_tracks_name: scale_dict_selection})
+            # Get the number of chunks we need to load
+            n_chunks = int(np.ceil(file_length / chunk_size))
+            if n_chunks == 0:
+                n_chunks = 1
+                chunk_size = file_length
 
-        # Add scale dict for given tracks selection to the more general one
-        # TODO: change in python 3.9
-        # save scale/shift dictionary to json file
-        os.makedirs(os.path.dirname(self.scale_dict_path), exist_ok=True)
-        with open(self.scale_dict_path, "w") as outfile:
-            json.dump(scale_dict_selection, outfile, indent=4)
-        logger.info(f"Saved scale dictionary as {self.scale_dict_path}")
+            logger.info("Calculating scaling and shifting values for the track variables")
+           
+            # Load generator
+            scaling_generator = self.get_scaling_generator(
+                input_file=file_name,
+                nJets=file_length,
+                tracks_name=self.config.tracks_name,
+                vert_prop_name=self.config.vertex_feat_name,
+                chunk_size=chunk_size,
+            )
+
+            # Loop over chunks
+            for chunk_counter in range(n_chunks):
+                logger.info(f"Using chunk {chunk_counter+1} from {n_chunks}")
+                # Check if this is the first time loading from the generator
+                if chunk_counter == 0 and i == 0:
+                    # Get the first chunk of scales from the generator
+                    scale_dict_selection, nEntries_loaded = next(scaling_generator)
+                else:
+                    # Get the next chunk of scales from the generator
+                    tmp_dict, tmp_nEntries_loaded = next(scaling_generator)
+
+                    # Combine the scale dicts coming from the generator
+                    (scale_dict_selection, nEntries_loaded,) = self.join_scale_dicts_trks(
+                        first_scale_dict=scale_dict_selection,
+                        second_scale_dict=tmp_dict,
+                        first_ns=nEntries_loaded,
+                        second_ns=tmp_nEntries_loaded,
+                    )
+
+            scale_dict_trk.update({self.config.input_tracks_name: scale_dict_selection})
+
+            # Add scale dict for given tracks selection to the more general one
+            # TODO: change in python 3.9
+            # save scale/shift dictionary to json file
+            os.makedirs(os.path.dirname(self.scale_dict_path), exist_ok=True)
+            with open(f"{self.scale_dict_path}", "w") as outfile:
+                json.dump(scale_dict_selection, outfile, indent=4)
+            logger.info(f"Saved scale dictionary as {self.scale_dict_path}")
 
     def get_scaling_generator(
         self,
@@ -149,9 +149,10 @@ class Scaler:
                 # vert_prop_chunk_c = np.asarray(
                 #     infile_all[f"/{vert_prop_name}_c"][index_tuple[0] : index_tuple[1]]
                 # )
-
                 track_mask = get_mask(tracks_chunk)
                 vert_mask = {jet_type: get_mask(vert_prop_chunk[jet_type]) for jet_type in self.config.jet_types}
+                for i in vert_mask.values():
+                    print(np.unique(i))
                 # vert_mask_b = get_mask(vert_prop_chunk_b)
                 # vert_mask_c = get_mask(vert_prop_chunk_c)
 
