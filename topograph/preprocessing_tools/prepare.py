@@ -15,6 +15,7 @@ class Prepare:
 
     def Run(self):
         logger = get_logger()
+        logger.info("start preparing")
         global_conf = GlobalConfig()
         output_file = (
             f"{self.config.output}/{self.config.preprocessing_file_name}".replace(
@@ -27,6 +28,7 @@ class Prepare:
             + self.dataset_types["_val"]["njets"]
             + self.dataset_types["_test"]["njets"]
         )/len(jet_types))
+        print(njets)
         stepsize = min(50_000, int(njets / 2))
 
         # input_file = f"{output_dir}/{self.config.one_file_name}.h5".replace(".h5.h5",".h5").replace("//","/")
@@ -44,6 +46,7 @@ class Prepare:
             with File(input_file, "r") as f:
                 njets_file = len(f["/jets"][:])
             n_steps = njets_file // stepsize + 1
+            print(n_steps)
             for step in range(n_steps):
                 logger.info(f"Process file {input_file}, step {step+1}/{n_steps}.")# jet type {self.jet_type}.")
                 datasets = DatasetCreater(
@@ -65,7 +68,6 @@ class Prepare:
                 tracks_extra_true = datasets.get_extra_track_truth()
                 # unscaled_pt = datasets.get_unscaled_pt()
                 jet_pt = datasets.get_jet_pt()
-                print(jet_pt)
                 # overall_inds = datasets.get_overall_inds()
                 HadrTruth = datasets.get_HadrLabel()
                 if create_file:

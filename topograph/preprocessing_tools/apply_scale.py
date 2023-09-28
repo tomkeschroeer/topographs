@@ -26,6 +26,7 @@ class Apply_Scaler:
         }
         self.njets = self.config.njets + self.config.njets_val + self.config.njets_test
         self.out_file = None
+        self.jet_types = self.config.jet_types
 
     def Run(self):
         logger = get_logger()
@@ -60,94 +61,97 @@ class Apply_Scaler:
         # for file_name, njets_per_file in self.file_names.items():
         self.out_file = input_file.replace(".h5", "_scaled.h5")
         logger.info(f"Save scaled inputs in file {self.out_file}")
-        # with File(self.out_file, "w") as h5file:
-        #     for keyname in dict_names:
-        #         scale_generator = self.scale_generator(
-        #             input_file=input_file,
-        #             nJets=self.njets,
-        #             keyname=keyname,
-        #             scale_dict=scale_dict[keyname],
-        #             chunk_size=chunk_size,
-        #         )
-        #         # Set up chunk counter and start looping
-        #         chunk_counter = 0
-        #         for chunk_counter in range(n_chunks):
-        #             logger.info(
-        #                 f"Applying scales for chunk {chunk_counter+1} of"
-        #                 f" {n_chunks}."
-        #             )
-        #             try:
-        #                 data = next(scale_generator)
+        with File(self.out_file, "w") as h5file:
+            for keyname in dict_names:
+                scale_generator = self.scale_generator(
+                    input_file=input_file,
+                    nJets=self.njets,
+                    keyname=keyname,
+                    scale_dict=scale_dict[keyname],
+                    chunk_size=chunk_size,
+                )
+                # Set up chunk counter and start looping
+                chunk_counter = 0
+                for chunk_counter in range(n_chunks):
+                    logger.info(
+                        f"Applying scales for chunk {chunk_counter+1} of"
+                        f" {n_chunks}."
+                    )
+                    try:
+                        data = next(scale_generator)
 
-        #                 if chunk_counter == 0:
-        #                     h5file.create_dataset(
-        #                         keyname,
-        #                         data=data[0],
-        #                         #  compression="lzf",
-        #                         chunks=((100,) + data[0].shape[1:]),
-        #                         maxshape=(
-        #                             None,
-        #                             *(data[0].shape[1:]),
-        #                         ),
-        #                     )
+                        if chunk_counter == 0:
+                            h5file.create_dataset(
+                                keyname,
+                                data=data[0],
+                                #  compression="lzf",
+                                chunks=((100,) + data[0].shape[1:]),
+                                maxshape=(
+                                    None,
+                                    *(data[0].shape[1:]),
+                                ),
+                            )
 
-        #                 else:
-        #                     h5file[keyname].resize(
-        #                         (h5file[keyname].shape[0] + data[0].shape[0]),
-        #                         axis=0,
-        #                     )
+                        else:
+                            h5file[keyname].resize(
+                                (h5file[keyname].shape[0] + data[0].shape[0]),
+                                axis=0,
+                            )
 
-        #                     h5file[keyname][-data[0].shape[0] :] = data[0]
+                            h5file[keyname][-data[0].shape[0] :] = data[0]
 
-        #             except StopIteration:
-        #                 break
+                    except StopIteration:
+                        break
 
-        #             chunk_counter += 1
+                    chunk_counter += 1
 
-        # self.save_remaining_dt(logger, input_file, n_entries_total=self.njets)
-        # chunk_size= 870
+        self.save_remaining_dt(logger, input_file, n_entries_total=self.njets)
+        # chunk_size = np.min() 
         starting_point = 0
         n_total = len(File(self.out_file,"r")[f"/{self.config.tracks_name}"])
         ind_array = np.linspace(0, n_total-1, n_total).astype(int)
         scary_shuffle(ind_array)
         n_jets_per_jettype = {jettype: 0 for jettype in self.jet_types}
-        total_njets_per_jettype = int(njets/len(self.jet_types))
-        for jet_type in self.jet_types:
-            for file_name, njets in self.file_names.items():
-                input_file = (
-                    f"{self.config.output}/{file_name}".replace(
-                        ".h5", ""
-                    )
-                    + ".h5"
+        total_njets_per_jettype = int(self.njets/len(self.jet_types))
+        starting_point = 0
+        for file_name, njets in self.file_names.items():
+            input_file = (
+                f"{self.config.output}/{file_name}".replace(
+                    ".h5", ""
                 )
+                + ".h5"
+            )
+            with File(input_file, "w") as f:
+                nsteps = int(njets//chunk_size)
                 r = njets % chunk_size
                 if r != 0:
-                    chunk_size = chunk_size - r
-                nsteps = int(n_total//chunk_size)
+                    nsteps += 1
+                print(nsteps)
                 # starting_point = 0
                 inds = np.array([[(step*chunk_size + starting_point), ((step+1)*chunk_size + starting_point)] for step in range(nsteps)], dtype=int)
-                if inds[-1,1] > njets: inds[-1,1] = njets + starting_point
+                if inds[-1,1] > njets + starting_point: inds[-1,1] = njets + starting_point
                 starting_point = inds[-1,1]
                 create_file = True
-                with File(self.out_file, "r") as o:
-                    keys=o.keys()
-                    print(keys)
-                    with File(input_file, "w") as f:
+                for jet_type in self.jet_types:
+                    with File(self.out_file, "r") as o:
+                        keys=o.keys()
                         for ind in inds:
-                            jet_type = o["jet_type"][ind[0]:ind[1]]
-                            mask = (jet_type == self.jet_types.index(jet_type))
+                            jet_type_in_jet = o["jet_type"][ind[0]:ind[1]]
+                            # print(self.jet_types.index(jet_type))
+                            mask = (jet_type_in_jet == self.jet_types.index(jet_type))
                             njets_step = sum(mask)
                             n_jets_per_jettype[jet_type] = n_jets_per_jettype[jet_type] + njets_step
                             # if n_jets_per_jettype[jet_type] >= total_njets_per_jettype:
                             if create_file:
                                 for key in keys:
                                     data_chunk = o[key][ind[0]:ind[1]][mask]
-                                    print("data_chunk ready")
                                     shape = data_chunk.shape
                                     shape = (None,) if len(shape) == 1 else (None, *shape[1:])
                                     f.create_dataset(key, data=data_chunk, chunks=True, maxshape=shape)
                                 create_file = False
                             else:
+                                print("in else")
+                                # print(o[key][ind[0]:ind[1]])
                                 for key in keys: #ind[1]-ind[0]
                                     f[key].resize((f[key].shape[0] + njets_step), axis=0)
                                     f[key][-njets_step:] = o[key][ind[0]:ind[1]][mask]
@@ -198,7 +202,6 @@ class Apply_Scaler:
 
         # Open the file and load the jets
         with File(input_file, "r") as f:
-
             # Get the indices
             start_ind = 0
             tupled_indices = []

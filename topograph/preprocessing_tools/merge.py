@@ -32,6 +32,7 @@ class Merge:
             + self.dataset_types["_test"]["njets"]
         )/len(jet_types))
         stepsize = min(50_000, int(njets / 2))
+        print(stepsize)
         n_steps = njets // stepsize + 1
         array_full={}
         array_dict_labels_full={}
@@ -41,7 +42,7 @@ class Merge:
         njets_dict = {jet_type: len(File(f"{output_file}_{jet_type}.h5", "r")[f"{self.config.edge_name}_{jet_type}"]) for jet_type in jet_types}
         non_stack_keys = [self.config.edge_name, self.config.vertex_feat_name]
         non_stack_keys_for_check = [f"{self.config.edge_name}_{jet_types[0]}", f"{self.config.vertex_feat_name}_{jet_types[0]}"]
-        keys = [key for key in File(f"{output_file}_{jet_types[0]}.h5").keys() if key not in non_stack_keys_for_check]
+        keys = [key for key in File(f"{output_file}_{jet_types[0]}.h5").keys()]# if key not in non_stack_keys_for_check]
         with File(
             f"{output_file}.h5", "w"
         ) as h5fw:
@@ -56,23 +57,23 @@ class Merge:
                         array_dict[f"jet_type_{jet_type}"] = np.full(shape=(len(array_dict[f"{keys[0]}_{jet_type}"])), fill_value=i)
                         array_dict[f"truthorigin_{jet_type}"] = truthorigin
                         array_full.update(array_dict)
-                        for jet_type_2 in jet_types:
-                            if jet_type_2 == jet_type:
-                                array_dict_labels = {f"{key}_{jet_type}_{jet_type_2}": h5fr[f"/{key}_{jet_type}"][step*stepsize:(step+1)*stepsize] for key in non_stack_keys}
-                                array_dict_labels_full.update(array_dict_labels)
-                            else:
-                                with File(f"{output_file}_{jet_type_2}.h5", "r") as h5fr_2:
-                                    y_edge = h5fr_2[f"/{self.config.edge_name}_{jet_type_2}"][step*stepsize:(step+1)*stepsize]
-                                    y_vertex = h5fr_2[f"/{self.config.vertex_feat_name}_{jet_type_2}"][step*stepsize:(step+1)*stepsize]
-                                array_dict_labels = {
-                                    f"{self.config.edge_name}_{jet_type}_{jet_type_2}": np.full(shape=y_edge.shape, dtype=y_edge.dtype, fill_value=0),
-                                    f"{self.config.vertex_feat_name}_{jet_type}_{jet_type_2}": np.full(shape=y_vertex.shape, dtype=y_vertex.dtype, fill_value=-999.),
-                                }
-                                array_dict_labels_full.update(array_dict_labels)
+                        # for jet_type_2 in jet_types:
+                            #  if jet_type_2 == jet_type:
+                            # array_dict_labels = {f"{key}_{jet_type}_{jet_type_2}": h5fr[f"/{key}_{jet_type}"][step*stepsize:(step+1)*stepsize] for key in non_stack_keys}
+                            # array_dict_labels_full.update(array_dict_labels)
+                            # else:
+                            #     with File(f"{output_file}_{jet_type_2}.h5", "r") as h5fr_2:
+                            #         y_edge = h5fr_2[f"/{self.config.edge_name}_{jet_type_2}"][step*stepsize:(step+1)*stepsize]
+                            #         y_vertex = h5fr_2[f"/{self.config.vertex_feat_name}_{jet_type_2}"][step*stepsize:(step+1)*stepsize]
+                            #     array_dict_labels = {
+                            #         f"{self.config.edge_name}_{jet_type}_{jet_type_2}": np.full(shape=y_edge.shape, dtype=y_edge.dtype, fill_value=0),
+                            #         f"{self.config.vertex_feat_name}_{jet_type}_{jet_type_2}": np.full(shape=y_vertex.shape, dtype=y_vertex.dtype, fill_value=-999.),
+                            #     }
+                            #     array_dict_labels_full.update(array_dict_labels)
                     # array_dict_comb_labels = {key: np.concatenate([array_dict_labels_full[f"{key}_{jet_type}_{jet_type_2}"] for jet_type_2 in jet_types]) for key in non_stack_keys}
                     array_dict_comb_labels = {}
-                    for key in non_stack_keys:
-                        array_dict_comb_labels[f"{key}_{jet_type}"] = np.concatenate([array_dict_labels_full[f"{key}_{jet_type}_{jet_type_2}"] for jet_type_2 in jet_types])
+                    # for key in non_stack_keys:
+                    #     array_dict_comb_labels[f"{key}_{jet_type}"] = np.concatenate([array_dict_labels_full[f"{key}_{jet_type}_{jet_type_2}"] for jet_type_2 in jet_types])
                     array_dict_comb_labels_full.update(array_dict_comb_labels)
                 # for jet_type in jet_types:
                 #     array_full[f"jet_type_{jet_types}"] = np.full(shape=(array_full[f"{key}_{jet_type}"]))
@@ -114,6 +115,8 @@ class Merge:
                 #     for key in array_dict_comb.keys():
                 #         array_dict_comb[key] = np.delete(array_dict_comb[key],comm_c, axis=0)
                 nentries = len(next(iter(array_dict_comb.values())))
+                # print(nentries)
+                # print(array_dict_comb["Y_vertex_features_c"])
                 indices = np.linspace(0, nentries-1, nentries).astype(int)
                 scary_shuffle(indices)
                 for key in array_dict_comb.keys():
