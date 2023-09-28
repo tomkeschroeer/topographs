@@ -126,16 +126,15 @@ class Apply_Scaler:
                 r = njets % chunk_size
                 if r != 0:
                     nsteps += 1
-                print(nsteps)
                 # starting_point = 0
                 inds = np.array([[(step*chunk_size + starting_point), ((step+1)*chunk_size + starting_point)] for step in range(nsteps)], dtype=int)
                 if inds[-1,1] > njets + starting_point: inds[-1,1] = njets + starting_point
                 starting_point = inds[-1,1]
                 create_file = True
-                for jet_type in self.jet_types:
-                    with File(self.out_file, "r") as o:
-                        keys=o.keys()
-                        for ind in inds:
+                with File(self.out_file, "r") as o:
+                    keys=o.keys()
+                    for ind in inds:
+                        for jet_type in self.jet_types:
                             jet_type_in_jet = o["jet_type"][ind[0]:ind[1]]
                             # print(self.jet_types.index(jet_type))
                             mask = (jet_type_in_jet == self.jet_types.index(jet_type))
@@ -150,12 +149,11 @@ class Apply_Scaler:
                                     f.create_dataset(key, data=data_chunk, chunks=True, maxshape=shape)
                                 create_file = False
                             else:
-                                print("in else")
                                 # print(o[key][ind[0]:ind[1]])
                                 for key in keys: #ind[1]-ind[0]
                                     f[key].resize((f[key].shape[0] + njets_step), axis=0)
                                     f[key][-njets_step:] = o[key][ind[0]:ind[1]][mask]
-                            # if n_jets_per_jettype[jet_type] >=  
+                            # if n_jets_per_jettype[jet_type] >=
 
     def scale_generator(
         self,
