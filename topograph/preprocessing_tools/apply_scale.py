@@ -106,7 +106,8 @@ class Apply_Scaler:
                     chunk_counter += 1
 
         self.save_remaining_dt(logger, input_file, n_entries_total=self.njets)
-        # chunk_size = np.min() 
+        chunk_size = np.min((chunk_size, int(self.config.njets_test/len(self.jet_types)))).astype(int)
+        print(chunk_size)
         starting_point = 0
         n_total = len(File(self.out_file,"r")[f"/{self.config.tracks_name}"])
         ind_array = np.linspace(0, n_total-1, n_total).astype(int)
@@ -150,9 +151,10 @@ class Apply_Scaler:
                                 create_file = False
                             else:
                                 # print(o[key][ind[0]:ind[1]])
-                                for key in keys: #ind[1]-ind[0]
-                                    f[key].resize((f[key].shape[0] + njets_step), axis=0)
-                                    f[key][-njets_step:] = o[key][ind[0]:ind[1]][mask]
+                                if njets_step >0:
+                                    for key in keys: #ind[1]-ind[0]
+                                        f[key].resize((f[key].shape[0] + njets_step), axis=0)
+                                        f[key][-njets_step:] = o[key][ind[0]:ind[1]][mask]
                             # if n_jets_per_jettype[jet_type] >=
 
     def scale_generator(
