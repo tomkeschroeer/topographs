@@ -1287,7 +1287,7 @@ class Plotter:
     def plotting_vertex_labels_per_epoch(self, model_file_numbers):
         for model_file_number in model_file_numbers:
             for jet_type in self.jet_types:
-                if not self.small_net[jet_type]
+                if not self.small_net[jet_type]:
                     self.logger.info(
                         f"plotting predictions per epoch for model {model_file_number} and jet type {jet_type}"
                     )
