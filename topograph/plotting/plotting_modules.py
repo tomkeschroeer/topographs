@@ -416,8 +416,6 @@ class Plotter:
                             effs=self.effs,
                             pos=i,
                         )
-                        print(f"{jet_type} all")
-                        print(self.effs[-1])
                         self.logger.info(
                             f"getting efficiency, zeros only, for model model_epoch{i:03d}"
                         )
@@ -441,8 +439,6 @@ class Plotter:
                                 pos=i,
                                 ones_only=True
                             )
-                            print(f"{jet_type} ones")
-                            print(self.effs_only_ones_labels[-1])
                         else:
                             self.effs_zeros = self.get_efficiency(
                                 preds=preds[mask],
@@ -1291,27 +1287,28 @@ class Plotter:
     def plotting_vertex_labels_per_epoch(self, model_file_numbers):
         for model_file_number in model_file_numbers:
             for jet_type in self.jet_types:
-                self.logger.info(
-                    f"plotting predictions per epoch for model {model_file_number} and jet type {jet_type}"
-                )
-                with File(
-                    f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-                ) as f:
-                    labels = f[f"labels_vertex_features_{jet_type}"][:self.njet_test].flatten()
-                nbins = 50
-                binrange = (min(labels), max(labels))
-                # var_label = get_var_label()
-                self.plot_hist(
-                    ylabel="normalised number of tracks",
-                    xlabel="",
-                    vals=[labels],
-                    labels=[""],
-                    colours=get_colours(1),
-                    title=f"labels for epoch {model_file_number}, {jet_type}-jets",
-                    nbins=nbins,
-                    binrange=binrange,
-                    plot_name=f"labels_split_epoch_{model_file_number}_{jet_type}",
-                )
+                if not self.small_net[jet_type]
+                    self.logger.info(
+                        f"plotting predictions per epoch for model {model_file_number} and jet type {jet_type}"
+                    )
+                    with File(
+                        f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+                    ) as f:
+                        labels = f[f"labels_vertex_features_{jet_type}"][:self.njet_test].flatten()
+                    nbins = 50
+                    binrange = (min(labels), max(labels))
+                    # var_label = get_var_label()
+                    self.plot_hist(
+                        ylabel="normalised number of tracks",
+                        xlabel="",
+                        vals=[labels],
+                        labels=[""],
+                        colours=get_colours(1),
+                        title=f"labels for epoch {model_file_number}, {jet_type}-jets",
+                        nbins=nbins,
+                        binrange=binrange,
+                        plot_name=f"labels_split_epoch_{model_file_number}_{jet_type}",
+                    )
 
     def plotting_saliency_map(self, model_file_numbers):
             with File(self.test_file, "r") as f:
