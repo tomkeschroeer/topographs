@@ -46,7 +46,6 @@ class Prepare:
             with File(input_file, "r") as f:
                 njets_file = len(f["/jets"][:])
             n_steps = njets_file // stepsize + 1
-            print(n_steps)
             for step in range(n_steps):
                 logger.info(f"Process file {input_file}, step {step+1}/{n_steps}.")# jet type {self.jet_type}.")
                 datasets = DatasetCreater(

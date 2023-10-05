@@ -250,7 +250,7 @@ class TopographModel(pl.LightningModule):
             sample, _batch_idx
         )
         self.log("valid/edge", loss_edge_cal)
-        if self.small_net[self.tr_jet_type]: return loss_edge_cal
+        # if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
         return total
