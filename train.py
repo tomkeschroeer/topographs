@@ -219,7 +219,7 @@ if __name__ == "__main__":
     #         from_numpy(mask_vertex_labels.astype(bool))
     # )
     valid_dataset = Topographs_dataset(
-        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val, jet_types=config.jet_types
+        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val, jet_types=config.jet_types, train=False
     )
     valid_loader = DataLoader(valid_dataset, batch_size=None)
 
