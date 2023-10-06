@@ -149,19 +149,17 @@ class TopographModel(pl.LightningModule):
         dot_products = [] #ModuleList()
         dot_products_prime = [] #ModuleList()
         dense_vertex_outs = [] #ModuleList()
-        for i, jet_type in enumerate(self.jet_types[:1]):
-            # print(jet_type)
-            # print(self.edge_layers[i](inputs))
+        for i, jet_type in enumerate(self.jet_types):
             edge_wt_outs.append(self.edge_layers[i](inputs))
             edge_feat_outs.append(self.feat_layers[i](inputs))
             dot_products.append(self.dot_products[i](edge_wt_outs[i], edge_feat_outs[i], mask))
             dt_shape = dot_products[i].size()
             inputs_shape = inputs.size()
-            input_to_concat = dot_products[i].reshape(dt_shape[i], 1, dt_shape[1])
-            input_to_concat = input_to_concat.expand(dt_shape[i],inputs_shape[1], dt_shape[1])
+            input_to_concat = dot_products[i].reshape(dt_shape[0], 1, dt_shape[1])
+            input_to_concat = input_to_concat.expand(dt_shape[0],inputs_shape[1], dt_shape[1])
             concat_inputs = T.cat((inputs, input_to_concat), axis = -1)
             edge_wt_outs_prime.append(self.edge_layers_prime[i](concat_inputs))
-            if self.small_net["light"]:
+            if self.small_net[jet_type]:
                 dense_vertex_outs.append(None)
             else:
                 edge_feat_outs_prime.append(self.edge_layers_prime[i](concat_inputs))
@@ -179,7 +177,6 @@ class TopographModel(pl.LightningModule):
         loss_edge_per_fl = {}
         vertex_outs, edge_outs = self.forward(inputs=inputs, mask=mask)
         for i, jet_type in enumerate(self.jet_types):
-            # print(edge_outs)
             labels_edge = labels[f"Y_edge_{jet_type}"]
             sample_weights = labels[f"sample_weights_{jet_type}"]
             if not self.small_net[jet_type]:

@@ -13,7 +13,6 @@ import shutil
 
 import torch.nn as nn
 import torch.optim as optim
-from lightning_lite.utilities.exceptions import MisconfigurationException
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import from_numpy, save, tensor
