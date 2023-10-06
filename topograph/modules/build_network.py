@@ -258,9 +258,9 @@ class TopographModel(pl.LightningModule):
         # if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("train/total", total)
         self.log("train/vertex", loss_vertex_cal)
-        for jet_type in self.jet_types:
-            self.log(f"train/edge_{jet_type}", loss_edge_per_fl[jet_type])
-            self.log(f"train/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
+        # for jet_type in self.jet_types:
+        #     self.log(f"train/edge_{jet_type}", loss_edge_per_fl[jet_type])
+        #     self.log(f"train/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
         return total
 
     def validation_step(self, sample: tuple, _batch_idx: int):
@@ -271,9 +271,9 @@ class TopographModel(pl.LightningModule):
         # if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
-        for jet_type in self.jet_types:
-            self.log(f"train/edge_{jet_type}", loss_edge_per_fl[jet_type])
-            self.log(f"train/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
+        # for jet_type in self.jet_types:
+        #     self.log(f"train/edge_{jet_type}", loss_edge_per_fl[jet_type])
+        #     self.log(f"train/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
         return total
 
     def configure_optimizers(self):
