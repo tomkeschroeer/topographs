@@ -184,16 +184,17 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net, train_toge
             model_outputs = models[train_together[0]].forward(inputs, mask)
             n_jettypes = int(len(model_outputs)/2)
             tmp_dict["output_v"], tmp_dict["output_e"] = model_outputs[:n_jettypes][0], model_outputs[n_jettypes:][0]
+            print(tmp_dict["output_e"][0].detach().numpy().shape)
             for i, train_jet_type in enumerate(train_together):
                 inputs.requires_grad_()
-                tmp_dict["output_e"][train_jet_type].backward(gradient=ones_like(tmp_dict["output_e"][train_jet_type]))
-                preds[f"preds_e_{train_jet_type}"].append(tmp_dict["output_e"][train_jet_type].detach().numpy())
+                tmp_dict["output_e"][i].backward(gradient=ones_like(tmp_dict["output_e"][i]))
+                preds[f"preds_e_{train_jet_type}"].append(tmp_dict["output_e"][i].detach().numpy())
                 labels[f"labels_e_{train_jet_type}"].append(labels_dict[f"Y_edge_{train_jet_type}"].detach().numpy())
                 if not small_net[train_jet_type]:
-                    preds[f"preds_v_{train_jet_type}"].append(tmp_dict["output_v"][train_jet_type].detach().numpy())
+                    preds[f"preds_v_{train_jet_type}"].append(tmp_dict["output_v"][i].detach().numpy())
                     labels[f"labels_v_{train_jet_type}"].append(labels_dict[f"Y_vertex_features_{train_jet_type}"].detach().numpy())
-                # grad = inputs.grad.data
-                # grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
+                grad = inputs.grad.data
+                grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
             # grad = inputs.grad.data
             # grads[f"grads_{jet_type}"].append(grad.detach().numpy())
         masks.append(mask.detach().numpy())
@@ -778,7 +779,6 @@ class Plotter:
     def plotting_regression_scatter(self, model_file_numbers, var):
         with File(self.test_file, "r") as f:
             jet_type_per_jet = f["jet_type"][:self.njet_test]
-            print(np.unique(jet_type_per_jet))
         for model_file_number in model_file_numbers:
             var_str, var_numb = get_var_names(var, self.used_vertex_properties)
             if var_numb == -1:
@@ -808,8 +808,6 @@ class Plotter:
                 plot_names = [f"{jet_type}_jets", f"non-{jet_type}_jets"]
                 preds_masked = preds[mask]
                 labels_masked = labels[mask]
-                print(preds_masked)
-                print(labels_masked)
                 var_min = np.min(labels_masked[~np.isnan(labels_masked)])
                 var_max = np.max(labels_masked[~np.isnan(labels_masked)])
                 var_min_pred = np.min(preds_masked[~np.isnan(preds_masked)])
@@ -888,8 +886,6 @@ class Plotter:
                         other_jet_type_int = self.get_jettype_index(other_jet_type)
                         mask_non = (jet_type_per_jet == other_jet_type_int)
                         preds_other_masked = preds[mask_non]
-                        print(other_jet_type)
-                        print(preds_other_masked)
                         self.plot_hist(
                             ylabel="number of jets",
                             xlabel="log $p_T$",
