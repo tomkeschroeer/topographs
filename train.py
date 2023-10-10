@@ -13,7 +13,6 @@ import shutil
 
 import torch.nn as nn
 import torch.optim as optim
-from lightning_lite.utilities.exceptions import MisconfigurationException
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import from_numpy, save, tensor
@@ -219,7 +218,7 @@ if __name__ == "__main__":
     #         from_numpy(mask_vertex_labels.astype(bool))
     # )
     valid_dataset = Topographs_dataset(
-        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val, jet_types=config.jet_types
+        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val, jet_types=config.jet_types, train=False
     )
     valid_loader = DataLoader(valid_dataset, batch_size=None)
 

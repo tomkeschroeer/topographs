@@ -91,7 +91,7 @@ class TopographModel(pl.LightningModule):
         self.nodes_vertex = nodes_vertex
 
         self.feat_layers = ModuleList()
-        self.edge_layers = ModuleList()
+        # self.edge_layers = ModuleList()
         self.dot_products = ModuleList()
 
         self.feat_layers_prime = ModuleList()
@@ -108,11 +108,12 @@ class TopographModel(pl.LightningModule):
                 self.vertex_networks.append(VertexNetwork(nodes=self.nodes_vertex))
                 self.feat_layers_prime.append(FeatLayers(nodes=self.nodes_feat))
             self.feat_layers.append(FeatLayers(nodes=self.nodes_feat))
-            self.edge_layers.append(EdgeLayers(nodes=self.nodes_weight))
+            # self.edge_layers.append(EdgeLayers(nodes=self.nodes_weight))
             self.dot_products.append(DotProduct())
             self.edge_layers_prime.append(EdgeLayers(nodes=self.nodes_weight_prime))
             self.dot_products_prime.append(DotProduct())
         # Define the loss funcitons
+        self.edge_layers = ModuleList([EdgeLayers(nodes=self.nodes_weight) for jet_type in self.jet_types])
         self.loss_fn_vertex = MSELoss(reduction='none')  # MultipleMSELoss()
 
     def on_fit_start(self):
@@ -141,13 +142,13 @@ class TopographModel(pl.LightningModule):
         model
             topograph model ready to be trained.
         """
-        edge_wt_outs = {}
-        edge_feat_outs = {}
-        edge_wt_outs_prime = {}
-        edge_feat_outs_prime = {}
-        dot_products = {}
-        dot_products_prime = {}
-        dense_vertex_outs = {}
+        edge_wt_outs = [] #ModuleList()
+        edge_feat_outs = [] #ModuleList()
+        edge_wt_outs_prime = [] #ModuleList()
+        edge_feat_outs_prime = [] #ModuleList()
+        dot_products = [] #ModuleList()
+        dot_products_prime = [] #ModuleList()
+        dense_vertex_outs = [] #ModuleList()
         for i, jet_type in enumerate(self.jet_types):
             edge_wt_outs[jet_type] = self.edge_layers[i](inputs)
             edge_feat_outs[jet_type] = self.feat_layers[i](inputs)
@@ -159,7 +160,7 @@ class TopographModel(pl.LightningModule):
             # concat_inputs = T.cat((inputs, input_to_concat), axis = -1)
             # edge_wt_outs_prime[jet_type] = self.edge_layers_prime[i](concat_inputs)
             if self.small_net[jet_type]:
-                dense_vertex_outs[jet_type] = None
+                dense_vertex_outs.append(None)
             else:
                 # edge_feat_outs_prime[jet_type] = self.edge_layers_prime[i](concat_inputs)
                 # dot_products_prime[jet_type] = self.dot_products_prime[i](edge_wt_outs_prime[jet_type], edge_feat_outs_prime[jet_type], mask)
@@ -171,8 +172,10 @@ class TopographModel(pl.LightningModule):
         cal_loss_edge_start = True
         cal_loss_vertex_start = True
         loss_vertex_cal = None
-        for jet_type in self.jet_types:
-            vertex_outs, edge_outs = self.forward(inputs=inputs, mask=mask)
+        loss_vertex_per_fl = {}
+        loss_edge_per_fl = {}
+        vertex_outs, edge_outs = self.forward(inputs=inputs, mask=mask)
+        for i, jet_type in enumerate(self.jet_types):
             labels_edge = labels[f"Y_edge_{jet_type}"]
             sample_weights = labels[f"sample_weights_{jet_type}"]
             if not self.small_net[jet_type]:
@@ -211,22 +214,30 @@ class TopographModel(pl.LightningModule):
 
             if cal_loss_edge_start:
                 loss_edge_cal = binary_cross_entropy_with_logits(
-                    edge_outs[jet_type], labels_edge, sample_weights, reduction='none',
+                    edge_outs[i], labels_edge, sample_weights, reduction='none',
+                    # edge_outs, labels_edge, sample_weights, reduction='none',
                 )[mask].mean()
+                loss_edge_per_fl[jet_type] = loss_edge_cal
                 cal_loss_edge_start = False
             else:
                 loss_edge_cal = loss_edge_cal + binary_cross_entropy_with_logits(
-                    edge_outs[jet_type], labels_edge, sample_weights, reduction='none',
+                    # edge_outs, labels_edge, sample_weights, reduction='none',
+                    edge_outs[i], labels_edge, sample_weights, reduction='none',
                 )[mask].mean()
+                loss_edge_per_fl[jet_type] = loss_edge_cal
             if cal_loss_vertex_start and not self.small_net[jet_type]:
                 loss_vertex_cal = self.loss_fn_vertex(
-                    vertex_outs[jet_type], labels_vertex
+                    vertex_outs[i], labels_vertex
+                    # vertex_outs, labels_vertex
                 )[mask_vert].mean()
+                loss_vertex_per_fl[jet_type] = loss_vertex_cal
                 cal_loss_vertex_start = False
             elif not cal_loss_vertex_start and not self.small_net[jet_type]:
                 loss_vertex_cal = loss_vertex_cal + self.loss_fn_vertex(
-                    vertex_outs[jet_type], labels_vertex
+                    # vertex_outs, labels_vertex
+                    vertex_outs[i], labels_vertex
                 )[mask_vert].mean()
+                loss_vertex_per_fl[jet_type] = loss_vertex_cal
         
         if loss_vertex_cal is not None:
             total = (
@@ -235,24 +246,32 @@ class TopographModel(pl.LightningModule):
         else:
             total = loss_edge_cal
         # total = loss_edge_cal
-        return loss_edge_cal, loss_vertex_cal, total
+        return loss_edge_cal, loss_vertex_cal, total, loss_edge_per_fl, loss_vertex_per_fl
 
     def training_step(self, sample: tuple, _batch_idx: int):
-        loss_edge_cal, loss_vertex_cal, total = self.basis_step(sample, _batch_idx)
+        loss_edge_cal, loss_vertex_cal, total, loss_edge_per_fl, loss_vertex_per_fl = self.basis_step(sample, _batch_idx)
         self.log("train/edge", loss_edge_cal)
         # if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("train/total", total)
         self.log("train/vertex", loss_vertex_cal)
+        for jet_type in self.jet_types:
+            self.log(f"train/edge_{jet_type}", loss_edge_per_fl[jet_type])
+            if not self.small_net[jet_type]:
+                self.log(f"train/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
         return total
 
     def validation_step(self, sample: tuple, _batch_idx: int):
-        loss_edge_cal, loss_vertex_cal, total = self.basis_step(
+        loss_edge_cal, loss_vertex_cal, total, loss_edge_per_fl, loss_vertex_per_fl = self.basis_step(
             sample, _batch_idx
         )
         self.log("valid/edge", loss_edge_cal)
         # if self.small_net[self.tr_jet_type]: return loss_edge_cal
         self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
+        for jet_type in self.jet_types:
+            self.log(f"valid/edge_{jet_type}", loss_edge_per_fl[jet_type])
+            if not self.small_net[jet_type]:
+                self.log(f"valid/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
         return total
 
     def configure_optimizers(self):

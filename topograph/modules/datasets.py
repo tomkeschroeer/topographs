@@ -20,7 +20,7 @@ class Topographs_dataset(IterableDataset):
         IterableDataset.__init__(self)
         
         self.filename = filename
-        # self.batch_size = batch_size
+        self.batch_size = batch_size
         self.n_samples = n_samples
         self.jet_types = jet_types
         self.batch_size = n_samples

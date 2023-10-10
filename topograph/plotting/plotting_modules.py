@@ -184,16 +184,17 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net, train_toge
             model_outputs = models[train_together[0]].forward(inputs, mask)
             n_jettypes = int(len(model_outputs)/2)
             tmp_dict["output_v"], tmp_dict["output_e"] = model_outputs[:n_jettypes][0], model_outputs[n_jettypes:][0]
+            print(tmp_dict["output_e"][0].detach().numpy().shape)
             for i, train_jet_type in enumerate(train_together):
                 inputs.requires_grad_()
-                tmp_dict["output_e"][train_jet_type].backward(gradient=ones_like(tmp_dict["output_e"][train_jet_type]))
-                preds[f"preds_e_{train_jet_type}"].append(tmp_dict["output_e"][train_jet_type].detach().numpy())
+                tmp_dict["output_e"][i].backward(gradient=ones_like(tmp_dict["output_e"][i]))
+                preds[f"preds_e_{train_jet_type}"].append(tmp_dict["output_e"][i].detach().numpy())
                 labels[f"labels_e_{train_jet_type}"].append(labels_dict[f"Y_edge_{train_jet_type}"].detach().numpy())
                 if not small_net[train_jet_type]:
-                    preds[f"preds_v_{train_jet_type}"].append(tmp_dict["output_v"][train_jet_type].detach().numpy())
+                    preds[f"preds_v_{train_jet_type}"].append(tmp_dict["output_v"][i].detach().numpy())
                     labels[f"labels_v_{train_jet_type}"].append(labels_dict[f"Y_vertex_features_{train_jet_type}"].detach().numpy())
-                # grad = inputs.grad.data
-                # grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
+                grad = inputs.grad.data
+                grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
             # grad = inputs.grad.data
             # grads[f"grads_{jet_type}"].append(grad.detach().numpy())
         masks.append(mask.detach().numpy())
@@ -778,7 +779,6 @@ class Plotter:
     def plotting_regression_scatter(self, model_file_numbers, var):
         with File(self.test_file, "r") as f:
             jet_type_per_jet = f["jet_type"][:self.njet_test]
-            print(np.unique(jet_type_per_jet))
         for model_file_number in model_file_numbers:
             var_str, var_numb = get_var_names(var, self.used_vertex_properties)
             if var_numb == -1:
@@ -808,8 +808,6 @@ class Plotter:
                 plot_names = [f"{jet_type}_jets", f"non-{jet_type}_jets"]
                 preds_masked = preds[mask]
                 labels_masked = labels[mask]
-                print(preds_masked)
-                print(labels_masked)
                 var_min = np.min(labels_masked[~np.isnan(labels_masked)])
                 var_max = np.max(labels_masked[~np.isnan(labels_masked)])
                 var_min_pred = np.min(preds_masked[~np.isnan(preds_masked)])
@@ -888,8 +886,6 @@ class Plotter:
                         other_jet_type_int = self.get_jettype_index(other_jet_type)
                         mask_non = (jet_type_per_jet == other_jet_type_int)
                         preds_other_masked = preds[mask_non]
-                        print(other_jet_type)
-                        print(preds_other_masked)
                         self.plot_hist(
                             ylabel="number of jets",
                             xlabel="log $p_T$",
@@ -1311,199 +1307,199 @@ class Plotter:
                     )
 
     def plotting_saliency_map(self, model_file_numbers):
-            with File(self.test_file, "r") as f:
-                jet_types = f[f"jet_type"][:self.njet_test]
-            for model_file_number in model_file_numbers:
-                for jet_type in self.jet_types:
-                    self.logger.info(f"plotting saliency map for model {model_file_number} for {jet_type}-jets")
-                    with File(
-                        f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
-                    ) as f:
-                        grads = f[f"gradients_{jet_type}"][:self.njet_test]
-                        grads_mask = f["mask"][:self.njet_test]
-                        grads_shape = grads.shape
-                        labels_edge = f[f"labels_edge_{jet_type}"][:self.njet_test]
-                    rep_grad_mask = (
-                        np.array(np.repeat(grads_mask, grads_shape[-1], axis=-1))
-                        .astype(bool)
-                        .reshape(grads_shape)
+        with File(self.test_file, "r") as f:
+            jet_types = f[f"jet_type"][:self.njet_test]
+        for model_file_number in model_file_numbers:
+            for jet_type in self.jet_types:
+                self.logger.info(f"plotting saliency map for model {model_file_number} for {jet_type}-jets")
+                with File(
+                    f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
+                ) as f:
+                    grads = f[f"gradients_{jet_type}"][:self.njet_test]
+                    grads_mask = f["mask"][:self.njet_test]
+                    grads_shape = grads.shape
+                    labels_edge = f[f"labels_edge_{jet_type}"][:self.njet_test]
+                rep_grad_mask = (
+                    np.array(np.repeat(grads_mask, grads_shape[-1], axis=-1))
+                    .astype(bool)
+                    .reshape(grads_shape)
+                )
+                rep_grad_mask_jettype = (
+                    np.repeat(
+                        np.logical_and(grads_mask, labels_edge == 1),
+                        grads_shape[-1],
+                        axis=-1,
                     )
-                    rep_grad_mask_jettype = (
-                        np.repeat(
-                            np.logical_and(grads_mask, labels_edge == 1),
-                            grads_shape[-1],
-                            axis=-1,
-                        )
-                        .astype(bool)
-                        .reshape(grads.shape)
+                    .astype(bool)
+                    .reshape(grads.shape)
+                )
+                rep_grad_mask_nonjettype = (
+                    np.repeat(
+                        np.logical_and(grads_mask, labels_edge == 0),
+                        grads_shape[-1],
+                        axis=-1,
                     )
-                    rep_grad_mask_nonjettype = (
-                        np.repeat(
-                            np.logical_and(grads_mask, labels_edge == 0),
-                            grads_shape[-1],
-                            axis=-1,
-                        )
-                        .astype(bool)
-                        .reshape(grads.shape)
-                    )
+                    .astype(bool)
+                    .reshape(grads.shape)
+                )
 
-                    grads_all = ma.array(grads, mask=~rep_grad_mask).mean(axis=1)
-                    grads_jettype = ma.array(grads, mask=~rep_grad_mask_jettype).mean(axis=1)
-                    grads_nonjettype = ma.array(grads, mask=~rep_grad_mask_nonjettype).mean(axis=1)
+                grads_all = ma.array(grads, mask=~rep_grad_mask).mean(axis=1)
+                grads_jettype = ma.array(grads, mask=~rep_grad_mask_jettype).mean(axis=1)
+                grads_nonjettype = ma.array(grads, mask=~rep_grad_mask_nonjettype).mean(axis=1)
 
-                    jettype_mask = (jet_types == self.get_jettype_index(jet_type))
-                    grads_nonjettype_shape = grads_nonjettype.shape
-                    grads_nonjettype_onlyjetttype = grads[jettype_mask]
-                    grads_onlyjettype_mask = grads_mask[jettype_mask]
-                    rep_grad_mask_nonjettype = (
-                        np.repeat(
-                            np.logical_and(grads_onlyjettype_mask, labels_edge[jettype_mask] == 0),
-                            grads_nonjettype_shape[-1],
-                            axis=-1
-                        )
-                    )        
-                    grads_nonjettype_onlyjettype = ma.array(grads_nonjettype_onlyjetttype, mask=~rep_grad_mask_nonjettype).mean(axis=1)
+                jettype_mask = (jet_types == self.get_jettype_index(jet_type))
+                grads_nonjettype_shape = grads_nonjettype.shape
+                grads_nonjettype_onlyjetttype = grads[jettype_mask]
+                grads_onlyjettype_mask = grads_mask[jettype_mask]
+                rep_grad_mask_nonjettype = (
+                    np.repeat(
+                        np.logical_and(grads_onlyjettype_mask, labels_edge[jettype_mask] == 0),
+                        grads_nonjettype_shape[-1],
+                        axis=-1
+                    )
+                )        
+                grads_nonjettype_onlyjettype = ma.array(grads_nonjettype_onlyjetttype, mask=~rep_grad_mask_nonjettype).mean(axis=1)
 
-                    track_vars = list(range(len(self.global_config.track_inputs)))
+                track_vars = list(range(len(self.global_config.track_inputs)))
 
-                    if len(track_vars) != grads_shape[-1]:
-                        self.logger.warning(
-                            "Number of track variables is not the same as the one indicated by"
-                            " the saved gradients. Only use the numbers of variables as y-axis"
-                        )
-                        track_vars = list(range(grads_shape[-1]))
+                if len(track_vars) != grads_shape[-1]:
+                    self.logger.warning(
+                        "Number of track variables is not the same as the one indicated by"
+                        " the saved gradients. Only use the numbers of variables as y-axis"
+                    )
+                    track_vars = list(range(grads_shape[-1]))
 
-                    sal_bins_all = np.linspace(
-                        min(grads_all.flatten()), max(grads_all.flatten()), num=25
-                    )
-                    hists_all = [
-                        np.histogram(
-                            grads_all[:, i][grads_all[:, i] != 0.0], bins=sal_bins_all
-                        )[0]
-                        / len(grads_all[:, i])
-                        for i in track_vars
-                    ]
-                    minimal_perc = np.concatenate(
-                        np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_all])
-                    )
-                    minimum = min(minimal_perc)
-                    maximum = max(minimal_perc)
-                    # sal_bins_all = np.linspace(minimum, maximum, num=25)
-                    grads_all[grads_all < sal_bins_all[minimum]] = sal_bins_all[minimum]
-                    grads_all[grads_all > sal_bins_all[maximum]] = sal_bins_all[maximum]
-                    sal_bins_all = np.linspace(
-                        min(grads_all.flatten()), max(grads_all.flatten()), num=25
-                    )
-                    # sal_bins_all = np.linspace(-0.1,0.01,50)
-                    hists_all = [
-                        np.histogram(grads_all[:, i], bins=sal_bins_all)[0]
-                        / len(grads_all[:, i])
-                        for i in track_vars
-                    ]
-                    self.plotting_scatter_vals(
-                        ylabel="input variable",
-                        xlabel="gradient",
-                        xvals=sal_bins_all[1:] - (sal_bins_all[1:] - sal_bins_all[0:-1]) / 2,
-                        yvals=track_vars,
-                        zvals=np.stack((hists_all)),
-                        plot_name=f"saliency_map_alltracks_model_{model_file_number:03d}",
-                        y_ticklabels=self.global_config.track_inputs,
-                        swap_inputs=False,
-                    )
+                sal_bins_all = np.linspace(
+                    min(grads_all.flatten()), max(grads_all.flatten()), num=25
+                )
+                hists_all = [
+                    np.histogram(
+                        grads_all[:, i][grads_all[:, i] != 0.0], bins=sal_bins_all
+                    )[0]
+                    / len(grads_all[:, i])
+                    for i in track_vars
+                ]
+                minimal_perc = np.concatenate(
+                    np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_all])
+                )
+                minimum = min(minimal_perc)
+                maximum = max(minimal_perc)
+                # sal_bins_all = np.linspace(minimum, maximum, num=25)
+                grads_all[grads_all < sal_bins_all[minimum]] = sal_bins_all[minimum]
+                grads_all[grads_all > sal_bins_all[maximum]] = sal_bins_all[maximum]
+                sal_bins_all = np.linspace(
+                    min(grads_all.flatten()), max(grads_all.flatten()), num=25
+                )
+                # sal_bins_all = np.linspace(-0.1,0.01,50)
+                hists_all = [
+                    np.histogram(grads_all[:, i], bins=sal_bins_all)[0]
+                    / len(grads_all[:, i])
+                    for i in track_vars
+                ]
+                self.plotting_scatter_vals(
+                    ylabel="input variable",
+                    xlabel="gradient",
+                    xvals=sal_bins_all[1:] - (sal_bins_all[1:] - sal_bins_all[0:-1]) / 2,
+                    yvals=track_vars,
+                    zvals=np.stack((hists_all)),
+                    plot_name=f"saliency_map_alltracks_model_{model_file_number:03d}",
+                    y_ticklabels=self.global_config.track_inputs,
+                    swap_inputs=False,
+                )
 
-                    sal_bins_jettype = np.linspace(
-                        min(grads_jettype.flatten()), max(grads_jettype.flatten()), num=25
-                    )
-                    hists_jettype = [
-                        np.histogram(grads_jettype[:, i][grads_jettype[:, i] != 0.0], bins=sal_bins_jettype)[0]
-                        / len(grads_jettype[:, i])
-                        for i in track_vars
-                    ]
-                    minimal_perc = np.concatenate(
-                        np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_jettype])
-                    )
-                    minimum = min(minimal_perc)
-                    maximum = max(minimal_perc)
-                    # sal_bins_b = np.linspace(minimum, maximum, num=25)
-                    grads_jettype[grads_jettype < sal_bins_jettype[minimum]] = sal_bins_jettype[minimum]
-                    grads_jettype[grads_jettype > sal_bins_jettype[maximum]] = sal_bins_jettype[maximum]
-                    sal_bins_jettype = np.linspace(
-                        min(grads_jettype.flatten()), max(grads_jettype.flatten()), num=25
-                    )
-                    self.plotting_scatter_vals(
-                        ylabel="input variable",
-                        xlabel="gradient",
-                        xvals=sal_bins_jettype[1:] - (sal_bins_jettype[1:] - sal_bins_jettype[0:-1]) / 2,
-                        yvals=track_vars,
-                        zvals=np.stack((hists_jettype)),
-                        plot_name=f"saliency_map_{jet_type}_tracks_model_{model_file_number:03d}",
-                        y_ticklabels=self.global_config.track_inputs,
-                        swap_inputs=False,
-                    )
+                sal_bins_jettype = np.linspace(
+                    min(grads_jettype.flatten()), max(grads_jettype.flatten()), num=25
+                )
+                hists_jettype = [
+                    np.histogram(grads_jettype[:, i][grads_jettype[:, i] != 0.0], bins=sal_bins_jettype)[0]
+                    / len(grads_jettype[:, i])
+                    for i in track_vars
+                ]
+                minimal_perc = np.concatenate(
+                    np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_jettype])
+                )
+                minimum = min(minimal_perc)
+                maximum = max(minimal_perc)
+                # sal_bins_b = np.linspace(minimum, maximum, num=25)
+                grads_jettype[grads_jettype < sal_bins_jettype[minimum]] = sal_bins_jettype[minimum]
+                grads_jettype[grads_jettype > sal_bins_jettype[maximum]] = sal_bins_jettype[maximum]
+                sal_bins_jettype = np.linspace(
+                    min(grads_jettype.flatten()), max(grads_jettype.flatten()), num=25
+                )
+                self.plotting_scatter_vals(
+                    ylabel="input variable",
+                    xlabel="gradient",
+                    xvals=sal_bins_jettype[1:] - (sal_bins_jettype[1:] - sal_bins_jettype[0:-1]) / 2,
+                    yvals=track_vars,
+                    zvals=np.stack((hists_jettype)),
+                    plot_name=f"saliency_map_{jet_type}_tracks_model_{model_file_number:03d}",
+                    y_ticklabels=self.global_config.track_inputs,
+                    swap_inputs=False,
+                )
 
-                    sal_bins_nonjettype = np.linspace(
-                        min(grads_nonjettype.flatten()), max(grads_nonjettype.flatten()), num=25
-                    )
-                    hists_nonjettype = [
-                        np.histogram(
-                            grads_nonjettype[:, i][grads_nonjettype[:, i] != 0.0], bins=sal_bins_nonjettype
-                        )[0]
-                        / len(grads_nonjettype[:, i])
-                        for i in track_vars
-                    ]
-                    minimal_perc = np.concatenate(
-                        np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_nonjettype])
-                    )
-                    minimum = min(minimal_perc)
-                    maximum = max(minimal_perc)
-                    # sal_bins_nonb = np.linspace(minimum, maximum, num=25)
-                    grads_nonjettype[grads_nonjettype < sal_bins_nonjettype[minimum]] = sal_bins_nonjettype[minimum]
-                    grads_nonjettype[grads_nonjettype > sal_bins_nonjettype[maximum]] = sal_bins_nonjettype[maximum]
-                    sal_bins_nonjettype = np.linspace(
-                        min(grads_nonjettype.flatten()), max(grads_nonjettype.flatten()), num=25
-                    )
-                    self.plotting_scatter_vals(
-                        ylabel="input variable",
-                        xlabel="gradient",
-                        xvals=sal_bins_nonjettype[1:] - (sal_bins_nonjettype[1:] - sal_bins_nonjettype[0:-1]) / 2,
-                        yvals=track_vars,
-                        zvals=np.stack((hists_nonjettype)),
-                        plot_name=f"saliency_map_non_{jet_type}_tracks_model_{model_file_number:03d}",
-                        y_ticklabels=self.global_config.track_inputs,
-                        swap_inputs=False,
-                    )
+                sal_bins_nonjettype = np.linspace(
+                    min(grads_nonjettype.flatten()), max(grads_nonjettype.flatten()), num=25
+                )
+                hists_nonjettype = [
+                    np.histogram(
+                        grads_nonjettype[:, i][grads_nonjettype[:, i] != 0.0], bins=sal_bins_nonjettype
+                    )[0]
+                    / len(grads_nonjettype[:, i])
+                    for i in track_vars
+                ]
+                minimal_perc = np.concatenate(
+                    np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_nonjettype])
+                )
+                minimum = min(minimal_perc)
+                maximum = max(minimal_perc)
+                # sal_bins_nonb = np.linspace(minimum, maximum, num=25)
+                grads_nonjettype[grads_nonjettype < sal_bins_nonjettype[minimum]] = sal_bins_nonjettype[minimum]
+                grads_nonjettype[grads_nonjettype > sal_bins_nonjettype[maximum]] = sal_bins_nonjettype[maximum]
+                sal_bins_nonjettype = np.linspace(
+                    min(grads_nonjettype.flatten()), max(grads_nonjettype.flatten()), num=25
+                )
+                self.plotting_scatter_vals(
+                    ylabel="input variable",
+                    xlabel="gradient",
+                    xvals=sal_bins_nonjettype[1:] - (sal_bins_nonjettype[1:] - sal_bins_nonjettype[0:-1]) / 2,
+                    yvals=track_vars,
+                    zvals=np.stack((hists_nonjettype)),
+                    plot_name=f"saliency_map_non_{jet_type}_tracks_model_{model_file_number:03d}",
+                    y_ticklabels=self.global_config.track_inputs,
+                    swap_inputs=False,
+                )
 
-                    sal_bins_nonjettype_onlyjettype = np.linspace(
-                        min(grads_nonjettype_onlyjettype.flatten()), max(grads_nonjettype_onlyjettype.flatten()), num=25
-                    )
-                    hists_nonjettype_onlyjettype = [
-                        np.histogram(
-                            grads_nonjettype_onlyjettype[:, i][grads_nonjettype_onlyjettype[:, i] != 0.0], bins=sal_bins_nonjettype_onlyjettype
-                        )[0]
-                        / len(grads_nonjettype_onlyjettype[:, i])
-                        for i in track_vars
-                    ]
-                    minimal_perc = np.concatenate(
-                        np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_nonjettype_onlyjettype])
-                    )
-                    minimum = min(minimal_perc)
-                    maximum = max(minimal_perc)
-                    # sal_bins_nonb = np.linspace(minimum, maximum, num=25)
-                    grads_nonjettype_onlyjettype[grads_nonjettype_onlyjettype < sal_bins_nonjettype_onlyjettype[minimum]] = sal_bins_nonjettype_onlyjettype[minimum]
-                    grads_nonjettype_onlyjettype[grads_nonjettype_onlyjettype > sal_bins_nonjettype_onlyjettype[maximum]] = sal_bins_nonjettype_onlyjettype[maximum]
-                    sal_bins_nonjettype_onlyjettype = np.linspace(
-                        min(grads_nonjettype_onlyjettype.flatten()), max(grads_nonjettype_onlyjettype.flatten()), num=25
-                    )
-                    self.plotting_scatter_vals(
-                        ylabel="input variable",
-                        xlabel="gradient",
-                        xvals=sal_bins_nonjettype_onlyjettype[1:] - (sal_bins_nonjettype_onlyjettype[1:] - sal_bins_nonjettype_onlyjettype[0:-1]) / 2,
-                        yvals=track_vars,
-                        zvals=np.stack((hists_nonjettype_onlyjettype)),
-                        plot_name=f"saliency_map_non_{jet_type}_only_{jet_type}_jets_tracks_model_{model_file_number:03d}",
-                        y_ticklabels=self.global_config.track_inputs,
-                        swap_inputs=False,
-                    )
+                sal_bins_nonjettype_onlyjettype = np.linspace(
+                    min(grads_nonjettype_onlyjettype.flatten()), max(grads_nonjettype_onlyjettype.flatten()), num=25
+                )
+                hists_nonjettype_onlyjettype = [
+                    np.histogram(
+                        grads_nonjettype_onlyjettype[:, i][grads_nonjettype_onlyjettype[:, i] != 0.0], bins=sal_bins_nonjettype_onlyjettype
+                    )[0]
+                    / len(grads_nonjettype_onlyjettype[:, i])
+                    for i in track_vars
+                ]
+                minimal_perc = np.concatenate(
+                    np.array([np.argwhere(hist > 0.1).flatten() for hist in hists_nonjettype_onlyjettype])
+                )
+                minimum = min(minimal_perc)
+                maximum = max(minimal_perc)
+                # sal_bins_nonb = np.linspace(minimum, maximum, num=25)
+                grads_nonjettype_onlyjettype[grads_nonjettype_onlyjettype < sal_bins_nonjettype_onlyjettype[minimum]] = sal_bins_nonjettype_onlyjettype[minimum]
+                grads_nonjettype_onlyjettype[grads_nonjettype_onlyjettype > sal_bins_nonjettype_onlyjettype[maximum]] = sal_bins_nonjettype_onlyjettype[maximum]
+                sal_bins_nonjettype_onlyjettype = np.linspace(
+                    min(grads_nonjettype_onlyjettype.flatten()), max(grads_nonjettype_onlyjettype.flatten()), num=25
+                )
+                self.plotting_scatter_vals(
+                    ylabel="input variable",
+                    xlabel="gradient",
+                    xvals=sal_bins_nonjettype_onlyjettype[1:] - (sal_bins_nonjettype_onlyjettype[1:] - sal_bins_nonjettype_onlyjettype[0:-1]) / 2,
+                    yvals=track_vars,
+                    zvals=np.stack((hists_nonjettype_onlyjettype)),
+                    plot_name=f"saliency_map_non_{jet_type}_only_{jet_type}_jets_tracks_model_{model_file_number:03d}",
+                    y_ticklabels=self.global_config.track_inputs,
+                    swap_inputs=False,
+                )
 
     def plotting_saliency_map_pertrack(self, model_file_numbers):
         for model_file_number in model_file_numbers:
