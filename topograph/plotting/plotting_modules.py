@@ -785,7 +785,6 @@ class Plotter:
                 self.logger.warning(f"Skipping plotting of {var}, not used in training")
                 break
             for jet_type in self.jet_types:
-                jet_type = "b"
                 other_jet_types = self.jet_types.copy()
                 other_jet_types.remove(jet_type)
                 if self.small_net[jet_type]:
