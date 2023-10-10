@@ -573,9 +573,7 @@ class DatasetCreater:
                 if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
                 for key in self.vertex_features:
                     if self.global_conf.vertex_feat_dict[key]["log"]:
-                        print(vertex_feat_jet_types)
                         vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
-                        print(vertex_feat_jet_types)
         return vertex_feat_jet_types
 
     def get_track_input(self):
