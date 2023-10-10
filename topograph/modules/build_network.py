@@ -150,21 +150,21 @@ class TopographModel(pl.LightningModule):
         dot_products_prime = [] #ModuleList()
         dense_vertex_outs = [] #ModuleList()
         for i, jet_type in enumerate(self.jet_types):
-            edge_wt_outs[jet_type] = self.edge_layers[i](inputs)
-            edge_feat_outs[jet_type] = self.feat_layers[i](inputs)
-            dot_products[jet_type] = self.dot_products[i](edge_wt_outs[jet_type], edge_feat_outs[jet_type], mask)
-            # dt_shape = dot_products[jet_type].size()
+            edge_wt_outs.append(self.edge_layers[i](inputs))
+            edge_feat_outs.append(self.feat_layers[i](inputs))
+            dot_products.append(self.dot_products[i](edge_wt_outs[i], edge_feat_outs[i], mask))
+            # dt_shape = dot_products[i].size()
             # inputs_shape = inputs.size()
-            # input_to_concat = dot_products[jet_type].reshape(dt_shape[0], 1, dt_shape[1])
+            # input_to_concat = dot_products[i].reshape(dt_shape[0], 1, dt_shape[1])
             # input_to_concat = input_to_concat.expand(dt_shape[0],inputs_shape[1], dt_shape[1])
             # concat_inputs = T.cat((inputs, input_to_concat), axis = -1)
-            # edge_wt_outs_prime[jet_type] = self.edge_layers_prime[i](concat_inputs)
+            # edge_wt_outs_prime.append(self.edge_layers_prime[i](concat_inputs))
             if self.small_net[jet_type]:
                 dense_vertex_outs.append(None)
             else:
-                # edge_feat_outs_prime[jet_type] = self.edge_layers_prime[i](concat_inputs)
-                # dot_products_prime[jet_type] = self.dot_products_prime[i](edge_wt_outs_prime[jet_type], edge_feat_outs_prime[jet_type], mask)
-                dense_vertex_outs[jet_type] = self.vertex_networks[i](dot_products[jet_type])
+                # edge_feat_outs_prime.append(self.edge_layers_prime[i](concat_inputs))
+                # dot_products_prime.append(self.dot_products_prime[i](edge_wt_outs_prime[i], edge_feat_outs_prime[i], mask))
+                dense_vertex_outs.append(self.vertex_networks[i](dot_products_prime[i]))
         return dense_vertex_outs, edge_wt_outs
 
     def basis_step(self, sample, _batch_idx):
