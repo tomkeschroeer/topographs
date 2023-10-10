@@ -164,7 +164,7 @@ class TopographModel(pl.LightningModule):
             else:
                 # edge_feat_outs_prime.append(self.edge_layers_prime[i](concat_inputs))
                 # dot_products_prime.append(self.dot_products_prime[i](edge_wt_outs_prime[i], edge_feat_outs_prime[i], mask))
-                dense_vertex_outs.append(self.vertex_networks[i](dot_products_prime[i]))
+                dense_vertex_outs.append(self.vertex_networks[i](dot_products[i]))
         return dense_vertex_outs, edge_wt_outs
 
     def basis_step(self, sample, _batch_idx):
