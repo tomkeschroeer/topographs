@@ -25,7 +25,7 @@ class Merge:
             ) as f:
                 if "jet_type" not in f.keys():
                     f.create_dataset("jet_type", data=np.full(shape=(len(f[f"{self.config.edge_name}_{jet_types[0]}"])), fill_value=0))
-            rename(f"{output_file}_{jet_types[0}}.h5", f"{output_file}.h5")
+            rename(f"{output_file}_{jet_types[0]}.h5", f"{output_file}.h5")
             exit()
         njets = int((
             self.dataset_types[""]["njets"]
@@ -33,7 +33,6 @@ class Merge:
             + self.dataset_types["_test"]["njets"]
         )/len(jet_types))
         stepsize = min(50_000, int(njets / 2))
-        print(stepsize)
         n_steps = njets // stepsize + 1
         array_full={}
         array_dict_labels_full={}
