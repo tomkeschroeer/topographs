@@ -59,4 +59,22 @@ for the training the following properties have to be defined:
 |---|---|---|
 jet_types | jet flavours that should be used for the training | ["b"] |
 small_net | dictionary that says for each jet flavour if a regression task has to be performed (False if regression should be performed) | {"b": False} |
-|||
+|tracks_name| dataset name for track inputs | X_train_tracks  |
+|edge_name| dataset name for edge labels |Y_edge |
+|vertex_feat_name| dataset name for regression labels | Y_vertex_features |
+|epochs| number of epochs to train for | 200 |
+|lr| learning rate | 0.01 |
+|use_sample_weights| If sample weights should be used for the edge training | True |
+|loss_fac_edge| weighting factor for the edge loss | 1 |
+|loss_fac_vert| weighting factor for the regression loss | 1 |
+| edge_feature_network | see below | see below |
+| edge_weight_network | see below | see below |
+| vertex_network | see below | see below |
+
+for the different parts of the networks you have to define the number of nodes:
+|network | field | description | default value |
+|---|---|---|
+| edge_feature_network | nodes | list of number of nodes per layer | [21, 20, 20, 30] |
+| edge_weight_network | nodes | list of number of nodes per layer | [21, 20, 20, 1] | 
+| vertex_network | nodes | list of number of nodes per layer | [30, 30, 30, 30, 1] |
+
