@@ -1,6 +1,17 @@
 # TopoGraphs
 
+If you don't already have a suitable dataset you first have to run the preprocessing in order to obtain one. The data fed in has to contain, besides the input features, the following truth information:
 
+on track level:
+```
+truthOriginLabel  
+flavour
+```
+on jet level:
+```
+HadronConeExclExtendedTruthLabelID  
+regression variable (e.g. hadron pt)
+```
 
 ## Getting started
 
