@@ -135,26 +135,27 @@ class Apply_Scaler:
                 with File(self.out_file, "r") as o:
                     keys=o.keys()
                     for ind in inds:
-                        for jet_type in self.jet_types:
-                            jet_type_in_jet = o["jet_type"][ind[0]:ind[1]]
-                            # print(self.jet_types.index(jet_type))
-                            mask = (jet_type_in_jet == self.jet_types.index(jet_type))
-                            njets_step = sum(mask)
-                            n_jets_per_jettype[jet_type] = n_jets_per_jettype[jet_type] + njets_step
-                            # if n_jets_per_jettype[jet_type] >= total_njets_per_jettype:
-                            if create_file:
-                                for key in keys:
-                                    data_chunk = o[key][ind[0]:ind[1]][mask]
-                                    shape = data_chunk.shape
-                                    shape = (None,) if len(shape) == 1 else (None, *shape[1:])
-                                    f.create_dataset(key, data=data_chunk, chunks=True, maxshape=shape)
-                                create_file = False
-                            else:
-                                # print(o[key][ind[0]:ind[1]])
-                                if njets_step >0:
-                                    for key in keys: #ind[1]-ind[0]
-                                        f[key].resize((f[key].shape[0] + njets_step), axis=0)
-                                        f[key][-njets_step:] = o[key][ind[0]:ind[1]][mask]
+                        njets_step = ind[1]-ind[0]
+                        # for jet_type in self.jet_types:
+                        #     jet_type_in_jet = o["jet_type"][ind[0]:ind[1]]
+                        #     # print(self.jet_types.index(jet_type))
+                        #     mask = (jet_type_in_jet == self.jet_types.index(jet_type))
+                        #     njets_step = sum(mask)
+                        #     n_jets_per_jettype[jet_type] = n_jets_per_jettype[jet_type] + njets_step
+                        #     # if n_jets_per_jettype[jet_type] >= total_njets_per_jettype:
+                        if create_file:
+                            for key in keys:
+                                data_chunk = o[key][ind[0]:ind[1]] #[mask]
+                                shape = data_chunk.shape
+                                shape = (None,) if len(shape) == 1 else (None, *shape[1:])
+                                f.create_dataset(key, data=data_chunk, chunks=True, maxshape=shape)
+                            create_file = False
+                        else:
+                            # print(o[key][ind[0]:ind[1]])
+                            if njets_step >0:
+                                for key in keys: #ind[1]-ind[0]
+                                    f[key].resize((f[key].shape[0] + njets_step), axis=0)
+                                    f[key][-njets_step:] = o[key][ind[0]:ind[1]] #[mask]
                             # if n_jets_per_jettype[jet_type] >=
 
     def scale_generator(
