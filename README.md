@@ -15,23 +15,23 @@ on jet level:
 HadronConeExclExtendedTruthLabelID  
 ```
 The needed fields to be filled in the config file are listed in the table below.
-|field | description   |  
-|---|---|  
-| input | input files in .h5 format.|  
-| output | output directory for the preprocessed files |  
-| output_training | output directory for the model checkpoints and later for plots etc. All outputs that are produced during and after the training |  
-| model_name | name of the training run that is used for weights and biases (wandb) |  
-| preprocessing_file_name | name of the output file for the preprocessing |
-| scale_dict | name of the scale dict where scaling and shifting parameters for the input features and regression variable for each jet flavour |  
-| training_file_name | in the last step the preprocessing file will be split into a training, testing and validation file. Here, define the name of training file|
-| testing_file_name | define the name of testing file |  
-| validation_file_name | define the name of validation file |  
-| njets | number of jets for the training file (total number, not per jet flavour!) |
-| njets_val | number of jets for the validation file (total number, not per jet flavour!)  |
-| njets_test | number of jets for the testing file (total number, not per jet flavour!)  |
-| input_tracks_name | name of dataset group in .h5 file that includes the track inputs, the truthOriginLabel and regression variable(s) | 
-| input_truth_name | name of dataset group in .h5 file that includes the flavour variable |
-| input_jet_name | name of dataset group in .h5 file that includes the jet information (HadronConeExclExtendedTruthLabelID) |
+|field | description   | default value |
+|---|---|---|
+| input | input files in .h5 format.|  - 
+| output | output directory for the preprocessed files | -
+| output_training | output directory for the model checkpoints and later for plots etc. All outputs that are produced during and after the training | - |
+| model_name | name of the training run that is used for weights and biases (wandb) | - |
+| preprocessing_file_name | name of the output file for the preprocessing | preprocessed_ttbar_topograph.h5
+| scale_dict | name of the scale dict where scaling and shifting parameters for the input features and regression variable for each jet flavour | scale_dict_ttbar.json |
+| training_file_name | in the last step the preprocessing file will be split into a training, testing and validation file. Here, define the name of training file| training_ttbar_topographs.h5 |
+| testing_file_name | define the name of testing file | testing_ttbar_topographs.h5 |
+| validation_file_name | define the name of validation file | validation_ttbar_topographs.h5  |
+| njets | number of jets for the training file (total number, not per jet flavour!) | 1_000_000 |
+| njets_val | number of jets for the validation file (total number, not per jet flavour!)  | 500_000 |
+| njets_test | number of jets for the testing file (total number, not per jet flavour!)  | 50_000 |
+| input_tracks_name | name of dataset group in .h5 file that includes the track inputs, the truthOriginLabel and regression variable(s) | tracks_loose |
+| input_truth_name | name of dataset group in .h5 file that includes the flavour variable | truth_hadrons |
+| input_jet_name | name of dataset group in .h5 file that includes the jet information (HadronConeExclExtendedTruthLabelID) | jets |
 
 to start the preprocessing run the following commands. First you have to calculate all the labels and save the inputs in the preprocessing file:
 ```
@@ -52,3 +52,11 @@ python preprocessing.py -c configs/config.yaml -a
 After the preprocessing you should have a training, a testing and a validation file.
 
 ## Training
+
+for the training the following properties have to be defined:
+
+|field | description | default value |
+|---|---|---|
+jet_types | jet flavours that should be used for the training | ["b"] |
+small_net | dictionary that says for each jet flavour if a regression task has to be performed (False if regression should be performed) | {"b": False} |
+|||
