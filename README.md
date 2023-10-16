@@ -80,53 +80,30 @@ for the different parts of the networks you have to define the number of nodes:
 
 ## Evaluation
 
-Once the training is done, your training can be evaluated. The following parameters are all given below the "evaluation" parameter.
+Once the training is done, your training can be evaluated. The following parameters are all given below the "evaluation" parameter.  
 
 | field | description | default value |  
 |---|---|---|  
 | model_file_numbers | list of the epoch number you would like to evaluate. | [1] |  
 | ntracks | number of tracks to be considered. | 40 |  
 | file_formats | list of file formats you want the plots to be saved | ["pdf", "png"] |  
-<!-- |  plot_efficiency:
-   plot: False # True
-    recalculate: False #True
-  plot_effs_per_pt:
-    plot: False
-  plot_parameters:
-    plot: False
-    recalculate: False
-  plot_pt:
-    plot: True
-    recalculate: False
-  plot_conf_matrix:
-    plot: False
-    recalculate: False
-  plot_loss: {}
-  plot_preds_per_epoch:
-    plot: False
-    recalculate: False
-  plot_preds_scatter:
-    plot: False
-    recalculate: False
-  plot_saliency:
-    plot: False
-  plot_saliency_pertrack:
-    plot: False
-  plot_saliency_pervar:
-    plot: False
-  plot_n_tracks_per_jet:
-    plot: False
-  plot_target_input_corr:
-    plot: False
-  plot_linear_fit:
-    plot: False
-  plot_track_origin:
-    plot: False
-  plot_inputs:
-    plot: False
-  plot_non_jet_tracks:
-    plot: False
-  plot_vertex_labels:
-    plot: False   -->
+| plot_efficiency | | {plot: False, recalculate: True} |  
+| plot_effs_per_pt | {plot: False}  |  
+| plot_pt | {plot: True} |  
+| plot_conf_matrix | {plot: False} |  
+| plot_preds_per_epoch | {plot: False} |  
+| plot_preds_scatter | {plot: False} |  
+| plot_saliency | {plot: False} |  
+| plot_saliency_pertrack | {plot: False} |
+| plot_saliency_pervar | {plot: False} |
+| plot_n_tracks_per_jet | {plot: False} |  
+| plot_target_input_corr | {plot: False} |  
+| plot_linear_fit | {plot: False} |  
+| plot_track_origin | {plot: False} |  
+| plot_inputs | {plot: False} |  
+| plot_non_jet_tracks | {plot: False} |  
+| plot_vertex_labels | {plot: False} |  
+
+
 
 
