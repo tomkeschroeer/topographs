@@ -88,22 +88,22 @@ Once the training is done, your training can be evaluated. The following paramet
 | model_file_numbers | list of the epoch number you would like to evaluate. | [1] |  
 | ntracks | number of tracks to be considered. | 40 |  
 | file_formats | list of file formats you want the plots to be saved | ["pdf", "png"] |  
-| plot_efficiency | | {plot: False, recalculate: True} |  
-| plot_effs_per_pt | {plot: False}  |  
-| plot_pt | {plot: True} |  
-| plot_conf_matrix | {plot: False} |  
-| plot_preds_per_epoch | {plot: False} |  
-| plot_preds_scatter | {plot: False} |  
-| plot_saliency | {plot: False} |  
-| plot_saliency_pertrack | {plot: False} |
-| plot_saliency_pervar | {plot: False} |
-| plot_n_tracks_per_jet | {plot: False} |  
-| plot_target_input_corr | {plot: False} |  
-| plot_linear_fit | {plot: False} |  
-| plot_track_origin | {plot: False} |  
-| plot_inputs | {plot: False} |  
-| plot_non_jet_tracks | {plot: False} |  
-| plot_vertex_labels | {plot: False} |  
+| plot_efficiency | plot the efficiencies per epoch for the track-to-hadron assignment | {plot: False, recalculate: True} |  
+| plot_effs_per_pt | plot the efficiencies for the track-to-hadron assignment as a function of pT| {plot: False}  |  
+| plot_pt | plot the regressed variable as a function of the truth label | {plot: True} |  
+| plot_conf_matrix | plot the confusion matrix for the track assignment efficiencies. | {plot: False} |  
+| plot_preds_per_epoch | plot the track assignment prediction for each epoch specified by model_file_numbers. | {plot: False} |  
+| plot_preds_scatter | plot the track assignment prediction as a function of the epoch | {plot: False} |  
+| plot_saliency | plot the saliency map | {plot: False} |  
+| plot_saliency_pertrack | plot the saliency map per track | {plot: False} |
+| plot_saliency_pervar | plot the saliency map per variable| {plot: False} |
+| plot_n_tracks_per_jet | plot the number of tracks per jet | {plot: False} |  
+| plot_target_input_corr | plot correlation between the inputs and the regression variable | {plot: False} |  
+| plot_linear_fit | plotting the distance of the vertex regession prediction to the diagonal | {plot: False} |  
+| plot_track_origin | plot the truth direction of the tracks | {plot: False} |  
+| plot_inputs | plot the inputs| {plot: False} |  
+| plot_non_jet_tracks | plot the predicition of the track assignments for the tracks that do not originate from the corresponding hadron.| {plot: False} |  
+| plot_vertex_labels | plot the truth regression labels | {plot: False} |  
 
 
 
