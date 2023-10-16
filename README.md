@@ -74,7 +74,7 @@ small_net | dictionary that says for each jet flavour if a regression task has t
 for the different parts of the networks you have to define the number of nodes:
 
 |network | field | description | default value |  
-|---|---|---|  
+|---|---|---|---|
 | edge_feature_network | nodes | list of number of nodes per layer | [21, 20, 20, 30] |  
 | edge_weight_network | nodes | list of number of nodes per layer | [21, 20, 20, 1] |  
 | vertex_network | nodes | list of number of nodes per layer | [30, 30, 30, 30, 1] |  
