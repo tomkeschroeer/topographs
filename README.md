@@ -79,6 +79,11 @@ for the different parts of the networks you have to define the number of nodes:
 | edge_weight_network | nodes | list of number of nodes per layer | [21, 20, 20, 1] |  
 | vertex_network | nodes | list of number of nodes per layer | [30, 30, 30, 30, 1] |  
 
+To perform the training execute:  
+```
+python train -c configs/config.yaml
+```
+
 ## Evaluation
 
 Once the training is done, your training can be evaluated. The following parameters are all given below the "evaluation" parameter.  
@@ -105,6 +110,12 @@ Once the training is done, your training can be evaluated. The following paramet
 | plot_non_jet_tracks | plot the predicition of the track assignments for the tracks that do not originate from the corresponding hadron.| {plot: False} |  
 | plot_vertex_labels | plot the truth regression labels | {plot: False} |  
 
-
-
-
+To perform the evaluation you first need to collect the data per epoch. To do so execute:  
+```
+python evaluate -c configs/config.yaml --epoch 0
+```
+After having performed this for every epoch execute
+```
+python evaluate -c configs/config.yaml 
+```
+If you only want to make the plots that use the model of the epochs specified in `model_file_numbers` you only have to run the first command for these epochs. Otherwise you have to run it for all.
