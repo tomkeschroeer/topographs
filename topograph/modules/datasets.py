@@ -23,7 +23,6 @@ class Topographs_dataset(IterableDataset):
         self.batch_size = batch_size
         self.n_samples = n_samples
         self.jet_types = jet_types
-        self.batch_size = n_samples
         if train:
             r = self.n_samples%self.batch_size
             if r != 0:
