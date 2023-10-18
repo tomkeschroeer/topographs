@@ -193,8 +193,8 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net, train_toge
                 if not small_net[train_jet_type]:
                     preds[f"preds_v_{train_jet_type}"].append(tmp_dict["output_v"][i].detach().numpy())
                     labels[f"labels_v_{train_jet_type}"].append(labels_dict[f"Y_vertex_features_{train_jet_type}"].detach().numpy())
-                grad = inputs.grad.data
-                grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
+                # grad = inputs.grad.data
+                # grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
             # grad = inputs.grad.data
             # grads[f"grads_{jet_type}"].append(grad.detach().numpy())
         masks.append(mask.detach().numpy())
@@ -246,9 +246,12 @@ class Plotter:
             if (self.cut_val is None)
             else f"plotting_data_tr_cutval={self.cut_val}.h5"
         )
-        self.used_vertex_properties = getattr(
-            self.config, "used_vertex_properties", None
-        )
+
+        self.used_vertex_properties = self.config.used_vertex_properties
+        if self.used_vertex_properties is None:
+            n_vert_feat = len(self.global_config.vertex_features)
+            self.used_vertex_properties = list(range(n_vert_feat))
+    
 
         str_vars = ""
         if vars is not None:
@@ -420,7 +423,7 @@ class Plotter:
                         self.logger.info(
                             f"getting efficiency, zeros only, for model model_epoch{i:03d}"
                         )
-                        
+
                         if len(self.jet_types)>1:
                             for other_jet_type in self.jet_types:
                                 other_jet_type_int = self.jet_types.index(other_jet_type)
@@ -470,7 +473,7 @@ class Plotter:
         if self.plot_eta:
             self.logger.info(f"plotting eta...")
             self.plotting_regression_scatter(
-                model_file_numbers=self.model_file_numbers, var="dr"
+                model_file_numbers=self.model_file_numbers, var="eta"
             )
 
         if self.plot_conf_matrix:
@@ -1315,6 +1318,9 @@ class Plotter:
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
                 ) as f:
                     grads = f[f"gradients_{jet_type}"][:self.njet_test]
+                    if len(grads) == 0:
+                        self.logger.warning("no gradients saved, skipping plotting of saliency map per track.")
+                        return 
                     grads_mask = f["mask"][:self.njet_test]
                     grads_shape = grads.shape
                     labels_edge = f[f"labels_edge_{jet_type}"][:self.njet_test]
@@ -1510,6 +1516,9 @@ class Plotter:
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
                 ) as f:
                     grads = f[f"gradients_{jet_type}"][:self.njet_test]
+                    if len(grads) == 0:
+                        self.logger.warning("no gradients saved, skipping plotting of saliency map per track.")
+                        return 
                     grads_mask = f["mask"][:self.njet_test]
                     grads_shape = grads.shape
                     labels_edge = f[f"labels_edge_{jet_type}"][:self.njet_test]
@@ -1647,6 +1656,9 @@ class Plotter:
                     f"{self.model_pred_folder}/epoch_pred_{model_file_number:03d}.h5", "r"
                 ) as f:
                     grads = f[f"gradients_{jet_type}"][:self.njet_test]
+                    if len(grads) == 0:
+                        self.logger.warning("no gradients saved, skipping plotting of saliency map per track.")
+                        return 
                     grads_mask = f["mask"][:self.njet_test]
                     grads_shape = grads.shape
                     labels_edge = f[f"labels_edge_{jet_type}"][:self.njet_test]

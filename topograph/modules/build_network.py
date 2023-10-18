@@ -91,7 +91,7 @@ class TopographModel(pl.LightningModule):
         self.nodes_vertex = nodes_vertex
 
         self.feat_layers = ModuleList()
-        # self.edge_layers = ModuleList()
+        self.edge_layers = ModuleList()
         self.dot_products = ModuleList()
 
         self.feat_layers_prime = ModuleList()
@@ -106,14 +106,13 @@ class TopographModel(pl.LightningModule):
                 self.feat_layers_prime.append(None)
             else:
                 self.vertex_networks.append(VertexNetwork(nodes=self.nodes_vertex))
-                self.feat_layers_prime.append(FeatLayers(nodes=self.nodes_feat))
+                self.feat_layers_prime.append(FeatLayers(nodes=self.nodes_feat_prime))
             self.feat_layers.append(FeatLayers(nodes=self.nodes_feat))
-            # self.edge_layers.append(EdgeLayers(nodes=self.nodes_weight))
+            self.edge_layers.append(EdgeLayers(nodes=self.nodes_weight))
             self.dot_products.append(DotProduct())
             self.edge_layers_prime.append(EdgeLayers(nodes=self.nodes_weight_prime))
             self.dot_products_prime.append(DotProduct())
         # Define the loss funcitons
-        self.edge_layers = ModuleList([EdgeLayers(nodes=self.nodes_weight) for jet_type in self.jet_types])
         self.loss_fn_vertex = MSELoss(reduction='none')  # MultipleMSELoss()
 
     def on_fit_start(self):
@@ -162,7 +161,7 @@ class TopographModel(pl.LightningModule):
             if self.small_net[jet_type]:
                 dense_vertex_outs.append(None)
             else:
-                edge_feat_outs_prime.append(self.edge_layers_prime[i](concat_inputs))
+                edge_feat_outs_prime.append(self.feat_layers_prime[i](concat_inputs))
                 dot_products_prime.append(self.dot_products_prime[i](edge_wt_outs_prime[i], edge_feat_outs_prime[i], mask))
                 dense_vertex_outs.append(self.vertex_networks[i](dot_products_prime[i]))
             # return self.vertex_networks[0](dot_products[0]), self.edge_layers_prime[0](concat_inputs)
