@@ -4,7 +4,7 @@ import json
 import numpy as np
 from h5py import File
 
-from topograph.modules import GlobalConfig, get_logger, get_mask
+from topograph.modules import GlobalConfig, get_logger, get_mask, scary_shuffle
 
 
 class Apply_Scaler:
@@ -17,16 +17,16 @@ class Apply_Scaler:
         self.global_conf = GlobalConfig()
         self.tracks_name = self.config.tracks_name
         self.vert_prop_name = self.config.vertex_feat_name
-        self.var_list = {
-            self.tracks_name: self.global_conf.track_inputs,
-            self.vert_prop_name: self.global_conf.vertex_features,
-        }
+        self.var_list = {f"{self.vert_prop_name}_{jet_type}": self.global_conf.vertex_features for jet_type in self.config.jet_types}
+        self.var_list[self.tracks_name] = self.global_conf.track_inputs
         self.file_names = {
             self.config.training_file_name: self.config.njets,
             self.config.validation_file_name: self.config.njets_val,
             self.config.testing_file_name: self.config.njets_test,
         }
+        self.njets = self.config.njets + self.config.njets_val + self.config.njets_test
         self.out_file = None
+        self.jet_types = self.config.jet_types
 
     def Run(self):
         logger = get_logger()
@@ -57,55 +57,106 @@ class Apply_Scaler:
             # scale_dict[self.vert_prop_name] = full_scale_dict[self.vert_prop_name]
 
         logger.info("Applying scaling and shifting.")
-
-        for file_name, njets_per_file in self.file_names.items():
-            self.out_file = f"{self.config.output}/{file_name}".replace(".h5.h5", ".h5")
-            logger.info(f"Save scaled inputs in file {self.out_file}")
-            with File(self.out_file, "w") as h5file:
-                for keyname in [self.tracks_name, self.vert_prop_name]:
-                    scale_generator = self.scale_generator(
-                        input_file=input_file,
-                        nJets=njets_per_file,
-                        keyname=keyname,
-                        scale_dict=scale_dict[keyname],
-                        chunk_size=chunk_size,
+        dict_names = scale_dict.keys()
+        # for file_name, njets_per_file in self.file_names.items():
+        self.out_file = input_file.replace(".h5", "_scaled.h5")
+        logger.info(f"Save scaled inputs in file {self.out_file}")
+        with File(self.out_file, "w") as h5file:
+            for keyname in dict_names:
+                scale_generator = self.scale_generator(
+                    input_file=input_file,
+                    nJets=self.njets,
+                    keyname=keyname,
+                    scale_dict=scale_dict[keyname],
+                    chunk_size=chunk_size,
+                )
+                # Set up chunk counter and start looping
+                chunk_counter = 0
+                for chunk_counter in range(n_chunks):
+                    logger.info(
+                        f"Applying scales for chunk {chunk_counter+1} of"
+                        f" {n_chunks}."
                     )
-                    # Set up chunk counter and start looping
-                    chunk_counter = 0
-                    for chunk_counter in range(n_chunks):
-                        logger.info(
-                            f"Applying scales for chunk {chunk_counter+1} of"
-                            f" {n_chunks}."
-                        )
-                        try:
-                            data = next(scale_generator)
+                    try:
+                        data = next(scale_generator)
 
-                            if chunk_counter == 0:
-                                h5file.create_dataset(
-                                    keyname,
-                                    data=data[0],
-                                    #  compression="lzf",
-                                    chunks=((100,) + data[0].shape[1:]),
-                                    maxshape=(
-                                        None,
-                                        *(data[0].shape[1:]),
-                                    ),
-                                )
+                        if chunk_counter == 0:
+                            h5file.create_dataset(
+                                keyname,
+                                data=data[0],
+                                #  compression="lzf",
+                                chunks=((100,) + data[0].shape[1:]),
+                                maxshape=(
+                                    None,
+                                    *(data[0].shape[1:]),
+                                ),
+                            )
 
-                            else:
-                                h5file[keyname].resize(
-                                    (h5file[keyname].shape[0] + data[0].shape[0]),
-                                    axis=0,
-                                )
+                        else:
+                            h5file[keyname].resize(
+                                (h5file[keyname].shape[0] + data[0].shape[0]),
+                                axis=0,
+                            )
 
-                                h5file[keyname][-data[0].shape[0] :] = data[0]
+                            h5file[keyname][-data[0].shape[0] :] = data[0]
 
-                        except StopIteration:
-                            break
+                    except StopIteration:
+                        break
 
-                        chunk_counter += 1
+                    chunk_counter += 1
 
-            self.save_remaining_dt(logger, input_file, n_entries_total=njets_per_file)
+        self.save_remaining_dt(logger, input_file, n_entries_total=self.njets)
+        chunk_size = np.min((chunk_size, int(self.config.njets_test/len(self.jet_types)))).astype(int)
+        print(chunk_size)
+        starting_point = 0
+        n_total = len(File(self.out_file,"r")[f"/{self.config.tracks_name}"])
+        ind_array = np.linspace(0, n_total-1, n_total).astype(int)
+        scary_shuffle(ind_array)
+        n_jets_per_jettype = {jettype: 0 for jettype in self.jet_types}
+        total_njets_per_jettype = int(self.njets/len(self.jet_types))
+        starting_point = 0
+        for file_name, njets in self.file_names.items():
+            input_file = (
+                f"{self.config.output}/{file_name}".replace(
+                    ".h5", ""
+                )
+                + ".h5"
+            )
+            with File(input_file, "w") as f:
+                nsteps = int(njets//chunk_size)
+                r = njets % chunk_size
+                if r != 0:
+                    nsteps += 1
+                # starting_point = 0
+                inds = np.array([[(step*chunk_size + starting_point), ((step+1)*chunk_size + starting_point)] for step in range(nsteps)], dtype=int)
+                if inds[-1,1] > njets + starting_point: inds[-1,1] = njets + starting_point
+                starting_point = inds[-1,1]
+                create_file = True
+                with File(self.out_file, "r") as o:
+                    keys=o.keys()
+                    for ind in inds:
+                        njets_step = ind[1]-ind[0]
+                        # for jet_type in self.jet_types:
+                        #     jet_type_in_jet = o["jet_type"][ind[0]:ind[1]]
+                        #     # print(self.jet_types.index(jet_type))
+                        #     mask = (jet_type_in_jet == self.jet_types.index(jet_type))
+                        #     njets_step = sum(mask)
+                        #     n_jets_per_jettype[jet_type] = n_jets_per_jettype[jet_type] + njets_step
+                        #     # if n_jets_per_jettype[jet_type] >= total_njets_per_jettype:
+                        if create_file:
+                            for key in keys:
+                                data_chunk = o[key][ind[0]:ind[1]] #[mask]
+                                shape = data_chunk.shape
+                                shape = (None,) if len(shape) == 1 else (None, *shape[1:])
+                                f.create_dataset(key, data=data_chunk, chunks=True, maxshape=shape)
+                            create_file = False
+                        else:
+                            # print(o[key][ind[0]:ind[1]])
+                            if njets_step >0:
+                                for key in keys: #ind[1]-ind[0]
+                                    f[key].resize((f[key].shape[0] + njets_step), axis=0)
+                                    f[key][-njets_step:] = o[key][ind[0]:ind[1]] #[mask]
+                            # if n_jets_per_jettype[jet_type] >=
 
     def scale_generator(
         self,
@@ -152,7 +203,6 @@ class Apply_Scaler:
 
         # Open the file and load the jets
         with File(input_file, "r") as f:
-
             # Get the indices
             start_ind = 0
             tupled_indices = []
@@ -264,20 +314,26 @@ class Apply_Scaler:
                             del o["unscaled_pt"]
                         if "jet_pt" in o.keys():
                             del o["jet_pt"]
-                        edges = f[self.config.edge_name][indices[0] : indices[1]]
+                        if "HadronTruthLabel" in o.keys():
+                            del o["HadronTruthLabel"]
+                        if "jet_type" in o.keys():
+                            del o["jet_type"]
+                        for jet_type in self.config.jet_types:
+                            edges = f[f"{self.config.edge_name}_{jet_type}"][indices[0] : indices[1]]
+                            o.create_dataset(
+                                data=edges,
+                                name=f"{self.config.edge_name}_{jet_type}",
+                                chunks=True,
+                                maxshape=(None, edges.shape[1]),
+                            )
                         edge_origin = f["edge_origin"][indices[0] : indices[1]]
                         track_extra = f["track_extra"][indices[0] : indices[1]]
                         track_extra_truth = f["track_extra_truth"][
                             indices[0] : indices[1]
                         ]
-                        unscaled_pt = f["unscaled_pt"][indices[0] : indices[1]]
-                        jet_pt = f["jet_pt"][indices[0] : indices[1]]
-                        o.create_dataset(
-                            data=edges,
-                            name=self.config.edge_name,
-                            chunks=True,
-                            maxshape=(None, edges.shape[1]),
-                        )
+                        # unscaled_pt = f["unscaled_pt"][indices[0] : indices[1]]
+                        HadronTruthLabel = f["HadronTruthLabel"][indices[0] : indices[1]]
+                        jet_type = f["jet_type"][indices[0] : indices[1]]
                         o.create_dataset(
                             data=edge_origin,
                             name="edge_origin",
@@ -296,26 +352,33 @@ class Apply_Scaler:
                             chunks=True,
                             maxshape=(None, track_extra.shape[1]),
                         )
+                        # o.create_dataset(
+                        #     data=unscaled_pt,
+                        #     name="unscaled_pt",
+                        #     chunks=True,
+                        #     maxshape=(None,),
+                        # )
                         o.create_dataset(
-                            data=unscaled_pt,
-                            name="unscaled_pt",
+                            data=HadronTruthLabel,
+                            name="HadronTruthLabel",
                             chunks=True,
                             maxshape=(None,),
                         )
                         o.create_dataset(
-                            data=unscaled_pt,
-                            name="jet_pt",
+                            data=jet_type,
+                            name="jet_type",
                             chunks=True,
                             maxshape=(None,),
                         )
                     else:
                         n_entries = indices[1] - indices[0]
-                        o[self.config.edge_name].resize(
-                            (o[self.config.edge_name].shape[0] + n_entries), axis=0
-                        )
-                        o[self.config.edge_name][-n_entries:] = f[
-                            self.config.edge_name
-                        ][indices[0] : indices[1]]
+                        for jet_type in self.config.jet_types:
+                            o[f"{self.config.edge_name}_{jet_type}"].resize(
+                                (o[f"{self.config.edge_name}_{jet_type}"].shape[0] + n_entries), axis=0
+                            )
+                            o[f"{self.config.edge_name}_{jet_type}"][-n_entries:] = f[
+                                f"{self.config.edge_name}_{jet_type}"
+                            ][indices[0] : indices[1]]
                         o["edge_origin"].resize(
                             (o["edge_origin"].shape[0] + n_entries), axis=0
                         )
@@ -334,13 +397,15 @@ class Apply_Scaler:
                         o["track_extra_truth"][-n_entries:] = f["track_extra_truth"][
                             indices[0] : indices[1]
                         ]
-                        o["unscaled_pt"].resize(
-                            (o["unscaled_pt"].shape[0] + n_entries), axis=0
-                        )
-                        o["unscaled_pt"][-n_entries:] = f["unscaled_pt"][
-                            indices[0] : indices[1]
-                        ]
-                        o["jet_pt"].resize((o["jet_pt"].shape[0] + n_entries), axis=0)
-                        o["jet_pt"][-n_entries:] = f["jet_pt"][indices[0] : indices[1]]
+                        # o["unscaled_pt"].resize(
+                        #     (o["unscaled_pt"].shape[0] + n_entries), axis=0
+                        # )
+                        # o["unscaled_pt"][-n_entries:] = f["unscaled_pt"][
+                        #     indices[0] : indices[1]
+                        # ]
+                        o["HadronTruthLabel"].resize((o["HadronTruthLabel"].shape[0] + n_entries), axis=0)
+                        o["HadronTruthLabel"][-n_entries:] = f["HadronTruthLabel"][indices[0] : indices[1]]
+                        o["jet_type"].resize((o["jet_type"].shape[0] + n_entries), axis=0)
+                        o["jet_type"][-n_entries:] = f["jet_type"][indices[0] : indices[1]]
 
         logger.info("Appending done.")

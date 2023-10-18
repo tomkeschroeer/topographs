@@ -13,7 +13,6 @@ import shutil
 
 import torch.nn as nn
 import torch.optim as optim
-from lightning_lite.utilities.exceptions import MisconfigurationException
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import from_numpy, save, tensor
@@ -98,8 +97,8 @@ if __name__ == "__main__":
             metadata_dict["n_trks"],
             metadata_dict["n_trk_features"],
         ) = f[f"{config.tracks_name}"].shape
-        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}"].shape
-        _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}"].shape
+        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}_{config.jet_types[0]}"].shape
+        _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}_{config.jet_types[0]}"].shape
 
     edge_feat_nodes = config.edge_feature_network["nodes"]
     edge_weight_nodes = config.edge_weight_network["nodes"]
@@ -136,6 +135,9 @@ if __name__ == "__main__":
         lr=lr,
         loss_fac_edge=loss_fac_edge,
         loss_fac_vert=loss_fac_vert,
+        tr_jet_type=config.train_jet_type,
+        small_net=config.small_net,
+        jet_types=config.jet_types,
     )
 
     makedirs(f"{training_output_folder}/modelfiles", exist_ok=True)
@@ -179,6 +181,7 @@ if __name__ == "__main__":
         filename=training_file,
         batch_size=min(njets, 1024),
         n_samples=njets,
+        jet_types=config.jet_types,
     )
 
     tracks_loader = DataLoader(tracks_dataset, batch_size=None)
@@ -215,13 +218,13 @@ if __name__ == "__main__":
     #         from_numpy(mask_vertex_labels.astype(bool))
     # )
     valid_dataset = Topographs_dataset(
-        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val
+        filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val, jet_types=config.jet_types, train=False
     )
     valid_loader = DataLoader(valid_dataset, batch_size=None)
 
     makedirs(f"{training_output_folder}/checkpoints", exist_ok=True)
     checkpoint = ModelCheckpoint(
-        monitor="valid/total",
+        monitor="valid/edge" if config.small_net else "valid/total",
         filename="checkpoint_train_{epoch}",
         dirpath=f"{training_output_folder}/checkpoints",
         save_top_k=-1,

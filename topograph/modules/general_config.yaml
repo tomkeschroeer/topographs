@@ -32,3 +32,22 @@ vertex_features:
     log: True
   # eta:
   #   log: False
+
+vertex_flavours:
+  - "b"
+  - "c"
+
+flavour:
+  b: 5
+  c: 4
+  light: None
+
+truthOriginLabel:
+  b: [3,4]
+  c: [5,4]
+  light: 2
+
+HadronConeExclLabel:
+  b: [5, 54, 55]
+  c: [44, 4]
+  light: 0

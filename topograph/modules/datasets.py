@@ -15,31 +15,29 @@ from torch.utils.data import Dataset, IterableDataset, TensorDataset, get_worker
 
 from topograph.modules.tools import get_sample_weights
 
-
-def scary_shuffle(*arrays):
-    """?!Should?! shuffle a collection of arrays inplace in the exact same way"""
-    assert all(len(a) == len(arrays[0]) for a in arrays)
-    rng_state = np.random.get_state()
-    for a in arrays:
-        np.random.shuffle(a)
-        np.random.set_state(rng_state)
-
-
 class Topographs_dataset(IterableDataset):
-    def __init__(self, filename, batch_size, n_samples):
+    def __init__(self, filename, n_samples, jet_types, batch_size=50_000, train=True):
         IterableDataset.__init__(self)
+        
         self.filename = filename
         self.batch_size = batch_size
         self.n_samples = n_samples
-        r = self.n_samples%self.batch_size
-        if r != 0:
-            self.n_samples = self.n_samples-r
+        self.jet_types = jet_types
+        if train:
+            r = self.n_samples%self.batch_size
+            if r != 0:
+                self.n_samples = self.n_samples-r
+            self.batch_size = min(batch_size, n_samples)
+            
 
     def open(self):
         self.file = h5py.File(self.filename)
         self.tracks = self.file["X_train_tracks"]
-        self.labels_v = self.file["Y_vertex_features"]
-        self.labels_e = self.file["Y_edge"]
+        self.jet_type_per_jet = self.file["jet_type"]
+        self.labels_open = {}
+        for jet_type in self.jet_types:
+            self.labels_open[f"Y_edge_{jet_type}"] = self.file[f"Y_edge_{jet_type}"]
+            self.labels_open[f"Y_vertex_features_{jet_type}"]= self.file[f"Y_vertex_features_{jet_type}"]
 
     def get_indeces(self):
         # if self.n_samples == -1: 
@@ -52,15 +50,20 @@ class Topographs_dataset(IterableDataset):
     def __iter__(self):
         indices = self.get_indeces()
         self.open()
+        self.labels = {}
+        self.vertex_masks = {}
         for inds in indices:
             self.tracks_batch = self.tracks[inds[0] : inds[1]].astype(np.float32)
-            self.labels_v_batch = self.labels_v[inds[0] : inds[1]].astype(np.float32)
-            self.labels_e_batch = self.labels_e[inds[0] : inds[1]].astype(np.float32)
             self.mask_batch = ~np.all(self.tracks_batch[..., :3] == 0, axis=-1)
-            self.samples_weights_batch = np.array(
-                list(map(get_sample_weights, self.labels_e_batch)), dtype=np.float32
-            )
-            yield self.tracks_batch, self.labels_e_batch, self.labels_v_batch, self.samples_weights_batch, self.mask_batch, None
+            self.jet_types_batch = self.jet_type_per_jet[inds[0] : inds[1]].astype(int)
+            for jet_type in self.jet_types:
+                self.labels[f"Y_edge_{jet_type}"] = self.labels_open[f"Y_edge_{jet_type}"][inds[0] : inds[1]].astype(np.float32)
+                self.labels[f"Y_vertex_features_{jet_type}"] = self.labels_open[f"Y_vertex_features_{jet_type}"][inds[0] : inds[1]].astype(np.float32)
+                self.labels[f"sample_weights_{jet_type}"] = np.array(
+                    list(map(get_sample_weights, np.stack((self.labels[f"Y_edge_{jet_type}"], self.mask_batch), axis=1))), dtype=np.float32
+                )
+                self.vertex_masks[f"vertex_mask_{jet_type}"] = (self.labels[f"Y_vertex_features_{jet_type}"] != -999.0)
+            yield self.tracks_batch, self.labels, self.mask_batch, self.vertex_masks, self.jet_types_batch
 
     def __len__(self) -> int:
         num_sampels = self.n_samples if self.n_samples != -1 else len(self.tracks)
