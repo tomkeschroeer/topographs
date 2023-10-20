@@ -58,8 +58,8 @@ class Prepare:
                     small_net=self.config.small_net,
                     load_jet_types=load_jet_types
                 )
-                vertex_feat = datasets.get_vertex_feat_y()
                 edge_y = datasets.get_edge_y()
+                vertex_feat = datasets.get_vertex_feat_y(labels_e=edge_y)
                 edge_origin = datasets.get_edge_origin()
                 track_inputs = datasets.get_track_input()
                 jet_types_to_save = datasets.get_jet_types_to_save()

@@ -4,6 +4,7 @@ import pathlib
 from glob import glob
 
 import numpy as np
+import numpy.ma as ma
 
 # import tensorflow.keras.backend as K
 import yaml
@@ -447,6 +448,9 @@ class DatasetCreater:
             self.reco = f[f"/{self.config.input_tracks_name}"].fields(self.global_conf.track_inputs)[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
+            self.reco_vertex = f[f"/{self.config.input_tracks_name}"].fields(["pt"])[
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
+            ]
             self.reco_dtypes = self.reco.dtype
             self.reco_jets = f["jets"].fields(["pt", "eventNumber"])[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -475,6 +479,7 @@ class DatasetCreater:
         self.jet_types_to_save = self.jet_types_to_save[self.ind_truthflav]
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
+        self.reco_vertex = self.reco_vertex[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
         self.trackExtra = self.trackExtra[self.ind_truthflav]
         self.reco_jets = self.reco_jets[self.ind_truthflav]
@@ -548,32 +553,47 @@ class DatasetCreater:
         )
         return edge_feat_y
     
-    def get_vertex_feat_y(self):
-        flavour = self.truth["flavour"]
-        vertex_feat = self.truth[self.vertex_features]
-        vertex_shape = vertex_feat.shape
-        if len(self.vertex_features) > 1:
-            shape = vertex_shape[:2]
-        else:
-            shape = (vertex_shape[0],)
-        vert_dtype = vertex_feat.dtype
+    def get_vertex_feat_y(self, labels_e):
+        pt_all = self.reco_vertex["pt"]
+        phis_all = self.reco["dphi"]
+        pi = np.pi
+        pt_shape = pt_all.shape
+        pt_type = pt_all.dtype
         vertex_feat_jet_types = {}
         for jet_type in self.jet_types:
-            vertex_feat_jet_types[jet_type] = np.full(shape=shape, fill_value=-999., dtype=vert_dtype)
-            if not self.small_net[jet_type]:
-                mask = self.check_cases_and_return(
-                    flavour,
-                    self.global_conf.flavour[jet_type],
-                )
-                jet_mask = np.sum(mask, axis=1)==1
-                mask[~jet_mask] = np.full(shape=mask.shape[1], fill_value=False)
-                vertex_feat_jet_types[jet_type] = np.full(shape=shape, fill_value=-999., dtype=vert_dtype)
-
-                vertex_feat_jet_types[jet_type][jet_mask] = vertex_feat[mask]
-                if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
-                for key in self.vertex_features:
-                    if self.global_conf.vertex_feat_dict[key]["log"]:
-                        vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
+            vertex_feat_jet_types[jet_type] = np.full(
+                shape=(pt_shape[0]), 
+                fill_value=-999., 
+                dtype=self.reco_vertex.dtype
+            )
+            if self.small_net[jet_type]:
+                continue
+            pt = ma.array(pt_all, mask=~(labels_e[jet_type] == 1))
+            phis = ma.array(phis_all, mask=~(labels_e[jet_type]  == 1))            
+            for i in range(0, pt_shape[0]):
+                pt_b = 0
+                pt_bs = np.array(pt.data[i][~pt.mask[i]], dtype = pt_type)
+                phi_bs = phis.data[i][~phis.mask[i]]
+                if len(pt_bs) > 0:
+                    pt_b = pt_bs[0]
+                    phi_b = phi_bs[0]
+                if len(pt_bs) > 1:
+                    for j in range(1, len(pt_bs)):
+                        phi_b = np.abs(phi_b - phi_bs[j])
+                        if phi_b > pi:
+                            phi_b = pi - phi_b
+                        pt_b = np.sqrt(
+                            pt_b * pt_b
+                            + pt_bs[j] * pt_bs[j]
+                            - 2 * pt_b * pt_bs[j] * np.cos(phi_b)
+                        )
+                if pt_b !=0:
+                    vertex_feat_jet_types[jet_type][i] = pt_b
+            mask = vertex_feat_jet_types[jet_type]["pt"] != -999.
+            vertex_feat_jet_types[jet_type]["pt"][mask] = np.log(vertex_feat_jet_types[jet_type]["pt"][mask])
+        # for key in self.vertex_features:
+        #     if self.global_conf.vertex_feat_dict[key]["log"]:
+        #         vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
         return vertex_feat_jet_types
 
     def get_track_input(self):
