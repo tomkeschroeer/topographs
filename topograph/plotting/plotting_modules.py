@@ -283,12 +283,6 @@ class Plotter:
         self.plot_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "plot", False
         )
-        self.plot_effs_zeros = self.config.evaluation.get(
-            "plot_efficiency_zeros_only", {}
-        ).get("plot", False)
-        self.plot_effs_ones = self.config.evaluation.get(
-            "plot_efficiency_ones_only", {}
-        ).get("plot", False)
         self.plot_effs_per_pt = self.config.evaluation.get(
             "plot_effs_per_pt", {}
         ).get("plot", False)
@@ -345,12 +339,6 @@ class Plotter:
         self.recalculate_effs = self.config.evaluation.get("plot_efficiency", {}).get(
             "recalculate", False
         )
-        self.recalculate_effs_zeros = self.config.evaluation.get(
-            "plot_efficiency_zeros_only", {}
-        ).get("recalculate", False)
-        self.recalculate_effs_ones = self.config.evaluation.get(
-            "plot_efficiency_ones_only", {}
-        ).get("recalculate", False)
         self.recalculate_pt = self.config.evaluation.get("plot_pt", {}).get(
             "recalculate", True
         )
@@ -393,7 +381,7 @@ class Plotter:
         self.ntracks = self.config.evaluation.get("ntracks", 40)
         with File(self.test_file, "r") as f:
             jet_type_per_jet = f["/jet_type"][:self.njet_test]
-        for jet_type in self.jet_types:
+        for jet_type in self.train_together:
             other_jet_types = self.jet_types.copy()
             other_jet_types.remove(jet_type)
             self.get_all_values()
@@ -624,13 +612,8 @@ class Plotter:
     def check_if_recalculate(self):
         return (
             (self.recalculate_effs)
-            or (self.recalculate_effs_zeros)
-            or (self.recalculate_effs_ones)
-            or (self.recalculate_loss)
             or (self.recalculate_preds_scatter)
             or (self.plot_effs)
-            or (self.plot_effs_zeros)
-            or (self.plot_effs_ones)
             or (self.plot_preds_scatter)
         )
 
@@ -795,7 +778,7 @@ class Plotter:
             if var_numb == -1:
                 self.logger.warning(f"Skipping plotting of {var}, not used in training")
                 break
-            for jet_type in self.jet_types:
+            for jet_type in self.train_together:
                 other_jet_types = self.jet_types.copy()
                 other_jet_types.remove(jet_type)
                 if self.small_net[jet_type]:
@@ -1015,7 +998,7 @@ class Plotter:
     
     def plotting_linear_fit(self, model_file_numbers):
         for model_file_number in model_file_numbers:
-            for jet_type in self.jet_types:
+            for jet_type in self.train_together:
                 if self.small_net[jet_type]:
                     self.logger.warning(f"Skipping fitting of {jet_type}-network, no regression trained.")
                     continue
@@ -1125,7 +1108,7 @@ class Plotter:
             jet_types_per_jet = f["jet_type"][:self.njet_test]
         for model_file_number in model_file_numbers:
             self.logger.info(f"plotting confusion matrix for model {model_file_number}")
-            for jet_type in self.jet_types:
+            for jet_type in self.train_together:
                 other_jet_types_int = self.jet_types.copy()
                 other_jet_types_int.remove(jet_type)
                 other_jet_types_int_dict = {}
@@ -1205,7 +1188,7 @@ class Plotter:
         with File(self.test_file, "r") as f:
             jet_types_per_jet = f["jet_type"][:self.njet_test]
         for model_file_number in model_file_numbers:
-            for jet_type in self.jet_types:
+            for jet_type in self.train_together:
                 self.logger.info(
                     f"plotting predictions per epoch for model {model_file_number} for {jet_type}-jets."
                 )
@@ -1249,7 +1232,7 @@ class Plotter:
             jet_type_per_jet = f["jet_type"][:self.njet_test]
         point_styles = ["b_","r_", "g_", "c_", "m_"]
         for model_file_number in model_file_numbers:
-            for jet_type in self.jet_types:
+            for jet_type in self.train_together:
                 jet_type_int = self.get_jettype_index(jet_type)
                 self.logger.info(
                     f"plotting track predictions for non-{jet_type} tracks for model {model_file_number}."
