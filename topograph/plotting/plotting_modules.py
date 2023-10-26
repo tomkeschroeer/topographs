@@ -184,41 +184,47 @@ def get_predictions_and_labels(models, dataset, jet_types, small_net, train_toge
             model_outputs = models[train_together[0]].forward(inputs, mask)
             n_jettypes = int(len(model_outputs)/2)
             tmp_dict["output_v"], tmp_dict["output_e"] = model_outputs[:n_jettypes][0], model_outputs[n_jettypes:][0]
-            print(tmp_dict["output_e"][0].detach().numpy().shape)
             for i, train_jet_type in enumerate(train_together):
                 inputs.requires_grad_()
                 tmp_dict["output_e"][i].backward(gradient=ones_like(tmp_dict["output_e"][i]))
                 preds[f"preds_e_{train_jet_type}"].append(tmp_dict["output_e"][i].detach().numpy())
-                labels[f"labels_e_{train_jet_type}"].append(labels_dict[f"Y_edge_{train_jet_type}"].detach().numpy())
                 if not small_net[train_jet_type]:
                     preds[f"preds_v_{train_jet_type}"].append(tmp_dict["output_v"][i].detach().numpy())
-                    labels[f"labels_v_{train_jet_type}"].append(labels_dict[f"Y_vertex_features_{train_jet_type}"].detach().numpy())
                 # grad = inputs.grad.data
                 # grads[f"grads_{train_jet_type}"].append(grad.detach().numpy())
             # grad = inputs.grad.data
             # grads[f"grads_{jet_type}"].append(grad.detach().numpy())
         masks.append(mask.detach().numpy())
+        for jet_type in jet_types_all:
+            labels[f"labels_e_{jet_type}"].append(labels_dict[f"Y_edge_{jet_type}"].detach().numpy())
+            if not small_net[jet_type]:
+                labels[f"labels_v_{jet_type}"].append(labels_dict[f"Y_vertex_features_{jet_type}"].detach().numpy())
+
     for jet_type in jet_types_all:
         shape_labels_e = np.array(labels[f"labels_e_{jet_type}"]).shape
-        shape_preds_e = np.array(preds[f"preds_e_{jet_type}"]).shape
         if not small_net[jet_type]:
-            shape_preds_v = np.array(preds[f"preds_v_{jet_type}"]).shape
             shape_labels_v = np.array(labels[f"labels_v_{jet_type}"]).shape
         shape_grads = np.array(grads[f"grads_{jet_type}"]).shape
-        preds[f"preds_e_{jet_type}"] = np.array(preds[f"preds_e_{jet_type}"]).reshape(
-            shape_preds_e[0] * shape_preds_e[1], shape_preds_e[2]
-        )  # ,*shape_preds_e[3:])
         labels[f"labels_e_{jet_type}"] = np.array(labels[f"labels_e_{jet_type}"]).reshape(
             shape_labels_e[0] * shape_labels_e[1], shape_labels_e[2]
         )
         if not small_net[jet_type]:
-            preds[f"preds_v_{jet_type}"] = np.array(preds[f"preds_v_{jet_type}"]).reshape(
-                shape_preds_v[0] * shape_preds_v[1], *shape_preds_v[2:]
-            )  # ,*shape_preds_v[3:])
             labels[f"labels_v_{jet_type}"] = np.array(labels[f"labels_v_{jet_type}"]).reshape(
                 shape_labels_v[0] * shape_labels_v[1], *shape_labels_v[2:]
             )
         # grads[f"grads_{jet_type}"] = np.array(grads[f"grads_{jet_type}"]).reshape(shape_grads[0] * shape_grads[1], *shape_grads[2:])
+
+    for jet_type in train_together:
+        shape_preds_e = np.array(preds[f"preds_e_{jet_type}"]).shape
+        preds[f"preds_e_{jet_type}"] = np.array(preds[f"preds_e_{jet_type}"]).reshape(
+            shape_preds_e[0] * shape_preds_e[1], shape_preds_e[2]
+        )  # ,*shape_preds_e[3:])
+        if not small_net[jet_type]:
+            shape_preds_v = np.array(preds[f"preds_v_{jet_type}"]).shape
+            preds[f"preds_v_{jet_type}"] = np.array(preds[f"preds_v_{jet_type}"]).reshape(
+                shape_preds_v[0] * shape_preds_v[1], *shape_preds_v[2:]
+            )  # ,*shape_preds_v[3:])
+
     shape_masks = np.array(masks).shape
     masks = np.array(masks).reshape(shape_masks[0] * shape_masks[1], *shape_masks[2:])
     return preds, labels, masks, grads
@@ -229,6 +235,7 @@ class Plotter:
         self.config = config
         self.cut_val = cut_val
         self.jet_types = config.jet_types
+        self.train_together = config.train_together
         self.small_net = config.small_net
         self.global_config = GlobalConfig(alternative_conf=None)
         if cut_val is not None:
@@ -698,11 +705,12 @@ class Plotter:
             )
 
     def plotting_efficiencies_per_pt(self, model_file_numbers):
+        self.logger.info("plotting efficiencies per pT")
         point_styles = ["bo","ro", "go", "co", "mo"]
         with File(self.test_file, "r") as f:
             jet_type_per_jet = f["jet_type"][:self.njet_test]
             track_pt = f["track_extra"].fields("pt")[:self.njet_test, :self.ntracks]
-        for jet_type in self.jet_types:
+        for jet_type in self.train_together:
             other_jet_types = self.jet_types.copy()
             other_jet_types.remove(jet_type)
             for model_file_number in model_file_numbers:
@@ -2118,6 +2126,7 @@ class GetEpochPrediction:
     def __init__(self, config, epoch, vars=None):
         self.config = config
         self.jet_types = config.jet_types
+        self.train_together = config.train_together
         self.small_net = config.small_net
         self.epoch = epoch
         self.test_file = (
