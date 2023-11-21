@@ -292,6 +292,7 @@ class GlobalConfig:
         with open(global_config_path) as global_conf_file:
             global_conf = yaml.load(global_conf_file, Loader=yaml.FullLoader)
             self.track_inputs = global_conf.get("track_inputs")
+            self.jet_inputs = global_conf.get("jet_inputs")
             self.edge_features = global_conf.get("edge_features")
             self.vertex_features = list(global_conf.get("vertex_features", {}).keys())
             self.vertex_feat_dict = global_conf.get("vertex_features", {})
@@ -348,7 +349,9 @@ class GetConfiguration:
             "vertex_network",
             "evaluation",
             "train_together",
-            "file_dirs"
+            "file_dirs",
+            "jets_name",
+            "add_jet_input",
         ]
 
         req_items = [
@@ -393,6 +396,7 @@ class GetConfiguration:
             "small_net": {"b": False},
             "tracks_name": "X_train_tracks",
             "edge_name": "Y_edge",
+            "jets_name": "X_train_jets",
             "edge_feat_name": "Y_edge_features",
             "vertex_feat_name": "Y_vertex_features",
             "epochs": 200,
@@ -407,6 +411,7 @@ class GetConfiguration:
             "evaluation": {"model_file_numbers": [199]},
             "train_together": [],
             "file_dirs": {},
+            "add_jet_input": True,
         }
         setattr(self, item, defaults[item])
 
@@ -448,7 +453,7 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
             self.reco_dtypes = self.reco.dtype
-            self.reco_jets = f["jets"].fields(["pt", "eventNumber"])[
+            self.reco_jets = f["jets"].fields(self.global_conf.jet_inputs)[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
@@ -521,7 +526,7 @@ class DatasetCreater:
     def get_edge_origin(self):
         return self.truthOriginLabel
 
-    def get_jet_pt(self):
+    def get_jet_inputs(self):
         return self.reco_jets
 
     def get_extra_track(self):
@@ -572,8 +577,9 @@ class DatasetCreater:
                 vertex_feat_jet_types[jet_type][jet_mask] = vertex_feat[mask]
                 if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
                 for key in self.vertex_features:
-                    if self.global_conf.vertex_feat_dict[key]["log"]:
-                        vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
+                    # if self.global_conf.vertex_feat_dict[key]["log"]:
+                    if key == "pt":
+                        vertex_feat_jet_types[jet_type][key][jet_mask] = vertex_feat_jet_types[jet_type][key][jet_mask]/self.reco_jets[key][jet_mask]
         return vertex_feat_jet_types
 
     def get_track_input(self):

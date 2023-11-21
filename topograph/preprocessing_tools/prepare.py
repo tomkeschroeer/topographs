@@ -28,7 +28,6 @@ class Prepare:
             + self.dataset_types["_val"]["njets"]
             + self.dataset_types["_test"]["njets"]
         )/len(jet_types))
-        print(njets)
         stepsize = min(50_000, int(njets / 2))
 
         # input_file = f"{output_dir}/{self.config.one_file_name}.h5".replace(".h5.h5",".h5").replace("//","/")
@@ -66,7 +65,7 @@ class Prepare:
                 tracks_extra = datasets.get_extra_track()
                 tracks_extra_true = datasets.get_extra_track_truth()
                 # unscaled_pt = datasets.get_unscaled_pt()
-                jet_pt = datasets.get_jet_pt()
+                jet_inputs = datasets.get_jet_inputs()
                 # overall_inds = datasets.get_overall_inds()
                 HadrTruth = datasets.get_HadrLabel()
                 if create_file:
@@ -88,8 +87,8 @@ class Prepare:
                             train_file.create_dataset("HadronTruthLabel", data = HadrTruth[mask], chunks=True, maxshape=(None,))
                         # if unscaled_pt is not None:
                         #     train_file.create_dataset("unscaled_pt", data = unscaled_pt, chunks=True, maxshape=(None,))
-                            if jet_pt is not None:
-                                train_file.create_dataset("jet_pt", data = jet_pt[mask], chunks=True, maxshape=(None,))
+                            if jet_inputs is not None:
+                                train_file.create_dataset(f"{self.config.jets_name}", data = jet_inputs[mask], chunks=True, maxshape=(None,))
                     n_jets_loaded += [datasets.get_n_valid_jets_type(jet_type) for jet_type in jet_types]
                     continue_loading = np.array(n_jets_loaded < int(njets))
                     load_jet_types=np.array(jet_types)[continue_loading]
@@ -184,11 +183,11 @@ class Prepare:
                                 #     train_file["unscaled_pt"][
                                 #         -njets_step:
                                 #     ] = unscaled_pt
-                                if jet_pt is not None:
-                                    train_file["jet_pt"].resize(
-                                        (train_file["jet_pt"].shape[0] + njets_step), axis=0
+                                if jet_inputs is not None:
+                                    train_file[f"{self.config.jets_name}"].resize(
+                                        (train_file[f"{self.config.jets_name}"].shape[0] + njets_step), axis=0
                                     )
-                                    train_file["jet_pt"][-njets_step:] = jet_pt[mask]
+                                    train_file[f"{self.config.jets_name}"][-njets_step:] = jet_inputs[mask]
                                 # train_file["overall_inds"].resize(
                                 #         (train_file["overall_inds"].shape[0] + njets_step), axis=0
                                 #     )

@@ -16,9 +16,11 @@ class Apply_Scaler:
         )
         self.global_conf = GlobalConfig()
         self.tracks_name = self.config.tracks_name
+        self.jets_name = self.config.jets_name
         self.vert_prop_name = self.config.vertex_feat_name
         self.var_list = {f"{self.vert_prop_name}_{jet_type}": self.global_conf.vertex_features for jet_type in self.config.jet_types}
         self.var_list[self.tracks_name] = self.global_conf.track_inputs
+        self.var_list[self.jets_name] = self.global_conf.jet_inputs
         self.file_names = {
             self.config.training_file_name: self.config.njets,
             self.config.validation_file_name: self.config.njets_val,

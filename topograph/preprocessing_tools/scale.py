@@ -13,6 +13,7 @@ class Scaler:
         self.global_conf = GlobalConfig()
         self.var_list = self.global_conf.track_inputs
         self.var_list_vert = self.global_conf.vertex_features
+        self.var_list_jets = self.global_conf.jet_inputs
 
     def Run(self):
         logger = get_logger()
@@ -50,6 +51,7 @@ class Scaler:
             input_file=file_name,
             nJets=file_length,
             tracks_name=self.config.tracks_name,
+            jets_name=self.config.jets_name,
             vert_prop_name=self.config.vertex_feat_name,
             chunk_size=chunk_size,
         )
@@ -88,6 +90,7 @@ class Scaler:
         input_file: str,
         nJets: int,
         tracks_name: str,
+        jets_name: str,
         vert_prop_name: str,
         chunk_size: int = int(10000),
     ):
@@ -136,6 +139,10 @@ class Scaler:
                     infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
                 )[:]
 
+                jets_chunk = np.asarray(
+                    infile_all[f"/{jets_name}"][index_tuple[0] : index_tuple[1]]
+                )[:]
+
                 vert_prop_chunk = {jet_type: np.asarray(
                     infile_all[f"/{vert_prop_name}_{jet_type}"][index_tuple[0] : index_tuple[1]]
                 ) for jet_type in self.config.jet_types}
@@ -148,16 +155,17 @@ class Scaler:
                 #     infile_all[f"/{vert_prop_name}_c"][index_tuple[0] : index_tuple[1]]
                 # )
                 track_mask = get_mask(tracks_chunk)
+                jet_mask = get_mask(jets_chunk)
                 vert_mask = {jet_type: get_mask(vert_prop_chunk[jet_type]) for jet_type in self.config.jet_types}
-                for jet_type in self.config.jet_types:
-                    print(jet_type)
-                    print(sum(vert_prop_chunk[jet_type]["pt"]!=-999.))
-                    print(sum(vert_mask[jet_type]))
                 # vert_mask_b = get_mask(vert_prop_chunk_b)
                 # vert_mask_c = get_mask(vert_prop_chunk_c)
 
                 X_train_tracks = np.stack(
                     [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
+                )
+                
+                X_train_jets = np.stack(
+                    [np.nan_to_num(jets_chunk[v]) for v in self.var_list_jets], axis=-1
                 )
 
                 X_train_vert_prop = {jet_type: np.stack(
@@ -182,6 +190,14 @@ class Scaler:
                     scale_tracks=True,
                 )
 
+                scale_dict_jet, nJets_inp = self.get_scaling(
+                    data=X_train_jets[:],
+                    var_names=self.var_list_jets,
+                    track_mask=jet_mask,
+                    scale_tracks=False
+                )
+
+
                 # scale_dict_vert_prop_b, nJets_b = self.get_scaling(
                 #     data=X_train_vert_prop_b[:],
                 #     var_names=self.var_list_vert,
@@ -202,8 +218,10 @@ class Scaler:
 
                 scale_dict = {f"{vert_prop_name}_{jet_type}": scale_dict_vert_prop[jet_type] for jet_type in self.config.jet_types}
                 scale_dict[tracks_name] = scale_dict_trk
+                scale_dict[jets_name] = scale_dict_jet
                 nEntries = {f"{vert_prop_name}_{jet_type}": nJets[jet_type] for jet_type in self.config.jet_types}
                 nEntries[tracks_name] = nTrks
+                nEntries[jets_name] = nJets_inp
                 # Yield the scale dict and the number jets
                 yield scale_dict, nEntries
 

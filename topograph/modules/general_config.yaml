@@ -21,6 +21,8 @@ track_inputs:
   - numberOfPixelHoles
   - numberOfSCTHoles
 
+jet_inputs:
+  - pt
 
 edge_features:
   - truthOriginLabel

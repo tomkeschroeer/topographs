@@ -16,13 +16,14 @@ from torch.utils.data import Dataset, IterableDataset, TensorDataset, get_worker
 from topograph.modules.tools import get_sample_weights
 
 class Topographs_dataset(IterableDataset):
-    def __init__(self, filename, n_samples, jet_types, batch_size=50_000, train=True):
+    def __init__(self, filename, n_samples, jet_types, batch_size=50_000, train=True, add_jet_input=True):
         IterableDataset.__init__(self)
         
         self.filename = filename
         self.batch_size = batch_size
         self.n_samples = n_samples
         self.jet_types = jet_types
+        self.add_jet_input = add_jet_input
         if train:
             r = self.n_samples%self.batch_size
             if r != 0:
@@ -33,6 +34,7 @@ class Topographs_dataset(IterableDataset):
     def open(self):
         self.file = h5py.File(self.filename)
         self.tracks = self.file["X_train_tracks"]
+        self.jet_inputs = self.file["jets"] #self.file["X_train_jets"]
         self.jet_type_per_jet = self.file["jet_type"]
         self.labels_open = {}
         for jet_type in self.jet_types:
@@ -63,7 +65,16 @@ class Topographs_dataset(IterableDataset):
                     list(map(get_sample_weights, np.stack((self.labels[f"Y_edge_{jet_type}"], self.mask_batch), axis=1))), dtype=np.float32
                 )
                 self.vertex_masks[f"vertex_mask_{jet_type}"] = (self.labels[f"Y_vertex_features_{jet_type}"] != -999.0)
-            yield self.tracks_batch, self.labels, self.mask_batch, self.vertex_masks, self.jet_types_batch
+            if self.add_jet_input:
+                self.jet_inputs_batch = self.jet_inputs[inds[0] : inds[1]].astype(np.float32)
+                self.jet_inputs_batch = np.repeat(self.jet_inputs_batch, axis=1, repeats=self.tracks_batch.shape[1])
+                shape_jets = self.jet_inputs_batch.shape
+                self.jet_inputs_batch = self.jet_inputs_batch.reshape(shape_jets[0], shape_jets[1], 1)
+                self.inputs = np.concatenate((self.tracks_batch, self.jet_inputs_batch), axis=2)
+            else:
+                self.inputs = self.tracks_batch
+
+            yield self.inputs, self.labels, self.mask_batch, self.vertex_masks, self.jet_types_batch
 
     def __len__(self) -> int:
         num_sampels = self.n_samples if self.n_samples != -1 else len(self.tracks)

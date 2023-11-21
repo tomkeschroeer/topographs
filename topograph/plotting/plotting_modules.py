@@ -44,7 +44,7 @@ def create_figure(plot):
 def get_var_names(var, used_vertex_properties=None, only_label=False):
     var = var.lower()
     vardict = {
-        "pt": "log($p_T$)",
+        "pt": "$p_T^{hadr}/p_T^{jet}$",# "log($p_T$)",
         "eta": "$\eta$",
         "dr": "$\Delta R$"
     }
@@ -808,7 +808,6 @@ class Plotter:
                 bins = np.linspace(
                     min(var_min, var_min_pred), max(var_max, var_max_pred), 60
                 )
-                # bins = np.linspace(-2, 2, 60)
                 hist = np.histogram2d(preds, labels, bins=[bins, bins])[0]
                 self.plotting_scatter_vals(
                     ylabel=f"true {var_str}",
@@ -836,6 +835,10 @@ class Plotter:
                 bins = np.linspace(
                     var_min_pred, var_max_pred, 60
                 )
+                if jet_type == "b":
+                    bins = np.linspace(0.6, 1.1, 40)
+                elif jet_type == "c":
+                    bins = np.linspace(0.25, 0.7, 40)
                 hist = np.histogram2d(preds_unscaled_jettype, labels_unscaled_jettype, bins=[bins, bins])[0]
                 self.plotting_scatter_vals(
                     ylabel=f"true {var_str}",
