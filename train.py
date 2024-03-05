@@ -224,7 +224,7 @@ if __name__ == "__main__":
 
     makedirs(f"{training_output_folder}/checkpoints", exist_ok=True)
     checkpoint = ModelCheckpoint(
-        monitor="valid/edge" if config.small_net else "valid/total",
+        monitor="valid/vertex", # ""valid/edge" if config.small_net else "valid/total",
         filename="checkpoint_train_{epoch}",
         dirpath=f"{training_output_folder}/checkpoints",
         save_top_k=-1,

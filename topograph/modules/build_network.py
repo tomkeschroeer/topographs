@@ -117,12 +117,12 @@ class TopographModel(pl.LightningModule):
 
     def on_fit_start(self):
         if wandb.run:
-            wandb.define_metric("train/edge", summary="min")
-            wandb.define_metric("valid/edge", summary="min")
+            # wandb.define_metric("train/edge", summary="min")
+            # wandb.define_metric("valid/edge", summary="min")
             if not self.small_net[self.tr_jet_type]:
-                wandb.define_metric("train/total", summary="min")
+                # wandb.define_metric("train/total", summary="min")
                 wandb.define_metric("train/vertex", summary="min")
-                wandb.define_metric("valid/total", summary="min")
+                # wandb.define_metric("valid/total", summary="min")
                 wandb.define_metric("valid/vertex", summary="min")
 
     def forward(self, inputs, mask):
@@ -245,7 +245,6 @@ class TopographModel(pl.LightningModule):
             )
         else:
             total = loss_edge_cal
-        # total = loss_edge_cal
         return loss_edge_cal, loss_vertex_cal, total, loss_edge_per_fl, loss_vertex_per_fl
 
     def training_step(self, sample: tuple, _batch_idx: int):
@@ -261,18 +260,19 @@ class TopographModel(pl.LightningModule):
         return total
 
     def validation_step(self, sample: tuple, _batch_idx: int):
-        loss_edge_cal, loss_vertex_cal, total, loss_edge_per_fl, loss_vertex_per_fl = self.basis_step(
-            sample, _batch_idx
-        )
-        self.log("valid/edge", loss_edge_cal)
+        # loss_edge_cal, loss_vertex_cal, total, loss_edge_per_fl, loss_vertex_per_fl = self.basis_step(
+        #     sample, _batch_idx
+        # )
+        loss_vertex_cal = self.basis_step(sample, _batch_idx)
+        # self.log("valid/edge", loss_edge_cal)
         # if self.small_net[self.tr_jet_type]: return loss_edge_cal
-        self.log("valid/total", total)
+        # self.log("valid/total", total)
         self.log("valid/vertex", loss_vertex_cal)
-        for jet_type in self.jet_types:
-            self.log(f"valid/edge_{jet_type}", loss_edge_per_fl[jet_type])
-            if not self.small_net[jet_type]:
-                self.log(f"valid/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
-        return total
+        # for jet_type in self.jet_types:
+        #     self.log(f"valid/edge_{jet_type}", loss_edge_per_fl[jet_type])
+        #     if not self.small_net[jet_type]:
+        #         self.log(f"valid/vertex_{jet_type}", loss_vertex_per_fl[jet_type])
+        return loss_vertex_cal #total
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)

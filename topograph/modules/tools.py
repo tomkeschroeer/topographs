@@ -301,6 +301,7 @@ class GlobalConfig:
                     self.flavour[key] = None
             self.truthOriginLabel = global_conf.get("truthOriginLabel", {})
             self.hadron_cone_excl_label = global_conf.get("HadronConeExclLabel", {})
+            self.jet_inputs = global_conf.get("jet_inputs")
 
 
 class GetConfiguration:
@@ -348,7 +349,9 @@ class GetConfiguration:
             "vertex_network",
             "evaluation",
             "train_together",
-            "file_dirs"
+            "file_dirs",
+            "solo_topo",
+            "scaling_needed",
         ]
 
         req_items = [
@@ -407,6 +410,8 @@ class GetConfiguration:
             "evaluation": {"model_file_numbers": [199]},
             "train_together": [],
             "file_dirs": {},
+            "solo_topo": True,
+            "scaling_needed": True,
         }
         setattr(self, item, defaults[item])
 
@@ -425,6 +430,15 @@ class DatasetCreater:
         self.jet_types = jet_types
         self.load_jet_types = load_jet_types
         self.small_net = small_net
+        self.conversion_dict = {
+            5: 0,
+            4: 1,
+            0: 2,
+            15: 3,
+            54: 0,
+            55: 0,
+            44: 1,
+        }
         with File(self.input_file, "r") as f:
             self.truth = f[f"/{self.config.input_truth_name}"][
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
@@ -448,7 +462,7 @@ class DatasetCreater:
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
             self.reco_dtypes = self.reco.dtype
-            self.reco_jets = f["jets"].fields(["pt", "eventNumber"])[
+            self.reco_jets = f["jets"].fields(self.global_conf.jet_inputs)[ #], "eventNumber"])[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
             self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
@@ -460,9 +474,9 @@ class DatasetCreater:
             # self.edge_features = f["/edge_features"][ConeExclFinalLabels
             #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :
             # ]
-            self.trackExtra = f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
-                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
-            ]
+            # self.trackExtra = f[f"/{self.config.input_tracks_name}"].fields(["pt", "dphi"])[
+            #     self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
+            # ]
 
         self.jet_types_to_save = np.full(shape=self.HadrConeTruth.shape, fill_value=-1)
         self.ind_truthflav_dict = {jet_type: self.get_indeces(jet_type) for jet_type in self.load_jet_types}
@@ -476,7 +490,7 @@ class DatasetCreater:
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
         self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
-        self.trackExtra = self.trackExtra[self.ind_truthflav]
+        # self.trackExtra = self.trackExtra[self.ind_truthflav]
         self.reco_jets = self.reco_jets[self.ind_truthflav]
         self.HadrConeTruth = self.HadrConeTruth[self.ind_truthflav]
 
@@ -514,6 +528,13 @@ class DatasetCreater:
         for jet_type in self.jet_types:
             edges[jet_type] = self.check_cases_and_return(truthOriginLabel,self.global_conf.truthOriginLabel[jet_type]).astype(int)
         return edges
+
+    def get_flavour_label(self):
+        print(np.unique(np.array([self.conversion_dict[d] for d in self.HadrConeTruth])))
+        return np.array([self.conversion_dict[d] for d in self.HadrConeTruth])
+
+    def get_jet_input(self):
+        return self.reco_jets
     
     def get_HadrLabel(self):
         return self.HadrConeTruth

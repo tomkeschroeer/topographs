@@ -6,7 +6,8 @@ from topograph.preprocessing_tools import (  # H5toTfrecordsConverter,
     Merge,
     Prepare,
     Scaler,
-    MergeTestFile
+    MergeTestFile,
+    Salt_preprocess,
 )
 from topograph.modules import (
     get_logger
@@ -38,6 +39,7 @@ def get_parser():
     parser.add_argument("--prepare", "-p", action="store_true", help="prepares samples")
     parser.add_argument("--merge", "-m", action="store_true", help="merge samples")
     parser.add_argument("--merge_test_files", "-mtf", action="store_true", help="merge test files")
+    parser.add_argument("--saltpreprocess", "-sp", action="store_true", help="salt preprocess")
     parser.add_argument("--to_records", "-r", action="store_true", help="merge samples")
 
     args = parser.parse_args()
@@ -78,3 +80,6 @@ if __name__ == "__main__":
     if args.merge_test_files:
         merge_test_file = MergeTestFile(config, dataset_types)
         merge_test_file.Run()
+    if args.saltpreprocess:
+        saltpreprocess = Salt_preprocess(config, dataset_types)
+        saltpreprocess.Run()

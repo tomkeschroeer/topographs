@@ -76,21 +76,23 @@ tfrecords:
 
 evaluation:
   model_file_numbers:
-    # - 1
-    - 45
-    - 90
-    - 145
-    - 199
+    - 1
+    - 44
+   # - 90
+   # - 145
+   # - 199
   n_samples: 1_000
   ntracks: 40
   file_formats:
     - png
     - pdf
   plot_efficiency:
-    plot: False
-    recalculate: False
+    plot: True 
+    recalculate: True
+  plot_effs_per_pt:
+    plot: True
   plot_parameters:
-    plot: False
+    plot: False 
     recalculate: False
   plot_pt:
     plot: True
@@ -99,15 +101,15 @@ evaluation:
     plot: False
     recalculate: False
   plot_conf_matrix:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_loss: {}
   plot_preds_per_epoch:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_preds_scatter:
-    plot: False
-    recalculate: False
+    plot: True
+    recalculate: True
   plot_saliency:
     plot: False
   plot_saliency_pertrack:
@@ -115,16 +117,16 @@ evaluation:
   plot_saliency_pervar:
     plot: False
   plot_n_tracks_per_jet:
-    plot: False
+    plot: True
   plot_target_input_corr:
-    plot: False
+    plot: True
   plot_linear_fit:
-    plot: False
+    plot: True
   plot_track_origin:
-    plot: False
+    plot: True
   plot_inputs:
-    plot: False
+    plot: True
   plot_non_jet_tracks:
-    plot: False
+    plot: True
   plot_vertex_labels:
-    plot: False
+    plot: True

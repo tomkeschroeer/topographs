@@ -4,6 +4,7 @@ from os import makedirs
 import json
 
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import numpy as np
 import numpy.ma as ma
 import torch.optim as optim
@@ -727,10 +728,11 @@ class Plotter:
                 track_pt_jettype_label_0 = track_pt_jettype[labels_edge_jettype == 0]
                 track_pt_fl_label_0 = track_pt_jettype_label_0.flatten()
 
-                effs_label_1, bins_label_1 = self.get_effs(pt_parts,track_pt_fl_label_1,preds_edge_label_1,labels_edge_label_1, ones_only=True)
-                effs_label_0, bins_label_0 = self.get_effs(pt_parts,track_pt_fl_label_0,preds_edge_label_0,labels_edge_label_0, zeros_only=True)
+                effs_label_1, n_per_bin_1, bins_label_1 = self.get_effs(pt_parts,track_pt_fl_label_1,preds_edge_label_1,labels_edge_label_1, ones_only=True)
+                effs_label_0, n_per_bin_0, bins_label_0 = self.get_effs(pt_parts,track_pt_fl_label_0,preds_edge_label_0,labels_edge_label_0, zeros_only=True)
 
                 eff_other_jets = {}
+                n_per_bin_other = {}
                 bins_other_jets = {}
                 for other_jet in other_jet_types:
                     jet_type_mask = (jet_type_per_jet == self.jet_types.index(other_jet))
@@ -738,7 +740,7 @@ class Plotter:
                     labels_edge_jettype = labels_edge[jet_type_mask]
                     track_pt_jettype = track_pt[jet_type_mask]
                     track_pt_fl_jettype = track_pt_jettype[labels_edge_jettype==0]
-                    eff_other_jets[other_jet], bins_other_jets[other_jet] = self.get_effs(
+                    eff_other_jets[other_jet], n_per_bin_other[other_jet], bins_other_jets[other_jet] = self.get_effs(
                         pt_parts,
                         track_pt_fl_jettype,
                         preds_edge_jettype[labels_edge_jettype==0],
@@ -747,6 +749,10 @@ class Plotter:
                         ones_only=False,
                     )
 
+                plt.clf()
+                plt.cla()
+
+                # plot, plot_names = 
                 self.plot_vals(
                     xlabel="$p_T$",
                     ylabel="efficiency",
@@ -758,15 +764,57 @@ class Plotter:
                     y_values_given=True,
                     # x_ticklabels=bins_str,
                     return_plot=False,
-                    legend_loc="best"
+                    legend_loc="best",
+                    # n_ratio_panels=1
                 )
 
+                plt.clf()
+                plt.cla()
+                fig, ax = plt.subplots()
+
+                # hide axes
+                fig.patch.set_visible(False)
+                ax.axis('off')
+                ax.axis('tight')
+
+                table_data = [  n_per_bin_1, np.round(np.array(n_per_bin_1)/sum(n_per_bin_1),2),
+                                n_per_bin_0, np.round(np.array(n_per_bin_0)/sum(n_per_bin_0),2)
+                ]
+                table_rows = [  f"{jet_type}-jets, label = 1", f"{jet_type}-jets, label = 1, rel",
+                                f"{jet_type}-jets, label = 0", f"{jet_type}-jets, label = 0, rel"
+                                ]
+                for other_jet in other_jet_types:
+                    table_data.append(n_per_bin_other[other_jet])
+                    table_data.append(np.round(np.array(n_per_bin_other[other_jet])/sum(n_per_bin_other[other_jet]),2))
+                    table_rows.append(f"{other_jet}-jets, label = 0")
+                    table_rows.append(f"{other_jet}-jets, label = 0, rel")
+            
+                table_column = [f"bin {i}" for i in range(1,11)]
+                fig.subplots_adjust(left=0.35)
+                # axis_ratio_1 = plot.fig.add_subplot(
+                #     3,1,3, sharex=plot.axis_top
+                # )
+                # plot.fig.add_subplot(bottom=0.7)
+                ax.table(
+                    cellText=table_data,
+                    loc="center",
+                    colLabels=table_column,
+                    rowLabels=table_rows,
+                    fontsize=23
+                )
+                for file_format in self.file_formats:
+                    fig.savefig(f"{self.plot_dir}/yields_{jet_type}.{file_format}")
+                # plt.savefig(f"/home/users/s/schroeer/scratch/PhD/Topograph_repos/topograph_pytorch_simtraining/table_{jet_type}.pdf")
+
+
     def get_effs(self,pt_parts,track_pt_fl,preds_edge,labels_edge,zeros_only=False,ones_only=False,):
-        effs=[]
+        effs = []
+        n_per_bin = []
         for i in range(len(pt_parts)-1):
             mask = np.array(np.logical_and(pt_parts[i]<track_pt_fl, pt_parts[i+1]>track_pt_fl))
             pred_pt_part = preds_edge[mask]
             labels_pt_part = labels_edge[mask]
+            n_per_bin.append(len(labels_pt_part))
             effs.append(calculate_efficiency(
                 pred=pred_pt_part,#pred_pt_part,
                 label=labels_pt_part,#labels_pt_part, 
@@ -776,7 +824,7 @@ class Plotter:
             )())
         bins = pt_parts[:-1]+(pt_parts[1:]-pt_parts[:-1])/2
         bins[-1] = pt_parts[-2] + (pt_parts[-2]-pt_parts[-3])/2
-        return effs, bins
+        return effs, n_per_bin, bins
 
 
     def plotting_regression_scatter(self, model_file_numbers, var):
@@ -843,8 +891,12 @@ class Plotter:
                 var_min_pred = np.min(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
                 var_max_pred = np.max(preds_unscaled_jettype[~np.isnan(preds_unscaled_jettype)])
                 bins = np.linspace(
-                    var_min_pred, var_max_pred, 60
+                    var_min_pred, var_max_pred, 40 #60
                 )
+                if jet_type == "b":
+                    bins = np.linspace(10.25,11.75,40)
+                elif jet_type == "c":
+                    bins = np.linspace(9,11.25,40)
                 hist = np.histogram2d(preds_unscaled_jettype, labels_unscaled_jettype, bins=[bins, bins])[0]
                 self.plotting_scatter_vals(
                     ylabel=f"true {var_str}",
@@ -931,7 +983,7 @@ class Plotter:
             str_labels.append(f"{jet_type}-jets, track label = 1")
             str_labels.append(f"{jet_type}-jets, track label = 0")
             input_vars = self.global_config.track_inputs
-        for i in range(0, len(input_vars)):
+        for i in range(0, len(input_vars)-1):
             self.logger.info(f"plotting distribution for {input_vars[i]}")
             dists_var = [dist[:,i] for dist in dists]
             nbins, binrange, ticks = get_n_bins(dists=dists_var, var=input_vars[i])
@@ -1992,7 +2044,8 @@ class Plotter:
         y_ticklabels=None,
         x_ticklabels=None,
         return_plot=False,
-        legend_loc="best"
+        legend_loc="best",
+        n_ratio_panels=0
     ):
         if y_values_given:
             ymax = max(vals[0][1])
@@ -2016,7 +2069,7 @@ class Plotter:
         plot = PlotBase(
             ylabel=ylabel,
             xlabel=xlabel,
-            n_ratio_panels=0,
+            n_ratio_panels=n_ratio_panels,
             logy=False,
             title=title,
             ymax=ymax + band,
@@ -2192,37 +2245,38 @@ class GetEpochPrediction:
         #     _, self.metadata_dict["n_vertex_feat"] = f[
         #         f"{self.config.vertex_feat_name}"
         #     ].shape
+        topomodels["b"].to_onnx(f"{self.training_output_folder}/onnx_model.onnx")
 
-        preds, labels, masks, grads = get_predictions_and_labels(
-            models=topomodels, dataset=self.dataset_loader, jet_types=self.jet_types, small_net=self.small_net, train_together=self.config.train_together
-        )
-        # model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
-        self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
-            "//", "/"
-        )
+        # preds, labels, masks, grads = get_predictions_and_labels(
+        #     models=topomodels, dataset=self.dataset_loader, jet_types=self.jet_types, small_net=self.small_net, train_together=self.config.train_together
+        # )
+        # # model_weights = np.array([par.detach().numpy() for par in topomodel.vertex_network.layers.parameters()])
+        # self.output_folder = f"{self.training_output_folder}/model_predictions".replace(
+        #     "//", "/"
+        # )
 
-        model_weight_dict = {}
-        bias_weight_counter = 0
-        layer_weight_counter = 0
-        # for i, m in enumerate(model_weights):
-        #     if len(m.shape) == 1:
-        #         model_weight_dict[i] = f"bias_{bias_weight_counter}"
-        #         bias_weight_counter += 1
-        #     else:
-        #         model_weight_dict[i] = f"layer_{layer_weight_counter}"
-        #         layer_weight_counter += 1
+        # model_weight_dict = {}
+        # bias_weight_counter = 0
+        # layer_weight_counter = 0
+        # # for i, m in enumerate(model_weights):
+        # #     if len(m.shape) == 1:
+        # #         model_weight_dict[i] = f"bias_{bias_weight_counter}"
+        # #         bias_weight_counter += 1
+        # #     else:
+        # #         model_weight_dict[i] = f"layer_{layer_weight_counter}"
+        # #         layer_weight_counter += 1
 
-        makedirs(self.output_folder, exist_ok=True)
-        with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
-            for jet_type in self.jet_types:
-                f.create_dataset(name=f"pred_edge_{jet_type}", data=preds[f"preds_e_{jet_type}"])
-                f.create_dataset(name=f"labels_edge_{jet_type}", data=labels[f"labels_e_{jet_type}"])
-                if not self.small_net[jet_type]:
-                    f.create_dataset(name=f"labels_vertex_features_{jet_type}", data=labels[f"labels_v_{jet_type}"])
-                    f.create_dataset(name=f"pred_vertex_features_{jet_type}", data=preds[f"preds_v_{jet_type}"])
-                f.create_dataset(name=f"gradients_{jet_type}", data=grads[f"grads_{jet_type}"])
-            f.create_dataset(name="mask", data=masks)
-            # f.create_dataset(name="gradients_pertrack", data=grads_pertrack.data)
-            # f.create_dataset(name="gradients_pertrack_mask", data=grads_pertrack.mask)
-            # for i in range(len(model_weights)):
-            #     f.create_dataset(name=model_weight_dict[i], data=model_weights[i])
+        # makedirs(self.output_folder, exist_ok=True)
+        # with File(f"{self.output_folder}/epoch_pred_{self.epoch:03d}.h5", "w") as f:
+        #     for jet_type in self.jet_types:
+        #         f.create_dataset(name=f"pred_edge_{jet_type}", data=preds[f"preds_e_{jet_type}"])
+        #         f.create_dataset(name=f"labels_edge_{jet_type}", data=labels[f"labels_e_{jet_type}"])
+        #         if not self.small_net[jet_type]:
+        #             f.create_dataset(name=f"labels_vertex_features_{jet_type}", data=labels[f"labels_v_{jet_type}"])
+        #             f.create_dataset(name=f"pred_vertex_features_{jet_type}", data=preds[f"preds_v_{jet_type}"])
+        #         f.create_dataset(name=f"gradients_{jet_type}", data=grads[f"grads_{jet_type}"])
+        #     f.create_dataset(name="mask", data=masks)
+        #     # f.create_dataset(name="gradients_pertrack", data=grads_pertrack.data)
+        #     # f.create_dataset(name="gradients_pertrack_mask", data=grads_pertrack.mask)
+        #     # for i in range(len(model_weights)):
+        #     #     f.create_dataset(name=model_weight_dict[i], data=model_weights[i])
