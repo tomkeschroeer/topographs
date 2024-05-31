@@ -27,12 +27,13 @@ class Salt_preprocess:
             + self.dataset_types["_test"]["njets"]
         )
         stepsize = min(50_000, int(njets / 2))
-        n_steps = njets // stepsize + 1
+        n_steps = njets // stepsize if njets % stepsize == 0 else njets // stepsize + 1
         input_file = (
             f"{self.config.output}/{self.config.preprocessing_file_name}".replace(
                 "//", "/"
             ).replace(".h5","") + ".h5"
         )
+
         output_file = input_file.replace(".h5", "") + "_salt.h5"
         keys = [key for key in File(input_file).keys()]
 
@@ -43,6 +44,7 @@ class Salt_preprocess:
                 newkey_track = True
                 newkey_jet = True
                 for key in keys:
+                    print(key)
                     final_dset = self.check_mergeing_keys(key)
                     data = f[key][:1]
                     if final_dset == "jets":
@@ -129,6 +131,8 @@ class Salt_preprocess:
             "Y_vertex_features_c",
             "HadronTruthLabel",
             "jet_inputs",
+            "jets",
+            "mask_jets",
         ]
         tracks = [
             "X_train_tracks",
@@ -138,6 +142,11 @@ class Salt_preprocess:
             "edge_origin",
             "track_extra",
             "track_extra_truth",
+            "tracks_loose",
+            "Y_edge_weight_b",
+            "Y_edge_weight_c",
+            "Y_edge_weight_light",
+            "mask_tracks",
         ]
 
         if dataset_name in jets:

@@ -911,6 +911,22 @@ class Plotter:
                     y_ticklabels=None,
                     swap_inputs=True,
                 )
+                exp_preds = np.exp(preds_unscaled_jettype)
+                exp_labels = np.exp(labels_unscaled_jettype)
+                hist = np.histogram2d(exp_preds, exp_labels, bins=[bins, bins])[0]
+                self.plotting_scatter_vals(
+                    ylabel=f"true {var_str}",
+                    xlabel=f"predicted {var_str}",
+                    plot_name=f"regression_model_{var}_{model_file_number}_{jet_type}_only_{jet_type}_jets_unscaled"
+                    if self.ntracks == 40
+                    else f"regression_model_{var}_nonlog_{model_file_number}_{jet_type}_only_{jet_type}_jets_unscaled_{self.ntracks}_tracks",
+                    xvals=bins,
+                    yvals=bins,
+                    zvals=hist,
+                    title=None,
+                    y_ticklabels=None,
+                    swap_inputs=True,
+                )
 
                 ## plotting of difference in pT for jet type
                 regs = calculate_pT_diff(pred=preds_masked, label=labels_masked)()

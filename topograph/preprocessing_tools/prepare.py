@@ -59,6 +59,8 @@ class Prepare:
                 )
                 vertex_feat = datasets.get_vertex_feat_y()
                 edge_y = datasets.get_edge_y()
+                sample_edge_weight_pos = {jet_type: sum(edge_y[jet_type]==1) for jet_type in jet_types}
+                sample_edge_weight_neg = {jet_type: sum(edge_y[jet_type]==0) for jet_type in jet_types}
                 edge_origin = datasets.get_edge_origin()
                 track_inputs = datasets.get_track_input()
                 jet_types_to_save = datasets.get_jet_types_to_save()
@@ -69,7 +71,6 @@ class Prepare:
                 # overall_inds = datasets.get_overall_inds()
                 HadrTruth = datasets.get_HadrLabel()
                 flavour_label = datasets.get_flavour_label()
-                print(np.unique(flavour_label))
                 jet_inputs = datasets.get_jet_input()
                 if self.config.solo_topo:
                     self.preprocess_for_solo_topo(
@@ -366,7 +367,7 @@ class Prepare:
                         train_file["flavour_label"].resize((train_file["flavour_label"].shape[0] + njets_step), axis=0)
                         train_file["flavour_label"][-njets_step:] = flavour_label[mask]
                         train_file["jet_inputs"].resize((train_file["jet_inputs"].shape[0] + njets_step), axis=0)
-                        train_file["jet_inputs"][-njets_step:] = flavour_label[mask]
+                        train_file["jet_inputs"][-njets_step:] = jet_inputs[mask]
                         train_file["edge_origin"].resize(
                             (train_file["edge_origin"].shape[0] + njets_step),
                             axis=0,
@@ -383,7 +384,7 @@ class Prepare:
                         )
                         train_file[self.config.tracks_name][
                             -njets_step:
-                        ] = datasets.get_track_input()[mask]
+                        ] = track_inputs[mask]
                         train_file["jet_type"].resize(
                             (
                                 train_file["jet_type"].shape[0]

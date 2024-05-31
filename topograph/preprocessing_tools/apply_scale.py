@@ -3,8 +3,9 @@ import json
 
 import numpy as np
 from h5py import File
+from numpy.lib.recfunctions import unstructured_to_structured as u2s
 
-from topograph.modules import GlobalConfig, get_logger, get_mask, scary_shuffle
+from topograph.modules import GlobalConfig, get_logger, get_mask, get_value_mask, scary_shuffle
 
 
 class Apply_Scaler:
@@ -16,9 +17,13 @@ class Apply_Scaler:
         )
         self.global_conf = GlobalConfig()
         self.tracks_name = self.config.tracks_name
+        self.input_jet_name = self.config.input_jet_name
         self.vert_prop_name = self.config.vertex_feat_name
-        self.var_list = {f"{self.vert_prop_name}_{jet_type}": self.global_conf.vertex_features for jet_type in self.config.jet_types}
-        self.var_list[self.tracks_name] = self.global_conf.track_inputs
+        if self.config.scaling_needed:
+            self.var_list = {f"{self.vert_prop_name}_{jet_type}": self.global_conf.vertex_features for jet_type in self.config.jet_types}
+            self.var_list[self.tracks_name] = self.global_conf.track_inputs
+        else:
+            self.var_list = {self.input_jet_name :["pt_Y_vertex_features_b", "pt_Y_vertex_features_c", "pt_Y_vertex_features_light"]}
         self.file_names = {
             self.config.training_file_name: self.config.njets,
             self.config.validation_file_name: self.config.njets_val,
@@ -39,72 +44,71 @@ class Apply_Scaler:
             )
             + ".h5"
         )
-        logger.info(f"Scale/Shift jets from {input_file}")
-        logger.info(f"Using scales in {self.scale_dict_path}")
+        if not self.config.scaling_needed:
+            input_file = input_file.replace(".h5", "_salt.h5")
+        print(input_file)
         file_length = len(
-            File(input_file, "r")[f"/{self.tracks_name}"][
-                self.var_list[self.tracks_name][0]
+            File(input_file, "r")[f"/{list(self.var_list.keys())[0]}"][
+                self.var_list[list(self.var_list.keys())[0]][0]
             ][:]
         )
         n_chunks = int(np.ceil(file_length / chunk_size))
-        if not self.config.scaling_needed:
-            input_file = input_file.replace(".h5", "_salt.h5")
         self.out_file = input_file.replace(".h5", "_scaled.h5")
-        if self.config.scaling_needed:
-            scale_dict = {}
+        logger.info(f"Scale/Shift jets from {input_file}")
+        logger.info(f"Using scales in {self.scale_dict_path}")
+        with open(self.scale_dict_path, "r") as infile:
+            scale_dict = json.load(infile)
+        # scale_dict[self.tracks_name] = full_scale_dict[self.tracks_name]
+        # scale_dict[self.vert_prop_name] = full_scale_dict[self.vert_prop_name]
 
-            with open(self.scale_dict_path, "r") as infile:
-                scale_dict = json.load(infile)
-            # scale_dict[self.tracks_name] = full_scale_dict[self.tracks_name]
-            # scale_dict[self.vert_prop_name] = full_scale_dict[self.vert_prop_name]
-
-            logger.info("Applying scaling and shifting.")
-            dict_names = scale_dict.keys()
-            # for file_name, njets_per_file in self.file_names.items():
-            logger.info(f"Save scaled inputs in file {self.out_file}")
-            with File(self.out_file, "w") as h5file:
-                for keyname in dict_names:
-                    scale_generator = self.scale_generator(
-                        input_file=input_file,
-                        nJets=self.njets,
-                        keyname=keyname,
-                        scale_dict=scale_dict[keyname],
-                        chunk_size=chunk_size,
+        logger.info("Applying scaling and shifting.")
+        dict_names = scale_dict.keys()
+        # for file_name, njets_per_file in self.file_names.items():
+        logger.info(f"Save scaled inputs in file {self.out_file}")
+        with File(self.out_file, "w") as h5file:
+            file_keys = h5file.keys()
+            for keyname in dict_names:
+                scale_generator = self.scale_generator(
+                    input_file=input_file,
+                    nJets=self.njets,
+                    keyname=keyname,
+                    scale_dict=scale_dict[keyname],
+                    chunk_size=chunk_size,
+                )
+                # Set up chunk counter and start looping
+                chunk_counter = 0
+                for chunk_counter in range(n_chunks):
+                    logger.info(
+                        f"Applying scales for chunk {chunk_counter+1} of"
+                        f" {n_chunks}."
                     )
-                    # Set up chunk counter and start looping
-                    chunk_counter = 0
-                    for chunk_counter in range(n_chunks):
-                        logger.info(
-                            f"Applying scales for chunk {chunk_counter+1} of"
-                            f" {n_chunks}."
-                        )
-                        try:
-                            data = next(scale_generator)
+                    try:
+                        data = next(scale_generator)
 
-                            if chunk_counter == 0:
-                                h5file.create_dataset(
-                                    keyname,
-                                    data=data[0],
-                                    #  compression="lzf",
-                                    chunks=((100,) + data[0].shape[1:]),
-                                    maxshape=(
-                                        None,
-                                        *(data[0].shape[1:]),
-                                    ),
-                                )
+                        if chunk_counter == 0:
+                            h5file.create_dataset(
+                                keyname,
+                                data=data[0],
+                                #  compression="lzf",
+                                chunks=((100,) + data[0].shape[1:]),
+                                maxshape=(
+                                    None,
+                                    *(data[0].shape[1:]),
+                                ),
+                            )
 
-                            else:
-                                h5file[keyname].resize(
-                                    (h5file[keyname].shape[0] + data[0].shape[0]),
-                                    axis=0,
-                                )
+                        else:
+                            h5file[keyname].resize(
+                                (h5file[keyname].shape[0] + data[0].shape[0]),
+                                axis=0,
+                            )
 
-                                h5file[keyname][-data[0].shape[0] :] = data[0]
+                            h5file[keyname][-data[0].shape[0] :] = data[0]
 
-                        except StopIteration:
-                            break
+                    except StopIteration:
+                        break
 
-                        chunk_counter += 1
+                    chunk_counter += 1
         if not self.config.scaling_needed:
             self.save_salt_datasets(logger, input_file, n_entries_total=self.njets)
         else:
@@ -159,12 +163,12 @@ class Apply_Scaler:
                                     f[key].resize((f[key].shape[0] + njets_step), axis=0)
                                     f[key][-njets_step:] = o[key][ind[0]:ind[1]] #[mask]
                             # if n_jets_per_jettype[jet_type] >=
-                    for key in keys:
-                        if "flavour_label" in f[key].dtype.names:
-                            print(f"{key} IN INT")
-                            f[self.config.input_jet_name].attrs["flavour_label"] = ['bjets', 'cjets', 'ujets']
-                        else:
-                            print(f"{key} not in if")
+                    # for key in keys:
+                    #     if "flavour_label" in f[key].dtype.names:
+                    #         print(f"{key} IN INT")
+                    #         f[self.config.input_jet_name].attrs["flavour_label"] = ['bjets', 'cjets', 'ujets']
+                    #     else:
+                    #         print(f"{key} not in if")
 
     def scale_generator(
         self,
@@ -225,6 +229,7 @@ class Apply_Scaler:
                 scaled_data = []
                 # Load tracks
                 data = np.asarray(f[keyname][index_tuple[0] : index_tuple[1]])
+                print(data)
 
                 # Apply scaling to the tracks
                 data = self.apply_scaling(
@@ -261,30 +266,43 @@ class Apply_Scaler:
             If scale is found to be 0 or inf for any track variable.
         """
         var_arr_list = []
+        all_vars = list(data.dtype.names)
+        dtype_all = data.dtype
         # Get track mask
         # track_mask = get_track_mask(trks)
+
         mask = get_mask(data)
         # Iterate over variables and scale/shift it
-        for var in var_list:
-            x = data[var]
+        for var in all_vars:
+            if var in var_list:
+                x = data[var]
+                print(x)
+                var_mask = get_value_mask(x)
+                mask_comb = np.logical_and(mask, var_mask)
+                print(f"mask comb = {mask_comb}")
+                # Stack the results for new dataset
+                shift = np.float32(scale_dict[var]["shift"])
+                scale = np.float32(scale_dict[var]["scale"])
+                if scale == 0 or np.isinf(scale):
+                    raise ValueError(f"Scale parameter for track var {var} is {scale}.")
+                x = np.where(
+                    mask_comb,
+                    x - shift,
+                    x,
+                )
+                x = np.where(
+                    mask_comb,
+                    x / scale,
+                    x,
+                )
+                var_arr_list.append(np.nan_to_num(x))
+            else:
+                x = data[var]   
+                var_arr_list.append(x)
 
-            # Stack the results for new dataset
-            shift = np.float32(scale_dict[var]["shift"])
-            scale = np.float32(scale_dict[var]["scale"])
-            if scale == 0 or np.isinf(scale):
-                raise ValueError(f"Scale parameter for track var {var} is {scale}.")
-            x = np.where(
-                mask,
-                x - shift,
-                x,
-            )
-            x = np.where(
-                mask,
-                x / scale,
-                x,
-            )
-            var_arr_list.append(np.nan_to_num(x))
         scaled_data = np.stack(var_arr_list, axis=-1)
+        scaled_data = u2s(scaled_data, dtype_all)
+        # scaled_data = np.array(scaled_data, dtype = dtype_all)
 
         # Return the scaled and tracks and, if defined, the track labels
         return scaled_data
@@ -457,19 +475,25 @@ class Apply_Scaler:
                     f" {len(tupled_indices)}"
                 )
                 if step == 0:
-                    with File(self.out_file, "w") as o:
-                        if self.config.input_jet_name in o.keys():
-                            del o[self.config.input_jet_name]
+                    n_entries = indices[1] - indices[0]
+                    with File(self.out_file, "r+") as o:
+                        print(f.keys())
+                        print(o.keys())
+                        print(self.var_list[self.config.input_jet_name])
+                        # print(self.var_list[self.config.input_jet_name].keys())
+                        # print(f[self.config.input_jet_name][['pt_Y_vertex_features_b', 'pt_Y_vertex_features_c', 'pt_Y_vertex_features_light']])
+                        # print(o[self.config.input_jet_name][self.var_list[self.config.input_jet_name]])
+                        # f[self.config.input_jet_name][self.var_list[self.config.input_jet_name]] = o[self.config.input_jet_name][self.var_list[self.config.input_jet_name]]
                         if "tracks" in o.keys():
                             del o["tracks"]
 
                         input_jet_name = f[self.config.input_jet_name][indices[0] : indices[1]]
-                        o.create_dataset(
-                            data=input_jet_name,
-                            name=self.config.input_jet_name,
-                            chunks=True,
-                            maxshape=(None,),
-                        )
+                        # o.create_dataset(
+                        #     data=input_jet_name,
+                        #     name=self.config.input_jet_name,
+                        #     chunks=True,
+                        #     maxshape=(None,),
+                        # )
                         input_track_name = f[self.config.input_tracks_name][indices[0] : indices[1]]
                         o.create_dataset(
                             data=input_track_name,
@@ -481,7 +505,7 @@ class Apply_Scaler:
                 else:
                     with File(self.out_file, "a") as o:
                         n_entries = indices[1] - indices[0]
-                        o[self.config.input_jet_name].resize((o[self.config.input_jet_name].shape[0] + n_entries), axis=0)
-                        o[self.config.input_jet_name][-n_entries:] = f[self.config.input_jet_name][indices[0] : indices[1]]
+                        # o[self.config.input_jet_name].resize((o[self.config.input_jet_name].shape[0] + n_entries), axis=0)
+                        # o[self.config.input_jet_name][-n_entries:] = f[self.config.input_jet_name][indices[0] : indices[1]]
                         o[self.config.input_tracks_name].resize((o[self.config.input_tracks_name].shape[0] + n_entries), axis=0)
                         o[self.config.input_tracks_name][-n_entries:] = f[self.config.input_tracks_name][indices[0] : indices[1]]

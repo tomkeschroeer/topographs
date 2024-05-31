@@ -4,15 +4,22 @@ import os
 import numpy as np
 from h5py import File
 
-from topograph.modules.tools import GlobalConfig, get_logger, get_mask
+from topograph.modules.tools import GlobalConfig, get_logger, get_mask, get_value_mask
 
 
 class Scaler:
     def __init__(self, config):
         self.config = config
         self.global_conf = GlobalConfig()
-        self.var_list = self.global_conf.track_inputs
-        self.var_list_vert = self.global_conf.vertex_features
+        if self.config.scaling_needed:
+            self.var_list = self.global_conf.track_inputs
+            self.var_list_vert = self.global_conf.vertex_features
+        else:
+            self.var_list = []
+            self.var_list_vert = [
+                "pt_Y_vertex_features"
+            ]
+            # self.vert_jet_types = ["b","c","light"]
 
     def Run(self):
         logger = get_logger()
@@ -29,13 +36,17 @@ class Scaler:
             )
             + ".h5"
         )
+        if not self.config.scaling_needed:
+            file_name = file_name.replace(".h5", "_salt.h5")
         self.scale_dict_path = (
             f"{self.config.output}/{self.config.scale_dict}".replace(".json", "")
             # f"{self.config.output}/{self.config.scale_dict}_{jet_type}".replace(".json", "")
             + ".json"
         )
+        f = File(file_name, "r")
         # Get the file_length
-        file_length = len(File(file_name, "r")[f"/{self.config.tracks_name}"])
+        file_length = len(f[list(f.keys())[0]])
+        f.close()
 
         # Get the number of chunks we need to load
         n_chunks = int(np.ceil(file_length / chunk_size))
@@ -49,9 +60,10 @@ class Scaler:
         scaling_generator = self.get_scaling_generator(
             input_file=file_name,
             nJets=file_length,
-            tracks_name=self.config.tracks_name,
-            vert_prop_name=self.config.vertex_feat_name,
+            tracks_name=self.config.tracks_name if self.config.scaling_needed else self.config.input_tracks_name,
+            vert_prop_name=self.config.vertex_feat_name if self.config.scaling_needed else self.config.input_jet_name,
             chunk_size=chunk_size,
+            scaling_needed=self.config.scaling_needed,
         )
 
         # Loop over chunks
@@ -90,6 +102,7 @@ class Scaler:
         tracks_name: str,
         vert_prop_name: str,
         chunk_size: int = int(10000),
+        scaling_needed: bool = True,
     ):
         """
         Set up a generator that loads the tracks in chunks and calculates the mean/std.
@@ -132,13 +145,30 @@ class Scaler:
 
             for index_tuple in tupled_indices:
 
-                tracks_chunk = np.asarray(
-                    infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
-                )[:]
+                if scaling_needed:
+                    tracks_chunk = np.asarray(
+                        infile_all[f"/{tracks_name}"][index_tuple[0] : index_tuple[1]]
+                    )[:]
 
-                vert_prop_chunk = {jet_type: np.asarray(
-                    infile_all[f"/{vert_prop_name}_{jet_type}"][index_tuple[0] : index_tuple[1]]
-                ) for jet_type in self.config.jet_types}
+                    vert_prop_chunk = {jet_type: np.asarray(
+                        infile_all[f"/{vert_prop_name}_{jet_type}"][index_tuple[0] : index_tuple[1]]
+                    ) for jet_type in self.config.jet_types}
+                    track_mask = get_mask(tracks_chunk)
+                    X_train_tracks = np.stack(
+                        [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
+                    )
+                    scale_dict_trk, nTrks = self.get_scaling(
+                        data=X_train_tracks[:],
+                        var_names=self.var_list,
+                        track_mask=track_mask,
+                        scale_tracks=True,
+                    )
+                else:
+                    vert_prop_chunk = {
+                        jet_type: np.asarray(
+                            infile_all[vert_prop_name][f"{self.var_list_vert[0]}_{jet_type}"][index_tuple[0] : index_tuple[1]], dtype=np.dtype([(self.var_list_vert[0], np.float32)])
+                        ) for jet_type in self.config.jet_types
+                    }
 
                 # vert_prop_chunk_b = np.asarray(
                 #     infile_all[f"/{vert_prop_name}_b"][index_tuple[0] : index_tuple[1]]
@@ -147,18 +177,13 @@ class Scaler:
                 # vert_prop_chunk_c = np.asarray(
                 #     infile_all[f"/{vert_prop_name}_c"][index_tuple[0] : index_tuple[1]]
                 # )
-                track_mask = get_mask(tracks_chunk)
+                # exit()
                 vert_mask = {jet_type: get_mask(vert_prop_chunk[jet_type]) for jet_type in self.config.jet_types}
-                for jet_type in self.config.jet_types:
-                    print(jet_type)
-                    print(sum(vert_prop_chunk[jet_type]["pt"]!=-999.))
-                    print(sum(vert_mask[jet_type]))
+                vert_mask_comb = {jet_type: np.logical_and(vert_mask[jet_type], get_value_mask(vert_prop_chunk[jet_type])) for jet_type in self.config.jet_types}
                 # vert_mask_b = get_mask(vert_prop_chunk_b)
                 # vert_mask_c = get_mask(vert_prop_chunk_c)
 
-                X_train_tracks = np.stack(
-                    [np.nan_to_num(tracks_chunk[v]) for v in self.var_list], axis=-1
-                )
+                
 
                 X_train_vert_prop = {jet_type: np.stack(
                     [np.nan_to_num(vert_prop_chunk[jet_type][v]) for v in self.var_list_vert],
@@ -175,12 +200,7 @@ class Scaler:
                 #     axis=-1,  # len(self.var_list_vert)
                 # )
 
-                scale_dict_trk, nTrks = self.get_scaling(
-                    data=X_train_tracks[:],
-                    var_names=self.var_list,
-                    track_mask=track_mask,
-                    scale_tracks=True,
-                )
+                
 
                 # scale_dict_vert_prop_b, nJets_b = self.get_scaling(
                 #     data=X_train_vert_prop_b[:],
@@ -193,17 +213,24 @@ class Scaler:
                 nJets = {}
 
                 for jet_type in self.config.jet_types:
-                    scale_dict_vert_prop[jet_type], nJets[jet_type] = self.get_scaling(
-                        data=X_train_vert_prop[jet_type][:],
-                        var_names=self.var_list_vert,
-                        track_mask=vert_mask[jet_type],
-                        scale_tracks=False,
-                    )
+                    if self.config.small_net[jet_type]:
+                        scale_dict_vert_prop[jet_type], nJets[jet_type] = {var_name:{"shift": np.nan, "scale": np.nan} for var_name in self.var_list_vert}, 0
+                    else:
+                        scale_dict_vert_prop[jet_type], nJets[jet_type] = self.get_scaling(
+                            data=X_train_vert_prop[jet_type][:],
+                            var_names=self.var_list_vert,
+                            track_mask=vert_mask_comb[jet_type],
+                            scale_tracks=False,
+                        )
 
-                scale_dict = {f"{vert_prop_name}_{jet_type}": scale_dict_vert_prop[jet_type] for jet_type in self.config.jet_types}
-                scale_dict[tracks_name] = scale_dict_trk
-                nEntries = {f"{vert_prop_name}_{jet_type}": nJets[jet_type] for jet_type in self.config.jet_types}
-                nEntries[tracks_name] = nTrks
+                if scaling_needed:
+                    scale_dict = {f"{vert_prop_name}_{jet_type}": scale_dict_vert_prop[jet_type] for jet_type in self.config.jet_types}
+                    nEntries = {f"{vert_prop_name}_{jet_type}": nJets[jet_type] for jet_type in self.config.jet_types}
+                    scale_dict[tracks_name] = scale_dict_trk
+                    nEntries[tracks_name] = nTrks
+                else:
+                    scale_dict = {f"{vert_prop_name}": {f"{self.var_list_vert[0]}_{jet_type}": scale_dict_vert_prop[jet_type][self.var_list_vert[0]] for jet_type in self.config.jet_types}}
+                    nEntries = {f"{vert_prop_name}": {f"{self.var_list_vert[0]}_{jet_type}": nJets[jet_type] for jet_type in self.config.jet_types}}
                 # Yield the scale dict and the number jets
                 yield scale_dict, nEntries
 
@@ -293,10 +320,17 @@ class Scaler:
         # Init a new combined scale dict
         combined_scale_dict = {}
         dict_names = first_scale_dict.keys()
-
+        print(f"first sc = {first_scale_dict}")
+        print(f"second sc = {second_scale_dict}")
         for dict_name in dict_names:
             combined_scale_dict_tmp = {}
             for var in first_scale_dict[dict_name]:
+                if not self.config.scaling_needed:
+                    first_N=first_ns[dict_name][var]
+                    second_N=second_ns[dict_name][var]
+                else:
+                    first_N=first_ns[dict_name]
+                    second_N=second_ns[dict_name]
                 # Add var to combined dict
                 combined_scale_dict_tmp[var] = {}
 
@@ -308,15 +342,21 @@ class Scaler:
                     first_scale_dict=first_scale_dict[dict_name],
                     second_scale_dict=second_scale_dict[dict_name],
                     variable=var,
-                    first_N=first_ns[dict_name],
-                    second_N=second_ns[dict_name],
+                    first_N=first_N,
+                    second_N=second_N,
                 )
             combined_scale_dict[dict_name] = combined_scale_dict_tmp
 
         # Sum of nTrks corresponding to combined scale dict
-        combined_ns = {
-            name: first_ns[name]+second_ns[name] for name in dict_names
-        }
+        if not self.config.scaling_needed:
+            combined_ns = {
+                name: {var: first_ns[name][var]+second_ns[name][var] for var in first_scale_dict[dict_name]}
+                    for name in dict_names
+            }
+        else:
+            combined_ns = {
+                name: first_ns[name]+second_ns[name] for name in dict_names
+            }
 
         return combined_scale_dict, combined_ns
 

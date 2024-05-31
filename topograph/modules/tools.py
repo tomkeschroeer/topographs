@@ -1,9 +1,11 @@
+
 """Script containing different tools."""
 import logging
 import pathlib
 from glob import glob
 
 import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured as s2u
 
 # import tensorflow.keras.backend as K
 import yaml
@@ -80,8 +82,15 @@ def get_logger():
 def get_mask(trks):
     for var, dtype in trks.dtype.fields.items():
         if "f" in dtype[0].str:
-            mask = np.logical_and(~np.isnan(trks[var]), ~(trks[var]==-999.))
+            mask = trks[var] != 0.
             return mask
+
+def get_value_mask(jets):
+    try:
+        mask = ~(jets==-999.)
+    except TypeError:
+        mask = ~(s2u(jets).squeeze()==-999.)
+    return mask
 
 def scary_shuffle(*arrays):
     """?!Should?! shuffle a collection of arrays inplace in the exact same way"""
@@ -572,6 +581,7 @@ class DatasetCreater:
     def get_vertex_feat_y(self):
         flavour = self.truth["flavour"]
         vertex_feat = self.truth[self.vertex_features]
+        # vertex_feat = np.full_like(vertex_feat, fill_value=5.)
         vertex_shape = vertex_feat.shape
         if len(self.vertex_features) > 1:
             shape = vertex_shape[:2]
@@ -592,9 +602,9 @@ class DatasetCreater:
 
                 vertex_feat_jet_types[jet_type][jet_mask] = vertex_feat[mask]
                 if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
-                for key in self.vertex_features:
-                    if self.global_conf.vertex_feat_dict[key]["log"]:
-                        vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
+                # for key in self.vertex_features:
+                #     if self.global_conf.vertex_feat_dict[key]["log"]:
+                #         vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
         return vertex_feat_jet_types
 
     def get_track_input(self):
