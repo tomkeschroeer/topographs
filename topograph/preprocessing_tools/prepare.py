@@ -72,6 +72,7 @@ class Prepare:
                 HadrTruth = datasets.get_HadrLabel()
                 flavour_label = datasets.get_flavour_label()
                 jet_inputs = datasets.get_jet_input()
+                neutrals = datasets.get_neutrals()
                 if self.config.solo_topo:
                     self.preprocess_for_solo_topo(
                         jet_types=jet_types,
@@ -89,7 +90,8 @@ class Prepare:
                         track_inputs=track_inputs,
                         # tracks_extra=tracks_extra,
                         tracks_extra_true=tracks_extra_true,
-                        vertex_feat=vertex_feat
+                        vertex_feat=vertex_feat,
+                        neutrals=neutrals,
                     )
                 else:
                     self.preprocess_for_salt_topo(
@@ -110,7 +112,8 @@ class Prepare:
                         tracks_extra_true=tracks_extra_true,
                         vertex_feat=vertex_feat,
                         flavour_label=flavour_label,
-                        jet_inputs=jet_inputs
+                        jet_inputs=jet_inputs,
+                        neutrals=neutrals,
                     )
                 continue_loading = np.array(n_jets_loaded < int(njets))
                 n_jets_loaded += [datasets.get_n_valid_jets_type(jet_type) for jet_type in jet_types]
@@ -147,7 +150,8 @@ class Prepare:
             track_inputs, 
             # tracks_extra, 
             tracks_extra_true, 
-            vertex_feat
+            vertex_feat,
+            neutrals
         ):
         if self.create_file:
             for jet_type in jet_types:
@@ -166,6 +170,7 @@ class Prepare:
                     # train_file.create_dataset("track_extra", data = tracks_extra[mask], chunks=True, maxshape=(None,n_tracks,))
                     train_file.create_dataset("track_extra_truth", data = tracks_extra_true[mask], chunks=True, maxshape=(None,n_tracks,))
                     train_file.create_dataset("HadronTruthLabel", data = HadrTruth[mask], chunks=True, maxshape=(None,))
+                    train_file.create_dataset("neutrals", data = neutrals[mask], chunks=True, maxshape=(None,n_tracks,))
                 # if unscaled_pt is not None:
                 #     train_file.create_dataset("unscaled_pt", data = unscaled_pt, chunks=True, maxshape=(None,))
                     if jet_pt is not None:
@@ -215,6 +220,8 @@ class Prepare:
                             ] = edge_y[jet_type][mask]
                         train_file["HadronTruthLabel"].resize((train_file["HadronTruthLabel"].shape[0] + njets_step), axis=0)
                         train_file["HadronTruthLabel"][-njets_step:] = HadrTruth[mask]
+                        train_file["neutrals"].resize((train_file["neutrals"].shape[0] + njets_step), axis=0)
+                        train_file["neutrals"][-njets_step:] = neutrals[mask]
                         train_file["edge_origin"].resize(
                             (train_file["edge_origin"].shape[0] + njets_step),
                             axis=0,
@@ -294,7 +301,8 @@ class Prepare:
             tracks_extra_true, 
             vertex_feat,
             flavour_label,
-            jet_inputs
+            jet_inputs,
+            neutrals
         ):
         if self.create_file:
             for jet_type in jet_types:
@@ -315,6 +323,7 @@ class Prepare:
                     train_file.create_dataset("HadronConeExclTruthLabelID", data = HadrTruth[mask], chunks=True, maxshape=(None,))
                     train_file.create_dataset("flavour_label", data = flavour_label[mask], chunks=True, maxshape=(None,))
                     train_file.create_dataset("jet_inputs", data=jet_inputs[mask], chunks=True, maxshape=(None,))
+                    train_file.create_dataset("neutrals", data=neutrals[mask], chunks=True, maxshape=(None,n_tracks))
                 # if unscaled_pt is not None:
                 #     train_file.create_dataset("unscaled_pt", data = unscaled_pt, chunks=True, maxshape=(None,))
                     if jet_pt is not None:
@@ -364,6 +373,8 @@ class Prepare:
                             ] = edge_y[jet_type][mask]
                         train_file["HadronConeExclTruthLabelID"].resize((train_file["HadronConeExclTruthLabelID"].shape[0] + njets_step), axis=0)
                         train_file["HadronConeExclTruthLabelID"][-njets_step:] = HadrTruth[mask]
+                        train_file["neutrals"].resize((train_file["neutrals"].shape[0] + njets_step), axis=0)
+                        train_file["neutrals"][-njets_step:] = neutrals[mask]
                         train_file["flavour_label"].resize((train_file["flavour_label"].shape[0] + njets_step), axis=0)
                         train_file["flavour_label"][-njets_step:] = flavour_label[mask]
                         train_file["jet_inputs"].resize((train_file["jet_inputs"].shape[0] + njets_step), axis=0)

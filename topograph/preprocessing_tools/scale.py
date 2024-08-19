@@ -320,8 +320,7 @@ class Scaler:
         # Init a new combined scale dict
         combined_scale_dict = {}
         dict_names = first_scale_dict.keys()
-        print(f"first sc = {first_scale_dict}")
-        print(f"second sc = {second_scale_dict}")
+
         for dict_name in dict_names:
             combined_scale_dict_tmp = {}
             for var in first_scale_dict[dict_name]:

@@ -308,7 +308,7 @@ class GlobalConfig:
             for key, fl in self.flavour.items():
                 if fl == "None":
                     self.flavour[key] = None
-            self.truthOriginLabel = global_conf.get("truthOriginLabel", {})
+            self.ftagTruthOriginLabel = global_conf.get("ftagTruthOriginLabel", {})
             self.hadron_cone_excl_label = global_conf.get("HadronConeExclLabel", {})
             self.jet_inputs = global_conf.get("jet_inputs")
 
@@ -474,7 +474,10 @@ class DatasetCreater:
             self.reco_jets = f["jets"].fields(self.global_conf.jet_inputs)[ #], "eventNumber"])[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize
             ]
-            self.truthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("truthOriginLabel")[
+            self.neutrals = f["neutral"][
+                self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
+            ]
+            self.ftagTruthOriginLabel = f[f"/{self.config.input_tracks_name}"].fields("ftagTruthOriginLabel")[
                 self.step * self.stepsize : (self.step + 1) * self.stepsize, :self.ntracks
             ]
             # self.trackExtraTruth = 
@@ -498,10 +501,11 @@ class DatasetCreater:
         self.jet_types_to_save = self.jet_types_to_save[self.ind_truthflav]
         self.truth = self.truth[self.ind_truthflav]
         self.reco = self.reco[self.ind_truthflav]
-        self.truthOriginLabel = self.truthOriginLabel[self.ind_truthflav]
+        self.ftagTruthOriginLabel = self.ftagTruthOriginLabel[self.ind_truthflav]
         # self.trackExtra = self.trackExtra[self.ind_truthflav]
         self.reco_jets = self.reco_jets[self.ind_truthflav]
         self.HadrConeTruth = self.HadrConeTruth[self.ind_truthflav]
+        self.neutrals = self.neutrals[self.ind_truthflav]
 
     def get_indeces(self, jet_type):
         hadronflavour = self.truth["flavour"]
@@ -532,10 +536,10 @@ class DatasetCreater:
             return 0
 
     def get_edge_y(self):
-        truthOriginLabel = self.truthOriginLabel
+        ftagTruthOriginLabel = self.ftagTruthOriginLabel
         edges = {}
         for jet_type in self.jet_types:
-            edges[jet_type] = self.check_cases_and_return(truthOriginLabel,self.global_conf.truthOriginLabel[jet_type]).astype(int)
+            edges[jet_type] = self.check_cases_and_return(ftagTruthOriginLabel,self.global_conf.ftagTruthOriginLabel[jet_type]).astype(int)
         return edges
 
     def get_flavour_label(self):
@@ -549,7 +553,7 @@ class DatasetCreater:
         return self.HadrConeTruth
 
     def get_edge_origin(self):
-        return self.truthOriginLabel
+        return self.ftagTruthOriginLabel
 
     def get_jet_pt(self):
         return self.reco_jets
@@ -609,6 +613,9 @@ class DatasetCreater:
 
     def get_track_input(self):
         return self.reco
+
+    def get_neutrals(self):
+        return self.neutrals
     
     def get_overall_inds(self):
         return self.overall_inds

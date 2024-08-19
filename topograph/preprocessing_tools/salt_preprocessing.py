@@ -68,9 +68,12 @@ class Salt_preprocess:
                             continue
                         data_tracks_keys.append(key)
                         if data.dtype.names is None:
-                            dtype_tr = np.dtype([(key, data.dtype.type)])                        
+                            dtype_tr = np.dtype([(key, data.dtype.type)])
                         else:
                             dtype_tr = data.dtype
+                            if "valid" in dtype_tr.names:
+                                dtype_tr_ar = np.array(dtype_tr.descr)[np.array(dtype_tr.names) != "valid"]
+                                dtype_tr = np.dtype([tuple(i) for i in dtype_tr_ar])
 
                         if newkey_track:
                             newkey_track = False
@@ -88,15 +91,20 @@ class Salt_preprocess:
                     data_merged_j = np.array([tuple(c) for c in data_merged_j], dtype=dtype_all_j)
                     tracks_shape = f[data_tracks_keys[0]][step * stepsize : (step + 1) * stepsize].shape
                     for j, key_tr in enumerate(data_tracks_keys):
+                        if key_tr == "valid": continue
                         temp_data = f[key_tr][step * stepsize : (step + 1) * stepsize].flatten()
-                        data_tr = pd.DataFrame(temp_data) #, dtype=np.void)
+                        data_tr = pd.DataFrame(temp_data).drop("valid", axis=1, errors="ignore") #, dtype=np.void)
+
                         if temp_data.dtype.names is None:
                             data_tr = data_tr.rename(columns={0: key_tr})
+                        if np.any(np.isnan(data_tr.to_numpy())):
+                            stay = "here"
                         if j == 0:
                             data_merged_tr = data_tr
                         else:
                             data_merged_tr = pd.concat((data_merged_tr, data_tr), axis=1)
                     data_merged_tr = data_merged_tr.to_numpy().reshape((tracks_shape[0]*tracks_shape[1], len(data_merged_tr.columns)))
+                    data_merged_tr[np.isnan(data_merged_tr)] = 0.
                     data_merged_tr = np.array([tuple(c) for c in data_merged_tr], dtype=dtype_all_tr).reshape(tracks_shape)
                     shape_j = data_merged_j.shape
                     shape_tr = data_merged_tr.shape
@@ -147,6 +155,7 @@ class Salt_preprocess:
             "Y_edge_weight_c",
             "Y_edge_weight_light",
             "mask_tracks",
+            "neutrals"
         ]
 
         if dataset_name in jets:

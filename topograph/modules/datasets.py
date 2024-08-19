@@ -34,6 +34,7 @@ class Topographs_dataset(IterableDataset):
         self.file = h5py.File(self.filename)
         self.tracks = self.file["X_train_tracks"]
         self.jet_type_per_jet = self.file["jet_type"]
+        self.neutrals = self.file["neutrals"]
         self.labels_open = {}
         for jet_type in self.jet_types:
             self.labels_open[f"Y_edge_{jet_type}"] = self.file[f"Y_edge_{jet_type}"]
@@ -54,6 +55,7 @@ class Topographs_dataset(IterableDataset):
         self.vertex_masks = {}
         for inds in indices:
             self.tracks_batch = self.tracks[inds[0] : inds[1]].astype(np.float32)
+            self.neutrals_batch = self.neutrals[inds[0] : inds[1]].astype(np.float32)
             self.mask_batch = ~np.all(self.tracks_batch[..., :3] == 0, axis=-1)
             self.jet_types_batch = self.jet_type_per_jet[inds[0] : inds[1]].astype(int)
             for jet_type in self.jet_types:
@@ -63,7 +65,7 @@ class Topographs_dataset(IterableDataset):
                     list(map(get_sample_weights, np.stack((self.labels[f"Y_edge_{jet_type}"], self.mask_batch), axis=1))), dtype=np.float32
                 )
                 self.vertex_masks[f"vertex_mask_{jet_type}"] = (self.labels[f"Y_vertex_features_{jet_type}"] != -999.0)
-            yield self.tracks_batch, self.labels, self.mask_batch, self.vertex_masks, self.jet_types_batch
+            yield self.tracks_batch, self.neutrals_batch, self.labels, self.mask_batch, self.vertex_masks, self.jet_types_batch
 
     def __len__(self) -> int:
         num_sampels = self.n_samples if self.n_samples != -1 else len(self.tracks)

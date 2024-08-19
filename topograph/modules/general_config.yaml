@@ -18,9 +18,9 @@ track_inputs:
   - numberOfPixelSharedHits
   - numberOfPixelSplitHits
   - numberOfSCTSharedHits
-  - truthOriginLabel
-  - truthVertexIndex
-
+  - ftagTruthOriginLabel
+  - ftagTruthVertexIndex
+ 
 jet_inputs:
   - pt_btagJes
   - eta_btagJes
@@ -49,8 +49,8 @@ jet_inputs:
 
 
 edge_features:
-  - truthOriginLabel
-  - truthVertexIndex
+  - ftagTruthOriginLabel
+  - ftagTruthVertexIndex
   - truthParentBarcode
 
 vertex_features:
@@ -68,7 +68,7 @@ flavour:
   c: 4
   light: None
 
-truthOriginLabel:
+ftagTruthOriginLabel:
   b: [3,4]
   c: [5,4]
   light: 2
