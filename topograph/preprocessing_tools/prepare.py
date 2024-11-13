@@ -66,7 +66,7 @@ class Prepare:
                 jet_types_to_save = datasets.get_jet_types_to_save()
                 # tracks_extra = datasets.get_extra_track()
                 tracks_extra_true = datasets.get_extra_track_truth()
-                # unscaled_pt = datasets.get_unscaled_pt()
+                unscaled_pt = datasets.get_unscaled_pt()
                 jet_pt = datasets.get_jet_pt()
                 # overall_inds = datasets.get_overall_inds()
                 HadrTruth = datasets.get_HadrLabel()
@@ -114,6 +114,7 @@ class Prepare:
                         flavour_label=flavour_label,
                         jet_inputs=jet_inputs,
                         neutrals=neutrals,
+                        unscaled_pt=unscaled_pt
                     )
                 continue_loading = np.array(n_jets_loaded < int(njets))
                 n_jets_loaded += [datasets.get_n_valid_jets_type(jet_type) for jet_type in jet_types]
@@ -151,7 +152,8 @@ class Prepare:
             # tracks_extra, 
             tracks_extra_true, 
             vertex_feat,
-            neutrals
+            neutrals,
+            unscaled_pt = None
         ):
         if self.create_file:
             for jet_type in jet_types:
@@ -171,8 +173,8 @@ class Prepare:
                     train_file.create_dataset("track_extra_truth", data = tracks_extra_true[mask], chunks=True, maxshape=(None,n_tracks,))
                     train_file.create_dataset("HadronTruthLabel", data = HadrTruth[mask], chunks=True, maxshape=(None,))
                     train_file.create_dataset("neutrals", data = neutrals[mask], chunks=True, maxshape=(None,n_tracks,))
-                # if unscaled_pt is not None:
-                #     train_file.create_dataset("unscaled_pt", data = unscaled_pt, chunks=True, maxshape=(None,))
+                    if unscaled_pt is not None:
+                        train_file.create_dataset("unscaled_pt", data = unscaled_pt[mask], chunks=True, maxshape=(None,))
                     if jet_pt is not None:
                         train_file.create_dataset("jet_pt", data = jet_pt[mask], chunks=True, maxshape=(None,))
             n_jets_loaded += [datasets.get_n_valid_jets_type(jet_type) for jet_type in jet_types]
@@ -302,7 +304,8 @@ class Prepare:
             vertex_feat,
             flavour_label,
             jet_inputs,
-            neutrals
+            neutrals,
+            unscaled_pt = None
         ):
         if self.create_file:
             for jet_type in jet_types:
@@ -315,6 +318,8 @@ class Prepare:
                     for snd_jet_type in jet_types:
                         train_file.create_dataset(f"{self.config.edge_name}_{snd_jet_type}", data = edge_y[snd_jet_type][mask], chunks=True, maxshape=(None,n_tracks,))
                         train_file.create_dataset(f"{self.config.vertex_feat_name}_{snd_jet_type}", data = vertex_feat[snd_jet_type][mask], chunks=True, maxshape=(None,)) #len(global_conf.vertex_features))) # dtype=datasets.vertex_feat_dtypes
+                        if unscaled_pt is not None:
+                            train_file.create_dataset(f"pt_{snd_jet_type}", data = unscaled_pt[snd_jet_type][mask], chunks=True, maxshape=(None,))
                     train_file.create_dataset("edge_origin", data = edge_origin[mask], chunks=True, maxshape=(None,n_tracks,))
                     train_file.create_dataset(f"{self.config.tracks_name}", data = np.array(track_inputs , dtype=datasets.reco_dtypes)[mask], chunks=True, maxshape=(None,n_tracks))
                     train_file.create_dataset(f"jet_type", data = np.array(jet_types_to_save)[mask], chunks=True, maxshape=(None,))
@@ -371,6 +376,16 @@ class Prepare:
                             train_file[f"{self.config.edge_name}_{jet_type}"][
                                 -njets_step:
                             ] = edge_y[jet_type][mask]
+                            train_file[f"pt_{jet_type}"].resize(
+                                (
+                                    train_file[f"pt_{jet_type}"].shape[0]
+                                    + njets_step
+                                ),
+                                axis=0,
+                            )
+                            train_file[f"pt_{jet_type}"][
+                                -njets_step:
+                            ] = unscaled_pt[jet_type][mask]
                         train_file["HadronConeExclTruthLabelID"].resize((train_file["HadronConeExclTruthLabelID"].shape[0] + njets_step), axis=0)
                         train_file["HadronConeExclTruthLabelID"][-njets_step:] = HadrTruth[mask]
                         train_file["neutrals"].resize((train_file["neutrals"].shape[0] + njets_step), axis=0)

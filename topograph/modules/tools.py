@@ -340,6 +340,7 @@ class GetConfiguration:
             "input_tracks_name",
             "input_truth_name",
             "input_jet_name",
+            "input_neutral_name",
             "model_files",
             "jet_types",
             "small_net",
@@ -566,12 +567,25 @@ class DatasetCreater:
 
     def get_unscaled_pt(self):
         flavour = self.truth["flavour"]
-        mask = self.check_cases_and_return(
-            flavour,
-            self.global_conf.flavour[self.jet_type],
-        )
-        if None in mask: return np.full(shape=mask.shape[0], fill_value=-999.)
-        return self.truth["pt"][mask]
+        vertex_feat = self.truth["pt"]
+        # vertex_feat = np.full_like(vertex_feat, fill_value=5.)
+        vertex_shape = vertex_feat.shape
+        vert_dtype = vertex_feat.dtype
+        vertex_feat_jet_types = {}
+        for jet_type in self.jet_types:
+            vertex_feat_jet_types[jet_type] = np.full(shape=(vertex_shape[0],), fill_value=-999., dtype=vert_dtype)
+            if not self.small_net[jet_type]:
+                mask = self.check_cases_and_return(
+                    flavour,
+                    self.global_conf.flavour[jet_type],
+                )
+                jet_mask = np.sum(mask, axis=1)==1
+                mask[~jet_mask] = np.full(shape=mask.shape[1], fill_value=False)
+                vertex_feat_jet_types[jet_type] = np.full(shape=(vertex_shape[0],), fill_value=-999., dtype=vert_dtype)
+
+                vertex_feat_jet_types[jet_type][jet_mask] = vertex_feat[mask]
+                if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
+        return vertex_feat_jet_types
 
     def get_edge_feat_y(self):
         edge_feat_y = np.array(
@@ -606,9 +620,9 @@ class DatasetCreater:
 
                 vertex_feat_jet_types[jet_type][jet_mask] = vertex_feat[mask]
                 if None in mask: return np.full(shape=(flavour.shape[0]), fill_value=-999., dtype=vert_dtype)
-                # for key in self.vertex_features:
-                #     if self.global_conf.vertex_feat_dict[key]["log"]:
-                #         vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
+                for key in self.vertex_features:
+                    if self.global_conf.vertex_feat_dict[key]["log"]:
+                        vertex_feat_jet_types[jet_type][key][jet_mask] = np.log(vertex_feat_jet_types[jet_type][key][jet_mask])
         return vertex_feat_jet_types
 
     def get_track_input(self):

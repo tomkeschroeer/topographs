@@ -23,6 +23,7 @@ class Apply_Scaler:
             self.var_list = {f"{self.vert_prop_name}_{jet_type}": self.global_conf.vertex_features for jet_type in self.config.jet_types}
             self.var_list[self.tracks_name] = self.global_conf.track_inputs
         else:
+            # self.var_list = {self.input_jet_name :{"Y_vertex_features_b":"pt", "Y_vertex_features_c":"pt", "Y_vertex_features_light":"pt"}}
             self.var_list = {self.input_jet_name :["pt_Y_vertex_features_b", "pt_Y_vertex_features_c", "pt_Y_vertex_features_light"]}
         self.file_names = {
             self.config.training_file_name: self.config.njets,
@@ -46,7 +47,7 @@ class Apply_Scaler:
         )
         if not self.config.scaling_needed:
             input_file = input_file.replace(".h5", "_salt.h5")
-        print(input_file)
+        # if self.config.scaling_needed:
         file_length = len(
             File(input_file, "r")[f"/{list(self.var_list.keys())[0]}"][
                 self.var_list[list(self.var_list.keys())[0]][0]
@@ -65,8 +66,8 @@ class Apply_Scaler:
         dict_names = scale_dict.keys()
         # for file_name, njets_per_file in self.file_names.items():
         logger.info(f"Save scaled inputs in file {self.out_file}")
+        
         with File(self.out_file, "w") as h5file:
-            file_keys = h5file.keys()
             for keyname in dict_names:
                 scale_generator = self.scale_generator(
                     input_file=input_file,
@@ -144,7 +145,6 @@ class Apply_Scaler:
                         njets_step = ind[1]-ind[0]
                         # for jet_type in self.jet_types:
                         #     jet_type_in_jet = o["jet_type"][ind[0]:ind[1]]
-                        #     # print(self.jet_types.index(jet_type))
                         #     mask = (jet_type_in_jet == self.jet_types.index(jet_type))
                         #     njets_step = sum(mask)
                         #     n_jets_per_jettype[jet_type] = n_jets_per_jettype[jet_type] + njets_step
@@ -157,7 +157,6 @@ class Apply_Scaler:
                                 f.create_dataset(key, data=data_chunk, chunks=True, maxshape=shape)
                             create_file = False
                         else:
-                            # print(o[key][ind[0]:ind[1]])
                             if njets_step >0:
                                 for key in keys: #ind[1]-ind[0]
                                     f[key].resize((f[key].shape[0] + njets_step), axis=0)
@@ -276,10 +275,8 @@ class Apply_Scaler:
         for var in all_vars:
             if var in var_list:
                 x = data[var]
-                print(x)
                 var_mask = get_value_mask(x)
                 mask_comb = np.logical_and(mask, var_mask)
-                print(f"mask comb = {mask_comb}")
                 # Stack the results for new dataset
                 shift = np.float32(scale_dict[var]["shift"])
                 scale = np.float32(scale_dict[var]["scale"])
@@ -477,13 +474,6 @@ class Apply_Scaler:
                 if step == 0:
                     n_entries = indices[1] - indices[0]
                     with File(self.out_file, "r+") as o:
-                        print(f.keys())
-                        print(o.keys())
-                        print(self.var_list[self.config.input_jet_name])
-                        # print(self.var_list[self.config.input_jet_name].keys())
-                        # print(f[self.config.input_jet_name][['pt_Y_vertex_features_b', 'pt_Y_vertex_features_c', 'pt_Y_vertex_features_light']])
-                        # print(o[self.config.input_jet_name][self.var_list[self.config.input_jet_name]])
-                        # f[self.config.input_jet_name][self.var_list[self.config.input_jet_name]] = o[self.config.input_jet_name][self.var_list[self.config.input_jet_name]]
                         if "tracks" in o.keys():
                             del o["tracks"]
 
@@ -501,6 +491,13 @@ class Apply_Scaler:
                             chunks=True,
                             maxshape=(None,40),
                         )
+                        input_neutal_name = f[self.config.input_neutral_name][indices[0] : indices[1]]
+                        o.create_dataset(
+                            data=input_neutal_name,
+                            name=self.config.input_neutral_name,
+                            chunks=True,
+                            maxshape=(None,40),
+                        )
                 
                 else:
                     with File(self.out_file, "a") as o:
@@ -509,3 +506,5 @@ class Apply_Scaler:
                         # o[self.config.input_jet_name][-n_entries:] = f[self.config.input_jet_name][indices[0] : indices[1]]
                         o[self.config.input_tracks_name].resize((o[self.config.input_tracks_name].shape[0] + n_entries), axis=0)
                         o[self.config.input_tracks_name][-n_entries:] = f[self.config.input_tracks_name][indices[0] : indices[1]]
+                        o[self.config.input_neutral_name].resize((o[self.config.input_neutral_name].shape[0] + n_entries), axis=0)
+                        o[self.config.input_neutral_name][-n_entries:] = f[self.config.input_neutral_name][indices[0] : indices[1]]

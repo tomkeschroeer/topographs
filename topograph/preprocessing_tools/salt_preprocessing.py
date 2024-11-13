@@ -19,7 +19,7 @@ class Salt_preprocess:
     def Run(self):
         self.logger = get_logger()
         self.logger.info("Starting Salt_preprocess")
-        self.logger.info("Creating datasets")
+        self.logger.info("Creating datasets") 
         jet_types = self.config.jet_types
         njets = int(
             self.dataset_types[""]["njets"]
@@ -27,6 +27,7 @@ class Salt_preprocess:
             + self.dataset_types["_test"]["njets"]
         )
         stepsize = min(50_000, int(njets / 2))
+        # stepsize = 1000
         n_steps = njets // stepsize if njets % stepsize == 0 else njets // stepsize + 1
         input_file = (
             f"{self.config.output}/{self.config.preprocessing_file_name}".replace(
@@ -41,10 +42,11 @@ class Salt_preprocess:
             with File(input_file, "r") as f:
                 data_jets_keys = []
                 data_tracks_keys = []
+                data_neutrals_keys = []
                 newkey_track = True
                 newkey_jet = True
+                newkey_neutral = True
                 for key in keys:
-                    print(key)
                     final_dset = self.check_mergeing_keys(key)
                     data = f[key][:1]
                     if final_dset == "jets":
@@ -80,6 +82,18 @@ class Salt_preprocess:
                             dtype_all_tr = dtype_tr
                         else:
                             dtype_all_tr = np.dtype(dtype_all_tr.descr + dtype_tr.descr)
+                    elif final_dset == "neutrals":
+                        self.logger.info(f"Creating {final_dset} dataset")
+                        data_neutrals_keys.append(key)
+                        if data.dtype.names is None:
+                            dtype_n = np.dtype([(key, data.dtype.type)])
+                        else:
+                            dtype_n = data.dtype
+                        if newkey_neutral:
+                            newkey_neutral = False
+                            dtype_all_n = dtype_n
+                        else:
+                            dtype_all_n = np.dtype(dtype_all_n.descr + dtype_n.descr)
                 for step in range(n_steps):
                     for j, key_j in enumerate(data_jets_keys):
                         data_j = pd.DataFrame(f[key_j][step * stepsize : (step + 1) * stepsize]) #, dtype=np.void)
@@ -89,16 +103,14 @@ class Salt_preprocess:
                             data_merged_j = pd.concat((data_merged_j, data_j), axis=1)
                     data_merged_j = data_merged_j.to_numpy()
                     data_merged_j = np.array([tuple(c) for c in data_merged_j], dtype=dtype_all_j)
+
                     tracks_shape = f[data_tracks_keys[0]][step * stepsize : (step + 1) * stepsize].shape
                     for j, key_tr in enumerate(data_tracks_keys):
                         if key_tr == "valid": continue
                         temp_data = f[key_tr][step * stepsize : (step + 1) * stepsize].flatten()
                         data_tr = pd.DataFrame(temp_data).drop("valid", axis=1, errors="ignore") #, dtype=np.void)
-
                         if temp_data.dtype.names is None:
                             data_tr = data_tr.rename(columns={0: key_tr})
-                        if np.any(np.isnan(data_tr.to_numpy())):
-                            stay = "here"
                         if j == 0:
                             data_merged_tr = data_tr
                         else:
@@ -106,20 +118,32 @@ class Salt_preprocess:
                     data_merged_tr = data_merged_tr.to_numpy().reshape((tracks_shape[0]*tracks_shape[1], len(data_merged_tr.columns)))
                     data_merged_tr[np.isnan(data_merged_tr)] = 0.
                     data_merged_tr = np.array([tuple(c) for c in data_merged_tr], dtype=dtype_all_tr).reshape(tracks_shape)
+                    for j, key_n in enumerate(data_neutrals_keys):
+                        data_n = f[key_n][step * stepsize : (step + 1) * stepsize]
+                        if j == 0:
+                            data_merged_n = data_n
+                        else:
+                            data_merged_n = np.concatenate((data_merged_n, data_n), axis=1)
                     shape_j = data_merged_j.shape
                     shape_tr = data_merged_tr.shape
+                    shape_n = data_merged_n.shape
                     maxshape_j = (None,) if len(shape_j) == 1 else (None, *shape_j[1:])
                     maxshape_tr = (None,) if len(shape_tr) == 1 else (None, *shape_tr[1:])
+                    maxshape_n = (None,) if len(shape_n) == 1 else (None, *shape_n[1:])
                     if step == 0:
                         h5fw.create_dataset(self.config.input_jet_name, data=data_merged_j, chunks=True, maxshape=maxshape_j)
                         h5fw.create_dataset(self.config.input_tracks_name, data=data_merged_tr, chunks=True, maxshape=maxshape_tr)
+                        h5fw.create_dataset(self.config.input_neutral_name, data=data_merged_n, chunks=True, maxshape=maxshape_n)
                     else:
                         data_jets = data_merged_j
                         data_tracks = data_merged_tr
+                        data_neutrals = data_merged_n
                         h5fw[self.config.input_jet_name].resize((h5fw[self.config.input_jet_name].shape[0] + data_jets.shape[0]), axis=0)
                         h5fw[self.config.input_tracks_name].resize((h5fw[self.config.input_tracks_name].shape[0] + data_tracks.shape[0]), axis=0)
+                        h5fw[self.config.input_neutral_name].resize((h5fw[self.config.input_neutral_name].shape[0] + data_neutrals.shape[0]), axis=0)
                         h5fw[self.config.input_jet_name][-data_jets.shape[0]:] = data_jets
                         h5fw[self.config.input_tracks_name][-data_tracks.shape[0]:] = data_tracks
+                        h5fw[self.config.input_neutral_name][-data_neutrals.shape[0]:] = data_neutrals
                 # data_merged = np.array([tuple(c) for c in data_merged], dtype=dtype_all)
                 # data_merged = np.array(data_merged, dtype=dtype_all)
 
@@ -155,12 +179,15 @@ class Salt_preprocess:
             "Y_edge_weight_c",
             "Y_edge_weight_light",
             "mask_tracks",
+        ]
+        neutrals = [
             "neutrals"
         ]
 
         if dataset_name in jets:
             return "jets"
-        if dataset_name in tracks:
+        elif dataset_name in tracks:
             return "tracks"
-        else:
-            return "none"
+        elif dataset_name in neutrals:
+            return "neutrals"
+        return "none"
