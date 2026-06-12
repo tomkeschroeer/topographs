@@ -12,33 +12,52 @@ import h5py
 import numpy as np
 import torch as T
 from torch.utils.data import Dataset, IterableDataset, TensorDataset, get_worker_info
+from numpy.lib.recfunctions import structured_to_unstructured as stu
 
-from topograph.modules.tools import get_sample_weights
+from topograph.modules.tools import get_sample_weights, GlobalConfig
 
 class Topographs_dataset(IterableDataset):
-    def __init__(self, filename, n_samples, jet_types, batch_size=50_000, train=True):
+    def __init__(
+        self, 
+        filename, 
+        n_samples, 
+        jet_types, 
+        batch_size=50_000, 
+        train=True, 
+        track_name="tracks",
+        jet_name="jets",
+        neutrals_name=None
+    ):
         IterableDataset.__init__(self)
         
         self.filename = filename
         self.batch_size = batch_size
         self.n_samples = n_samples
         self.jet_types = jet_types
+        self.track_name = track_name
+        self.jet_name = jet_name
+        self.neutrals_name = neutrals_name
         if train:
             r = self.n_samples%self.batch_size
             if r != 0:
                 self.n_samples = self.n_samples-r
             self.batch_size = min(batch_size, n_samples)
+        self.global_conf = GlobalConfig()
             
 
     def open(self):
         self.file = h5py.File(self.filename)
-        self.tracks = self.file["X_train_tracks"]
-        self.jet_type_per_jet = self.file["jet_type"]
-        self.neutrals = self.file["neutrals"]
+        self.tracks = self.file[self.track_name]
+        self.jets = self.file[self.jet_name]
+        # self.jet_type_per_jet = self.file["jet_type"] 
+        if self.neutrals_name is not None:
+            self.neutrals = self.file[self.neutrals_name]
+        else: self.neutrals = None
+
         self.labels_open = {}
         for jet_type in self.jet_types:
-            self.labels_open[f"Y_edge_{jet_type}"] = self.file[f"Y_edge_{jet_type}"]
-            self.labels_open[f"Y_vertex_features_{jet_type}"]= self.file[f"Y_vertex_features_{jet_type}"]
+            self.labels_open[f"Y_edge_{jet_type}"] = self.tracks[f"Y_edge_{jet_type}"]
+            self.labels_open[f"Y_vertex_features_{jet_type}"]= self.jets.fields([f"{reg_l}_Y_vertex_features_{jet_type}" for reg_l in self.global_conf.vertex_features])
 
     def get_indeces(self):
         # if self.n_samples == -1: 
@@ -54,10 +73,14 @@ class Topographs_dataset(IterableDataset):
         self.labels = {}
         self.vertex_masks = {}
         for inds in indices:
-            self.tracks_batch = self.tracks[inds[0] : inds[1]].astype(np.float32)
-            self.neutrals_batch = self.neutrals[inds[0] : inds[1]].astype(np.float32)
+            self.tracks_batch = stu(self.tracks.fields(self.global_conf.track_inputs)[inds[0] : inds[1]]).astype(np.float32)
             self.mask_batch = ~np.all(self.tracks_batch[..., :3] == 0, axis=-1)
-            self.jet_types_batch = self.jet_type_per_jet[inds[0] : inds[1]].astype(int)
+            self.jet_batch = stu(self.jets.fields(self.global_conf.jet_inputs)[inds[0] : inds[1]])[:,None,:].repeat(repeats=40,axis=1).astype(np.float32)
+            input_batch = np.concatenate((self.tracks_batch,self.jet_batch), axis = -1)
+            if self.neutrals is not None:
+                self.neutrals_batch = self.neutrals[inds[0] : inds[1]].astype(np.float32)
+                input_batch = np.concatenate(input_batches, self.neutrals_batch)
+            # self.jet_types_batch = self.jet_type_per_jet[inds[0] : inds[1]].astype(int)
             for jet_type in self.jet_types:
                 self.labels[f"Y_edge_{jet_type}"] = self.labels_open[f"Y_edge_{jet_type}"][inds[0] : inds[1]].astype(np.float32)
                 self.labels[f"Y_vertex_features_{jet_type}"] = self.labels_open[f"Y_vertex_features_{jet_type}"][inds[0] : inds[1]].astype(np.float32)
@@ -65,7 +88,7 @@ class Topographs_dataset(IterableDataset):
                     list(map(get_sample_weights, np.stack((self.labels[f"Y_edge_{jet_type}"], self.mask_batch), axis=1))), dtype=np.float32
                 )
                 self.vertex_masks[f"vertex_mask_{jet_type}"] = (self.labels[f"Y_vertex_features_{jet_type}"] != -999.0)
-            yield self.tracks_batch, self.neutrals_batch, self.labels, self.mask_batch, self.vertex_masks, self.jet_types_batch
+            yield input_batch, self.labels, self.mask_batch, self.vertex_masks # self.jet_types_batch
 
     def __len__(self) -> int:
         num_sampels = self.n_samples if self.n_samples != -1 else len(self.tracks)

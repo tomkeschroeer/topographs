@@ -89,16 +89,7 @@ if __name__ == "__main__":
     input_weight_layer_name = "input_1"
     input_feat_layer_name = "input_2"
 
-    metadata_dict = {}
     train_file = f"{config.output}/{config.training_file_name}".replace("//", "/")
-    with File(train_file, "r") as f:
-        (
-            metadata_dict["n_jets"],
-            metadata_dict["n_trks"],
-            metadata_dict["n_trk_features"],
-        ) = f[f"{config.tracks_name}"].shape
-        _, metadata_dict["n_vertex_feat"] = f[f"{config.vertex_feat_name}_{config.jet_types[0]}"].shape
-        _, metadata_dict["n_edge_y"] = f[f"{config.edge_name}_{config.jet_types[0]}"].shape
 
     edge_feat_nodes = config.edge_feature_network["nodes"]
     edge_weight_nodes = config.edge_weight_network["nodes"]
@@ -129,13 +120,11 @@ if __name__ == "__main__":
         nodes_feat=edge_feat_nodes,
         nodes_weight=edge_weight_nodes,
         nodes_vertex=nodes_vertex,
-        save_dir=config.output_training,
-        name=config.model_name,
+        # save_dir=config.output_training,
         activation_name=config.edge_weight_network["add_activation"],
         lr=lr,
         loss_fac_edge=loss_fac_edge,
         loss_fac_vert=loss_fac_vert,
-        tr_jet_type=config.train_jet_type,
         small_net=config.small_net,
         jet_types=config.jet_types,
     )
@@ -151,32 +140,6 @@ if __name__ == "__main__":
     njets = getattr(config, "njets", -1)
     njets = -1 if njets is None else njets
 
-    # tracks_dataset = IterableFlavourTaggingDataset(
-    #     dset="train",
-    #     buffer_shuffle=True,
-    #     file_name = training_file,
-    #     batch_size = min(njets,1024),
-    #     drop_last = True,
-    #     buffer_size = 100_000,
-    #     njets = getattr(config, "njets", -1),
-    #     vars=vars,
-    #     used_vertex_properties=used_vertex_properties,
-    # )
-    # with File(training_file, "r") as f:
-    #     tracks = f["X_train_tracks"][:500_000]
-    #     y_edge = f["Y_edge"][:500_000]
-    #     y_vertex = f["Y_vertex_features"][:500_000]
-    #     mask = ~np.all(tracks[..., :3] == 0, axis=-1)
-    #     mask_vertex_labels = np.all(~np.isnan(y_vertex), axis = -1)
-    #     sample_weights = np.array(list(map(get_sample_weights, y_edge)))
-    # tracks_dataset = TensorDataset(
-    #         from_numpy(tracks.astype(np.float32)),
-    #         from_numpy(y_edge.astype(np.float32)),
-    #         from_numpy(y_vertex.astype(np.float32)),
-    #         from_numpy(sample_weights.astype(np.float32)),
-    #         from_numpy(mask.astype(bool)),
-    #         from_numpy(mask_vertex_labels.astype(bool))
-    # )
     tracks_dataset = Topographs_dataset(
         filename=training_file,
         batch_size=min(njets, 1024),
@@ -188,35 +151,7 @@ if __name__ == "__main__":
 
     njets_val = getattr(config, "njets_val", -1)
     njets_val = -1 if njets_val is None else njets_val
-    # valid_dataset = IterableFlavourTaggingDataset(
-    #     dset="valid",
-    #     buffer_shuffle=False,
-    #     file_name = val_file,
-    #     batch_size = min(njets_val, 1024),
-    #     drop_last = True,
-    #     buffer_size = 100_000,
-    #     njets = njets_val,
-    #     vars=vars,
-    #     used_vertex_properties=used_vertex_properties,
-    # )
-    # # valid_loader = DataLoader(valid_dataset, batch_size=None)
-    # train_data = training_file()
-    # with File(val_file, "r") as f:
-    #     tracks = f["X_train_tracks"][:]
-    #     y_edge = f["Y_edge"][:]
-    #     y_vertex = f["Y_vertex_features"][:]
-    #     mask = ~np.all(tracks[..., :3] == 0, axis=-1)
-    #     mask_vertex_labels = np.all(~np.isnan(y_vertex), axis = -1)
-    #     sample_weights = np.array(list(map(get_sample_weights, y_edge)))
 
-    # valid_dataset = TensorDataset(
-    #         from_numpy(tracks.astype(np.float32)),
-    #         from_numpy(y_edge.astype(np.float32)),
-    #         from_numpy(y_vertex.astype(np.float32)),
-    #         from_numpy(sample_weights.astype(np.float32)),
-    #         from_numpy(mask.astype(bool)),
-    #         from_numpy(mask_vertex_labels.astype(bool))
-    # )
     valid_dataset = Topographs_dataset(
         filename=val_file, batch_size=min(njets_val, 1024), n_samples=njets_val, jet_types=config.jet_types, train=False
     )

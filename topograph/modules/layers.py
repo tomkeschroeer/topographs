@@ -265,7 +265,7 @@ class DotProduct(Module):
         """
         super().__init__(**kwargs)
 
-    def forward(self, feat_layer, edge_layer, mask):
+    def forward(self, feat_layer, edge_layer):
         """
         Define what happens when layer is called.
 
@@ -279,10 +279,7 @@ class DotProduct(Module):
         pool : object
             dot product of the inputs.
         """
-        # sum(features * edges,axis=1)
         pool = sum(feat_layer * edge_layer, axis=1)  # * mask.unsqueeze(-1)
-        # pool = pool.sum()
-        # pool = squeeze(pool,0)
         return pool
 
 
